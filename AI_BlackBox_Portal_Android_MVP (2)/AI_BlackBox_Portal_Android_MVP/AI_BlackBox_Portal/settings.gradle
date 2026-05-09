@@ -1,0 +1,19 @@
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        google()
+        mavenCentral()
+        // CLI Agent — Termux terminal-emulator/terminal-view artifacts are
+        // published on JitPack, not Maven Central.
+        maven { url 'https://jitpack.io' }
+    }
+}
+rootProject.name = "AI BlackBox Portal"
+include(":app")

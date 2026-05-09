@@ -1,0 +1,673 @@
+"""
+Gemini Computer Use Agent Loop.
+
+Implements the screenshot -> Gemini API -> action -> screenshot cycle
+for both browser and Android targets.
+"""
+import asyncio
+import json
+import time
+import base64
+import os
+from typing import Optional, Dict, Any, List, AsyncGenerator
+
+from google import genai
+from google.genai import types
+
+from Orchestrator.gemini_cu.config import (
+    DEFAULT_CU_MODEL, MAX_ITERATIONS, MAX_WALL_CLOCK,
+    BROWSER_ONLY_FUNCTIONS, GEMINI_CU_WIDTH, GEMINI_CU_HEIGHT
+)
+from Orchestrator.gemini_cu.session_manager import GeminiCUSession
+from Orchestrator.config import GOOGLE_API_KEY
+from Orchestrator.agent_context import (
+    append_fossils_to_system,
+    resolve_operator,
+    retrieve_for_agent,
+)
+
+
+# Predefined CU function names from Google's API
+PREDEFINED_CU_FUNCTIONS = {
+    "click_at", "hover_at", "type_text_at", "key_combination",
+    "scroll_at", "scroll_document", "navigate", "open_web_browser",
+    "go_back", "go_forward", "search", "wait_5_seconds", "drag_and_drop"
+}
+
+# Custom Android functions
+CUSTOM_ANDROID_FUNCTIONS = {
+    "open_app", "long_press_at", "go_home", "go_back_android",
+    "scroll_down", "scroll_up"
+}
+
+
+def _map_gemini_keys(keys: str) -> str:
+    """Map Gemini CU key names to xdotool format.
+    Gemini sends: "Control+A", "Enter", "Meta+Shift+T", "Escape"
+    xdotool expects: "ctrl+a", "Return", "super+shift+t", "Escape"
+    """
+    # Map modifier and special key names
+    key_map = {
+        "Control": "ctrl",
+        "Meta": "super",
+        "Alt": "alt",
+        "Shift": "shift",
+        "Enter": "Return",
+        "Backspace": "BackSpace",
+        "Delete": "Delete",
+        "Escape": "Escape",
+        "Tab": "Tab",
+        "Space": "space",
+        "ArrowUp": "Up",
+        "ArrowDown": "Down",
+        "ArrowLeft": "Left",
+        "ArrowRight": "Right",
+        "PageUp": "Prior",
+        "PageDown": "Next",
+        "Home": "Home",
+        "End": "End",
+    }
+    parts = keys.split("+")
+    mapped = []
+    for p in parts:
+        p_stripped = p.strip()
+        if p_stripped in key_map:
+            mapped.append(key_map[p_stripped])
+        elif len(p_stripped) == 1:
+            # Single character — lowercase for xdotool
+            mapped.append(p_stripped.lower())
+        else:
+            # Pass through as-is (F1, F2, etc.)
+            mapped.append(p_stripped)
+    return "+".join(mapped)
+
+
+def _build_tools(environment: str) -> list:
+    """Build the tool configuration for Gemini CU."""
+    tools = []
+    if environment in ("browser", "desktop"):
+        tools.append(types.Tool(
+            computer_use=types.ComputerUse(
+                environment=types.Environment.ENVIRONMENT_BROWSER
+            )
+        ))
+    elif environment == "android":
+        cu_tool = types.Tool(
+            computer_use=types.ComputerUse(
+                environment=types.Environment.ENVIRONMENT_BROWSER,
+                excluded_predefined_functions=BROWSER_ONLY_FUNCTIONS
+            )
+        )
+        tools.append(cu_tool)
+
+        # Add custom Android functions
+        android_fns = _get_android_function_declarations()
+        tools.append(types.Tool(function_declarations=android_fns))
+    return tools
+
+
+def _get_android_function_declarations() -> list:
+    """Build custom function declarations for Android CU."""
+    return [
+        types.FunctionDeclaration(
+            name="open_app",
+            description="Opens an Android app by package name.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "app_name": {"type": "string",
+                                 "description": "App package name or friendly name"}
+                },
+                "required": ["app_name"]
+            }
+        ),
+        types.FunctionDeclaration(
+            name="long_press_at",
+            description="Long press at a coordinate on the Android screen.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "x": {"type": "integer", "description": "X coordinate (0-999)"},
+                    "y": {"type": "integer", "description": "Y coordinate (0-999)"}
+                },
+                "required": ["x", "y"]
+            }
+        ),
+        types.FunctionDeclaration(
+            name="go_home",
+            description="Navigate to the Android home screen.",
+            parameters={"type": "object", "properties": {}}
+        ),
+        types.FunctionDeclaration(
+            name="go_back_android",
+            description="Press the Android back button.",
+            parameters={"type": "object", "properties": {}}
+        ),
+        types.FunctionDeclaration(
+            name="scroll_down",
+            description="Scroll down on the Android screen.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "x": {"type": "integer", "description": "X coordinate (0-999)"},
+                    "y": {"type": "integer", "description": "Y coordinate (0-999)"}
+                }
+            }
+        ),
+        types.FunctionDeclaration(
+            name="scroll_up",
+            description="Scroll up on the Android screen.",
+            parameters={
+                "type": "object",
+                "properties": {
+                    "x": {"type": "integer", "description": "X coordinate (0-999)"},
+                    "y": {"type": "integer", "description": "Y coordinate (0-999)"}
+                }
+            }
+        ),
+    ]
+
+
+async def _capture_screenshot(session: GeminiCUSession) -> bytes:
+    """Capture a screenshot from the target device.
+    For desktop/browser: captures at native res then resizes to Gemini's 1440x900.
+    For android: returns ADB screenshot as-is.
+    """
+    if session.environment in ("browser", "desktop"):
+        from Orchestrator.browser.screenshot import (
+            capture_screenshot_display, resize_screenshot
+        )
+        from Orchestrator.browser.config import ACTIVE_DISPLAY
+        # Capture at native resolution, then resize to Gemini's expected 1440x900
+        # (NOT 1280x720 which is Anthropic's resolution)
+        png_bytes = capture_screenshot_display(ACTIVE_DISPLAY)
+        png_bytes = resize_screenshot(png_bytes, GEMINI_CU_WIDTH, GEMINI_CU_HEIGHT)
+        return png_bytes
+    elif session.environment == "android":
+        from Orchestrator.adb.commands import ADBCommands
+        cmds = ADBCommands(session.device_id)
+        await cmds.detect_screen_size()
+        return await cmds.screenshot()
+    else:
+        raise ValueError(f"Unknown environment: {session.environment}")
+
+
+async def _execute_predefined_action(session: GeminiCUSession,
+                                      action_name: str, args: dict) -> dict:
+    """Execute a predefined Gemini CU action."""
+    if session.environment in ("browser", "desktop"):
+        from Orchestrator.browser.actions import ActionExecutor
+        executor = ActionExecutor()
+
+        # Gemini CU uses normalized 0-999 coords. Convert to Gemini's CU display
+        # space (1440x900), then ActionExecutor._scale_coord() scales to real desktop.
+        # But ActionExecutor scales from Anthropic's 1280x720 — so we must scale
+        # directly to real desktop pixels here, bypassing the double scale.
+        from Orchestrator.browser.config import NATIVE_WIDTH, NATIVE_HEIGHT
+        W, H = NATIVE_WIDTH, NATIVE_HEIGHT  # Real desktop: 1920x1080
+
+        def _gemini_to_real(gx, gy):
+            """Convert Gemini normalized 0-999 coords directly to real desktop pixels."""
+            return int(gx / 999 * W), int(gy / 999 * H)
+
+        if action_name == "click_at":
+            raw_x, raw_y = args.get("x", 0), args.get("y", 0)
+            rx, ry = _gemini_to_real(raw_x, raw_y)
+            print(f"[GEMINI CU] click_at: raw=({raw_x},{raw_y}) → real=({rx},{ry}) [display={W}x{H}]")
+            from Orchestrator.browser.actions import _run_xdotool, _jitter
+            import time
+            _run_xdotool("mousemove", "--sync", str(rx), str(ry))
+            time.sleep(_jitter())
+            _run_xdotool("click", "1")
+            return {"success": True, "message": f"Left click at ({rx},{ry})"}
+        elif action_name == "type_text_at":
+            rx, ry = _gemini_to_real(args.get("x", 0), args.get("y", 0))
+            from Orchestrator.browser.actions import _run_xdotool, _jitter
+            import time
+            _run_xdotool("mousemove", "--sync", str(rx), str(ry))
+            time.sleep(_jitter())
+            _run_xdotool("click", "1")
+            await asyncio.sleep(0.2)
+            if args.get("clear_before_typing", False):
+                _run_xdotool("key", "--clearmodifiers", "ctrl+a")
+                await asyncio.sleep(0.1)
+            _run_xdotool("type", "--clearmodifiers", "--delay", "12", args.get("text", ""))
+            return {"success": True, "message": f"Typed at ({rx},{ry})"}
+        elif action_name == "hover_at":
+            rx, ry = _gemini_to_real(args.get("x", 0), args.get("y", 0))
+            from Orchestrator.browser.actions import _run_xdotool
+            _run_xdotool("mousemove", "--sync", str(rx), str(ry))
+            return {"success": True, "message": f"Hover at ({rx},{ry})"}
+        elif action_name == "key_combination":
+            keys = args.get("keys", "")
+            # Gemini sends "Control+A", xdotool expects "ctrl+a"
+            keys = _map_gemini_keys(keys)
+            from Orchestrator.browser.actions import _run_xdotool
+            _run_xdotool("key", "--clearmodifiers", keys)
+            return {"success": True, "message": f"Key: {keys}"}
+        elif action_name == "scroll_at":
+            rx, ry = _gemini_to_real(args.get("x", 0), args.get("y", 0))
+            direction = args.get("direction", "down")
+            magnitude = args.get("magnitude", 3)
+            from Orchestrator.browser.actions import _run_xdotool, _jitter
+            import time
+            _run_xdotool("mousemove", "--sync", str(rx), str(ry))
+            time.sleep(_jitter())
+            button_map = {"up": "4", "down": "5", "left": "6", "right": "7"}
+            button = button_map.get(direction, "5")
+            clicks = max(1, int(magnitude))
+            for _ in range(clicks):
+                _run_xdotool("click", button)
+                time.sleep(0.02)
+            return {"success": True, "message": f"Scroll {direction} x{clicks} at ({rx},{ry})"}
+        elif action_name == "scroll_document":
+            from Orchestrator.browser.actions import _run_xdotool
+            direction = args.get("direction", "down")
+            button = "5" if direction == "down" else "4"
+            for _ in range(5):
+                _run_xdotool("click", button)
+                import time; time.sleep(0.02)
+            return {"success": True, "message": f"Scroll document {direction}"}
+        elif action_name == "navigate":
+            url = args.get("url", "")
+            from Orchestrator.browser.actions import _run_xdotool
+            _run_xdotool("key", "--clearmodifiers", "ctrl+l")
+            await asyncio.sleep(0.2)
+            _run_xdotool("type", "--clearmodifiers", "--delay", "12", url)
+            await asyncio.sleep(0.1)
+            _run_xdotool("key", "--clearmodifiers", "Return")
+            return {"success": True, "action": "navigate", "url": url}
+        elif action_name == "wait_5_seconds":
+            await asyncio.sleep(5)
+            return {"success": True, "action": "wait"}
+        elif action_name == "drag_and_drop":
+            sx, sy = _gemini_to_real(args.get("x", 0), args.get("y", 0))
+            dx, dy = _gemini_to_real(args.get("destination_x", 0), args.get("destination_y", 0))
+            from Orchestrator.browser.actions import _run_xdotool, _jitter
+            import time
+            _run_xdotool("mousemove", "--sync", str(sx), str(sy))
+            time.sleep(_jitter(50))
+            _run_xdotool("mousedown", "1")
+            time.sleep(0.1)
+            _run_xdotool("mousemove", "--sync", str(dx), str(dy))
+            time.sleep(0.1)
+            _run_xdotool("mouseup", "1")
+            return {"success": True, "message": f"Drag ({sx},{sy}) -> ({dx},{dy})"}
+        else:
+            return {"success": False, "error": f"Unknown browser action: {action_name}"}
+
+    elif session.environment == "android":
+        from Orchestrator.adb.commands import ADBCommands
+        cmds = ADBCommands(session.device_id)
+        await cmds.detect_screen_size()
+
+        if action_name == "click_at":
+            return await cmds.tap(args.get("x", 500), args.get("y", 500))
+        elif action_name == "type_text_at":
+            await cmds.tap(args.get("x", 500), args.get("y", 500))
+            await asyncio.sleep(0.3)
+            return await cmds.type_text(args.get("text", ""))
+        elif action_name == "hover_at":
+            return {"success": True, "action": "hover (no-op on Android)"}
+        elif action_name == "key_combination":
+            return await cmds.key_event(args.get("keys", ""))
+        elif action_name == "scroll_at":
+            # Browser convention (matches how the model was trained):
+            # "down" = scroll page down = see more content below = finger swipes UP
+            # "up"   = scroll page up   = see content above     = finger swipes DOWN
+            direction = args.get("direction", "down")
+            if direction == "down":
+                return await cmds.scroll_down(args.get("x", 500), args.get("y", 500))
+            elif direction == "up":
+                return await cmds.scroll_up(args.get("x", 500), args.get("y", 500))
+            elif direction == "left":
+                return await cmds.swipe(
+                    args.get("x", 500), args.get("y", 500),
+                    max(0, args.get("x", 500) - 300), args.get("y", 500))
+            elif direction == "right":
+                return await cmds.swipe(
+                    args.get("x", 500), args.get("y", 500),
+                    min(999, args.get("x", 500) + 300), args.get("y", 500))
+            else:
+                return await cmds.scroll_down(args.get("x", 500), args.get("y", 500))
+        elif action_name == "wait_5_seconds":
+            await asyncio.sleep(5)
+            return {"success": True, "action": "wait"}
+        else:
+            return {"success": False, "error": f"Unknown android action: {action_name}"}
+
+    return {"success": False, "error": "Unknown environment"}
+
+
+async def _execute_custom_function(session: GeminiCUSession,
+                                    func_name: str, args: dict) -> dict:
+    """Execute a custom Android function."""
+    from Orchestrator.adb.commands import ADBCommands
+    cmds = ADBCommands(session.device_id)
+    await cmds.detect_screen_size()
+
+    if func_name == "open_app":
+        return await cmds.open_app(args.get("app_name", ""))
+    elif func_name == "long_press_at":
+        return await cmds.long_press(args.get("x", 500), args.get("y", 500))
+    elif func_name == "go_home":
+        return await cmds.go_home()
+    elif func_name == "go_back_android":
+        return await cmds.go_back()
+    elif func_name == "scroll_down":
+        return await cmds.scroll_down(args.get("x", 500), args.get("y", 500))
+    elif func_name == "scroll_up":
+        return await cmds.scroll_up(args.get("x", 500), args.get("y", 500))
+    else:
+        return {"success": False, "error": f"Unknown custom function: {func_name}"}
+
+
+def _save_screenshot(png_bytes: bytes, session: GeminiCUSession) -> str:
+    """Save screenshot to uploads directory and return URL path."""
+    uploads_dir = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        "Portal", "uploads"
+    )
+    os.makedirs(uploads_dir, exist_ok=True)
+    filename = f"gemini_cu_{session.operator}_{session.screenshot_count:03d}.png"
+    filepath = os.path.join(uploads_dir, filename)
+    with open(filepath, "wb") as f:
+        f.write(png_bytes)
+    session.screenshot_count += 1
+    return f"/ui/uploads/{filename}"
+
+
+def _default_system_prompt(session: GeminiCUSession) -> str:
+    """Generate a default system prompt based on environment."""
+    if session.environment == "android":
+        return (
+            "You are a Computer Use agent controlling an Android device via touch input. "
+            "You can see the screen through screenshots and interact via tap, swipe, "
+            "type, and other actions.\n\n"
+            "TEMPORAL AWARENESS — FIRST ACTION:\n"
+            "Your VERY FIRST action must be to call get_current_time to anchor yourself in the present. "
+            "Do this before any other actions.\n\n"
+            "SCROLL CONVENTIONS (browser-style, mapped to touch for you):\n"
+            "- scroll_at direction='down' = scroll page down (see more content below)\n"
+            "- scroll_at direction='up' = scroll page up (see content above)\n"
+            "- To open the Android app drawer from the home screen: use scroll_at with "
+            "direction='down' starting from the bottom of the screen (y=800-900)\n\n"
+            "TIPS:\n"
+            "- Use the custom functions (open_app, go_home, go_back_android) for "
+            "Android-specific actions.\n"
+            "- If a scroll doesn't seem to work, try starting from a different y position.\n"
+            "- Use the type tool instead of the onscreen keyboard when possible.\n"
+            "- Complete the user's task step by step, taking a new screenshot after each action."
+        )
+    elif session.environment == "desktop":
+        return (
+            "You are the AI BlackBox — a Computer Use agent controlling a Linux desktop. "
+            "You can see the screen through screenshots and interact via click, type, "
+            "scroll, and navigation actions.\n\n"
+            "TEMPORAL AWARENESS — FIRST ACTION:\n"
+            "Your VERY FIRST action must be to call get_current_time to anchor yourself in the present. "
+            "Do this before any other actions.\n\n"
+            "The desktop is a real Linux machine (display :0, 1920x1080). "
+            "Your coordinates are normalized 0-999. (0,0) = top-left, (999,999) = bottom-right.\n\n"
+            "Click in the CENTER of UI elements for best accuracy. "
+            "Complete the user's task step by step, taking a screenshot after each action "
+            "to verify the result. If a page is loading, use wait_5_seconds before retrying."
+        )
+    else:
+        return (
+            "You are a Computer Use agent controlling a web browser. "
+            "You can see the screen through screenshots and interact via click, type, "
+            "scroll, and navigation actions. Complete the user's task step by step. "
+            "If a page is loading, use wait_5_seconds before retrying.\n\n"
+            "TEMPORAL AWARENESS — FIRST ACTION:\n"
+            "Your VERY FIRST action must be to call get_current_time to anchor yourself in the present. "
+            "Do this before any other actions."
+        )
+
+
+async def run_gemini_cu_loop(
+    session: GeminiCUSession,
+    prompt: str,
+    model_name: str = DEFAULT_CU_MODEL,
+    system_prompt: Optional[str] = None,
+    url: Optional[str] = None
+) -> AsyncGenerator[dict, None]:
+    """
+    Run the Gemini Computer Use agent loop.
+    Yields SSE-style event dicts as the loop progresses.
+    """
+    start_time = time.time()
+    session.status = "running"
+    session.current_step = 0
+
+    tools = _build_tools(session.environment)
+    print(f"[GEMINI CU] run_gemini_cu_loop started: env={session.environment}, model={model_name}, tools={len(tools)}")
+
+    # Plan Task 4: inject fossil retrieval at agent-loop start.
+    # Only on the first turn of a session — subsequent turns reuse
+    # session.conversation_history and re-injecting would balloon the prompt.
+    is_first_turn = not getattr(session, "conversation_history", None)
+    operator = resolve_operator(session.operator, "[GEMINI-CU]")
+    fossil_text, provenance = retrieve_for_agent(
+        user_text=prompt,
+        operator=operator,
+        log_prefix="[GEMINI-CU]",
+    )
+    # Always stash provenance on the session and yield it to the consumer
+    # (REST `/run` ignores it; SSE `/stream` forwards it; chat-provider
+    # consumers in chat_routes already read session.provenance).
+    session.provenance = provenance
+    yield {"type": "provenance", "data": provenance}
+
+    base_system = system_prompt or _default_system_prompt(session)
+    if is_first_turn:
+        composed_system = append_fossils_to_system(base_system, fossil_text)
+    else:
+        composed_system = base_system
+
+    config = types.GenerateContentConfig(
+        tools=tools,
+        system_instruction=composed_system,
+    )
+
+    client = genai.Client(api_key=GOOGLE_API_KEY)
+
+    # Capture initial screenshot
+    print(f"[GEMINI CU] Capturing initial screenshot...")
+    try:
+        screenshot_bytes = await _capture_screenshot(session)
+        print(f"[GEMINI CU] Screenshot captured: {len(screenshot_bytes)} bytes")
+    except Exception as e:
+        print(f"[GEMINI CU] Screenshot FAILED: {e}")
+        yield {"type": "error", "data": {"message": f"Failed to capture initial screenshot: {e}"}}
+        session.status = "error"
+        return
+
+    screenshot_url = _save_screenshot(screenshot_bytes, session)
+    print(f"[GEMINI CU] Screenshot saved: {screenshot_url}")
+    yield {"type": "cu_screenshot", "data": {"url": screenshot_url, "step": 0}}
+
+    # Build initial content — reuse conversation history for multi-turn
+    if session.conversation_history:
+        contents = list(session.conversation_history)
+        contents.append(types.Content(role="user", parts=[
+            types.Part.from_text(text=prompt),
+            types.Part.from_bytes(data=screenshot_bytes, mime_type="image/png")
+        ]))
+    else:
+        contents = [
+            types.Content(role="user", parts=[
+                types.Part.from_text(text=prompt),
+                types.Part.from_bytes(data=screenshot_bytes, mime_type="image/png")
+            ])
+        ]
+
+    # Navigate to URL if browser/desktop mode
+    if url and session.environment in ("browser", "desktop"):
+        from Orchestrator.browser.actions import ActionExecutor
+        executor = ActionExecutor()
+        executor.execute("key", text="ctrl+l")
+        await asyncio.sleep(0.2)
+        executor.execute("type", text=url)
+        await asyncio.sleep(0.1)
+        executor.execute("key", text="Return")
+        await asyncio.sleep(2)
+        screenshot_bytes = await _capture_screenshot(session)
+        screenshot_url = _save_screenshot(screenshot_bytes, session)
+        yield {"type": "cu_screenshot", "data": {"url": screenshot_url, "step": 0}}
+        contents[0] = types.Content(role="user", parts=[
+            types.Part.from_text(text=prompt),
+            types.Part.from_bytes(data=screenshot_bytes, mime_type="image/png")
+        ])
+
+    # Agent Loop
+    for step in range(1, MAX_ITERATIONS + 1):
+        if session.stop_requested:
+            yield {"type": "cu_stopped", "data": {"step": step}}
+            break
+
+        elapsed = time.time() - start_time
+        if elapsed > MAX_WALL_CLOCK:
+            yield {"type": "error", "data": {"message": "Wall clock timeout (30 min)"}}
+            break
+
+        session.current_step = step
+        yield {"type": "cu_step", "data": {"step": step, "total": MAX_ITERATIONS}}
+
+        # Call Gemini API
+        print(f"[GEMINI CU] Step {step}: calling API with {len(contents)} content blocks, system_instruction={len(str(config.system_instruction or ''))} chars")
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=config,
+            )
+            print(f"[GEMINI CU] Step {step}: API response received, candidates={len(response.candidates) if response.candidates else 0}")
+        except Exception as e:
+            print(f"[GEMINI CU] Step {step}: API ERROR: {e}")
+            yield {"type": "error", "data": {"message": f"Gemini API error: {e}"}}
+            session.status = "error"
+            return
+
+        # Track tokens
+        if hasattr(response, "usage_metadata") and response.usage_metadata:
+            session.total_tokens["input"] += (
+                getattr(response.usage_metadata, "prompt_token_count", 0) or 0)
+            session.total_tokens["output"] += (
+                getattr(response.usage_metadata, "candidates_token_count", 0) or 0)
+
+        if not response.candidates:
+            yield {"type": "error", "data": {"message": "No response candidates from Gemini"}}
+            break
+
+        candidate = response.candidates[0]
+        content = candidate.content
+        contents.append(content)
+
+        # Debug: log what the model returned
+        part_types = []
+        for p in content.parts:
+            if hasattr(p, "function_call") and p.function_call:
+                part_types.append(f"fn:{p.function_call.name}")
+            elif hasattr(p, "text") and p.text:
+                part_types.append(f"text({len(p.text)}ch)")
+            else:
+                part_types.append("other")
+        print(f"[GEMINI CU] Step {step} response: {part_types}")
+
+        # Process response parts
+        function_calls = []
+        text_parts = []
+        for part in content.parts:
+            if hasattr(part, "function_call") and part.function_call:
+                function_calls.append(part.function_call)
+            elif hasattr(part, "text") and part.text:
+                text_parts.append(part.text)
+
+        if text_parts:
+            yield {"type": "content", "data": {"text": "\n".join(text_parts), "step": step}}
+
+        # If no function calls, task is complete
+        if not function_calls:
+            session.final_response = "\n".join(text_parts) if text_parts else "Task completed."
+            yield {"type": "done", "data": {"content": session.final_response}}
+            break
+
+        # Execute function calls
+        function_response_parts = []
+        for fc in function_calls:
+            fname = fc.name
+            fargs = dict(fc.args) if fc.args else {}
+            print(f"[GEMINI CU] Action: {fname} | Raw args: {fargs}")
+
+            yield {"type": "cu_action", "data": {"action": fname, "params": fargs, "step": step}}
+
+            # Build response data dict — always include url (required by API)
+            response_data = {"url": f"{session.environment}://{session.device_id}"}
+            if "safety_decision" in fargs:
+                # Auto-acknowledge safety decisions (agent mode, no human in loop)
+                response_data["safety_acknowledgement"] = "true"
+                yield {"type": "cu_safety", "data": {"decision": fargs["safety_decision"], "step": step}}
+
+            # Handle built-in get_screenshot (just return current screen)
+            if fname == "get_screenshot":
+                try:
+                    screenshot_bytes = await _capture_screenshot(session)
+                    screenshot_url = _save_screenshot(screenshot_bytes, session)
+                    yield {"type": "cu_screenshot", "data": {"url": screenshot_url, "step": step}}
+                    response_data["result"] = "screenshot captured"
+                    function_response_parts.append(
+                        types.Part.from_function_response(
+                            name=fname, response=response_data
+                        )
+                    )
+                    function_response_parts.append(
+                        types.Part.from_bytes(data=screenshot_bytes, mime_type="image/png")
+                    )
+                except Exception as e:
+                    response_data["error"] = str(e)
+                    function_response_parts.append(
+                        types.Part.from_function_response(
+                            name=fname, response=response_data
+                        )
+                    )
+                continue
+
+            # Execute predefined or custom actions
+            if fname in PREDEFINED_CU_FUNCTIONS:
+                result = await _execute_predefined_action(session, fname, fargs)
+            elif fname in CUSTOM_ANDROID_FUNCTIONS:
+                result = await _execute_custom_function(session, fname, fargs)
+            else:
+                result = {"success": False, "error": f"Unknown function: {fname}"}
+
+            await asyncio.sleep(0.5)
+
+            # Capture new screenshot after action
+            try:
+                screenshot_bytes = await _capture_screenshot(session)
+                screenshot_url = _save_screenshot(screenshot_bytes, session)
+                yield {"type": "cu_screenshot", "data": {"url": screenshot_url, "step": step}}
+
+                response_data["result"] = json.dumps(result)
+                function_response_parts.append(
+                    types.Part.from_function_response(
+                        name=fname, response=response_data
+                    )
+                )
+                function_response_parts.append(
+                    types.Part.from_bytes(data=screenshot_bytes, mime_type="image/png")
+                )
+            except Exception as e:
+                response_data["error"] = str(e)
+                function_response_parts.append(
+                    types.Part.from_function_response(
+                        name=fname, response=response_data
+                    )
+                )
+
+        contents.append(types.Content(role="user", parts=function_response_parts))
+
+    session.status = "complete"
+    session.conversation_history = contents
+    yield {"type": "usage", "data": session.total_tokens}

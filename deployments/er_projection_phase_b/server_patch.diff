@@ -1,0 +1,11 @@
+--- /tmp/server_original.py	2026-05-05 13:47:49.924174591 -0400
++++ /tmp/server_modified.py	2026-05-05 13:48:37.456010095 -0400
+@@ -9,7 +9,7 @@
+ # Import tool modules to register handlers before app starts
+ from .registry import registry
+ from .ros_bridge import RosBridge
+-from .tools import motion, gimbal, camera, status, nav, system, lights, explore  # noqa: F401
++from .tools import motion, gimbal, camera, status, nav, system, lights, explore, projection  # noqa: F401
+ 
+ @asynccontextmanager
+ async def lifespan(app: FastAPI):

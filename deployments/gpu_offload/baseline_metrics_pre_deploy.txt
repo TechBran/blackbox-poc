@@ -1,0 +1,40 @@
+=== top ===
+[sudo] password for jetson: top - 01:30:11 up 49 min,  0 users,  load average: 4.13, 4.53, 4.48
+Tasks: 333 total,   7 running, 326 sleeping,   0 stopped,   0 zombie
+%Cpu(s): 53.3 us, 27.1 sy,  0.0 ni, 17.8 id,  0.0 wa,  0.9 hi,  0.9 si,  0.0 st
+MiB Mem :   7619.8 total,   2309.0 free,   2402.9 used,   2907.9 buff/cache
+MiB Swap:   3809.9 total,   3809.9 free,      0.0 used.   4929.8 avail Mem 
+
+    PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+    524 root      20   0  236944  12004   6352 S  64.7   0.2   0:19.15 polkitd
+   2092 root      20   0 1722668 151368  65760 S  47.1   1.9  24:46.17 python3
+   3571 root      20   0 2421560 121220  40084 S  29.4   1.6  18:52.15 compone+
+    631 root      20   0 1418296 107032  23472 S  23.5   1.4   0:14.58 tailsca+
+    505 root      20   0  484788  18828  14552 S  17.6   0.2   0:08.48 Network+
+   2076 root      20   0 1108180 237656  73128 S  17.6   3.0   6:47.84 python3
+   2692 root      20   0  918196  66024  28496 R  17.6   0.8   8:48.10 imu_node
+    504 message+  20   0   10428   5644   3600 R  11.8   0.1   0:07.06 dbus-da+
+   3566 root      20   0  721260  33640  20984 S  11.8   0.4   3:53.13 ekf_node
+   3749 root      20   0  992800  87012  42620 R  11.8   1.1   8:15.43 python3
+   3750 root      20   0 1742296 223476  55348 S  11.8   2.9   8:33.19 python3
+      1 root      20   0  167932  11876   7476 S   5.9   0.2   0:07.29 systemd
+    528 pulse      9 -11  615480  17784   9196 S   5.9   0.2   1:03.86 pulseau+
+   2099 root      20   0 1497792 186044  63448 S   5.9   2.4   3:27.32 python3
+   2988 rtkit     21   1  153504   1596   1388 S   5.9   0.0   0:00.27 rtkit-d+
+   3554 root      20   0  916572  68024  28612 S   5.9   0.9   0:53.17 joint_s+
+   3558 root      20   0  913132  63392  27268 S   5.9   0.8   2:04.30 ugv_dri+
+   3569 root      20   0  642780  28080  17144 S   5.9   0.4   1:19.61 scan_to+
+=== loadavg ===
+4.13 4.53 4.48 27/1041 12313
+=== tegrastats (3 samples) ===
+05-08-2026 01:30:12 RAM 2841/7620MB (lfb 4x4MB) SWAP 0/3810MB (cached 0MB) CPU [55%@1510,58%@1510,57%@1510,55%@1510,59%@1510,57%@1510] EMC_FREQ 5%@2133 GR3D_FREQ 0%@[624] NVDEC off NVJPG off NVJPG1 off VIC off OFA off APE 200 cpu@54.281C soc2@53.718C soc0@52.156C gpu@52.531C tj@54.281C soc1@53.75C VDD_IN 7012mW/7012mW VDD_CPU_GPU_CV 2238mW/2238mW VDD_SOC 1630mW/1630mW
+05-08-2026 01:30:13 RAM 2844/7620MB (lfb 4x4MB) SWAP 0/3810MB (cached 0MB) CPU [45%@1510,48%@1510,41%@1510,39%@1510,41%@1510,43%@1510] EMC_FREQ 4%@2133 GR3D_FREQ 0%@[624] NVDEC off NVJPG off NVJPG1 off VIC off OFA off APE 200 cpu@54.375C soc2@53.718C soc0@52.187C gpu@52.687C tj@54.375C soc1@53.937C VDD_IN 6645mW/6829mW VDD_CPU_GPU_CV 1994mW/2116mW VDD_SOC 1589mW/1610mW
+05-08-2026 01:30:14 RAM 2843/7620MB (lfb 4x4MB) SWAP 0/3810MB (cached 0MB) CPU [44%@1510,42%@1510,42%@1510,41%@1510,42%@1510,40%@1510] EMC_FREQ 4%@2133 GR3D_FREQ 0%@[624] NVDEC off NVJPG off NVJPG1 off VIC off OFA off APE 200 cpu@54.343C soc2@53.781C soc0@52.156C gpu@52.468C tj@54.343C soc1@53.875C VDD_IN 6563mW/6740mW VDD_CPU_GPU_CV 1913mW/2048mW VDD_SOC 1589mW/1603mW
+=== topic rates ===
+=== /scan ===
+average rate: 7.112
+	min: 0.000s max: 0.347s std dev: 0.11060s window: 11
+=== /scan_filtered ===
+=== /camera/image/compressed ===
+=== nav2_container CPU ===
+root         656 38.6  1.5 2421560 121220 ?      Sl   08:41  19:00 /opt/ros/humble/lib/rclcpp_components/component_container_isolated --ros-args --log-level info --ros-args -r __node:=nav2_container --params-file /tmp/tmpeno0396g --params-file /tmp/launch_params_1pw62p6x -r /tf:=tf -r /tf_static:=tf_static

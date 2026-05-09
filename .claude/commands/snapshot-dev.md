@@ -1,0 +1,101 @@
+# /snapshot-dev — Mint a Development Snapshot
+
+Mint a snapshot of the current session's completed work into the BlackBox volume so future sessions can find it via semantic + keyword search.
+
+## How It Works
+
+1. POST to `/chat/save` (NOT `/chat` — that wastes an LLM round-trip).
+2. Backend's auto-mint trigger (`turns_threshold=1`) fires `perform_mint()` immediately.
+3. `perform_mint()` generates a 3072-dim `gemini-embedding-001` embedding inline before returning, so the snapshot is searchable the moment the curl returns.
+4. Snapshot ID returned in the response body.
+
+## Default Behavior
+
+- **Operator:** `Brandon` (NOT `Brandon-DEV` — Brandon-DEV is for sessions where the user is acting as the dev persona, but completions of work for Brandon should be saved under Brandon so his future searches find them).
+- **Trigger:** invoked manually via `/snapshot-dev`, OR organically by Claude at the end of any non-trivial task per the CLAUDE.md instruction.
+- **Cost:** ~one Gemini embedding call (~$0.00013 at 3072 dims). No LLM completion call.
+
+## Operator Override
+
+If the user passes an operator as an argument (`/snapshot-dev system`, `/snapshot-dev Brandon-DEV`), use that. Otherwise default to `Brandon`.
+
+## What To Capture
+
+The `assistant_response` field becomes the snapshot body. Future semantic search hits this. Be comprehensive enough that a fresh session searching for the work can fully reconstruct context. Include:
+
+- **What problem was solved** (one paragraph)
+- **Files created** (path + line count + one-line description per file)
+- **Files modified** (path + nature of change)
+- **Architecture choices worth remembering** (especially non-obvious ones — gotchas, scope nuances, invariants)
+- **Test totals** (how many tests, all passing?)
+- **Verification evidence** (probe results, log lines, build output summary)
+- **Search hint phrases** ("Search this snapshot via X, Y, Z") so future-Claude can grep semantically
+
+## Procedure
+
+```bash
+# 1. Build the JSON payload as a heredoc-to-file (avoids shell-quoting hell with embedded JSON)
+cat > /tmp/snap_payload.json <<'EOF'
+{
+  "operator": "Brandon",
+  "user_message": "<one-line framing of the work being snapshotted>",
+  "assistant_response": "<the full structured summary — see What To Capture above>",
+  "model": "claude-opus-4-7",
+  "tokens": {"prompt": 0, "completion": 0}
+}
+EOF
+
+# 2. POST to /chat/save
+curl -s -X POST http://localhost:9091/chat/save \
+  -H "Content-Type: application/json" \
+  --data-binary @/tmp/snap_payload.json | python3 -m json.tool
+
+# Expected response:
+#   {
+#     "success": true,
+#     "operator": "Brandon",
+#     "minted": true,
+#     "snap_id": "SNAP-YYYYMMDD-NNNN",
+#     ...
+#   }
+
+# 3. Verify embedding generated (proof point — must show 3072 dimensions, not "Failed")
+sudo journalctl -u blackbox.service --since "30 seconds ago" --no-pager 2>&1 | \
+  grep -E "MINT|EMBEDDING|SNAP-YYYYMMDD-NNNN" | head -10
+```
+
+**IMPORTANT:** If `Write` to `/tmp` fails or shell quoting blocks long content, fall back to writing the payload via the `Write` tool to `/tmp/snap_payload.json`, then `curl --data-binary @/tmp/snap_payload.json`. JSON inside `-d '{...}'` shell-single-quotes is fragile for multi-paragraph bodies — use the file path.
+
+## Reporting Back
+
+When the snapshot mints, report to the user:
+
+| Field | Value |
+|---|---|
+| **snap_id** | `SNAP-YYYYMMDD-NNNN` |
+| **operator** | (the one used) |
+| **embedding** | 3072 dimensions ✓ (or warn if `Failed to generate`) |
+| **media artifacts** | (count if any auto-attached) |
+| **search hint** | (1-2 phrases the user can grep for later) |
+
+## Anti-Patterns (do NOT do)
+
+- ❌ Don't POST to `/chat` (LLM round-trip, ~$0.05+ per call vs ~$0.0001 for /chat/save).
+- ❌ Don't manually call `/mint` afterward — auto-mint already fired, you'd create a duplicate.
+- ❌ Don't AskUserQuestion for the operator unless explicitly told to — default to `Brandon` and let the user override via slash arg.
+- ❌ Don't truncate the summary — semantic search quality depends on full context. The 30k char cap is a hard ceiling, not a target.
+- ❌ Don't use stale model names (`gemini-2.5-pro`, `text-embedding-004`). Current defaults: `gemini-3.1-pro-preview-customtools` (chat), `gemini-embedding-001` (embeddings). The `model` field in the SaveRequest is just metadata; use whichever model actually produced the response (e.g. `claude-opus-4-7`).
+
+## When To Auto-Trigger (per CLAUDE.md)
+
+Per the updated CLAUDE.md, invoke this at the end of:
+- Completing a multi-step plan (this session's "Android context retrieval pipeline fix" was a perfect example)
+- Wrapping a meaningful debugging session (root cause found and fixed)
+- Major refactor or feature landing
+- Any task involving 3+ files modified
+
+Skip for:
+- Trivial Q&A ("yes", "what does X do")
+- Single-file typo fixes
+- Pure exploration with no code changes
+- Tasks the user hasn't asked you to record

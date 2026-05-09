@@ -1,0 +1,265 @@
+{
+  "Brandon": {
+    "83e5d7dd-dda5-4eb7-b44a-39837251fdc0": {
+      "id": "83e5d7dd-dda5-4eb7-b44a-39837251fdc0",
+      "name": "Anna",
+      "phone": "4108165293",
+      "email": "",
+      "relationship": "wife",
+      "notes": "Contact number for Anna, gathered from previous snapshots.",
+      "tags": [
+        "friend",
+        "external"
+      ],
+      "created_by": "openai-realtime",
+      "created_at": "2026-02-05T23:09:13.333708+00:00",
+      "updated_at": "2026-03-26T02:57:33.023554+00:00"
+    },
+    "dd1838af-fe1b-4dcd-8993-741b48586b41": {
+      "id": "dd1838af-fe1b-4dcd-8993-741b48586b41",
+      "name": "Brandon",
+      "phone": "+14108166914",
+      "email": "",
+      "relationship": "owner",
+      "notes": "Owner and operator of the AI BlackBox Flight Recorder. Primary contact for all alerts, cron job deliveries, and system notifications.",
+      "tags": [
+        "owner",
+        "vip",
+        "primary"
+      ],
+      "created_by": "Brandon",
+      "created_at": "2026-02-11T01:11:46.455923+00:00",
+      "updated_at": "2026-02-11T01:11:46.455923+00:00"
+    }
+  },
+  "Anna": {
+    "41fc7d37-10c2-46eb-8c95-987bd43cd5e7": {
+      "id": "41fc7d37-10c2-46eb-8c95-987bd43cd5e7",
+      "name": "AI BlackBox Flight Recorder",
+      "phone": "+17164512527",
+      "email": "brandon@aiblackboxfc.com",
+      "relationship": "system",
+      "notes": "The AI BlackBox system phone number. Used as caller identity for outbound calls.",
+      "tags": [
+        "system"
+      ],
+      "created_by": "system",
+      "created_at": "2026-02-05T21:35:27.193394+00:00",
+      "updated_at": "2026-02-05T21:35:27.193394+00:00"
+    },
+    "a1b2c3d4-anna-self-phone-number": {
+      "id": "a1b2c3d4-anna-self-phone-number",
+      "name": "Anna",
+      "phone": "4108165293",
+      "email": "",
+      "relationship": "owner",
+      "notes": "Anna's own phone number. Used for SMS routing — incoming messages from this number route to operator Anna.",
+      "tags": [
+        "owner",
+        "self"
+      ],
+      "created_by": "system",
+      "created_at": "2026-03-27T00:00:00.000000+00:00",
+      "updated_at": "2026-03-27T00:00:00.000000+00:00"
+    },
+    "feee6f6b-f5c7-4d68-b9aa-271cbfe9440c": {
+      "id": "feee6f6b-f5c7-4d68-b9aa-271cbfe9440c",
+      "name": "Brandon",
+      "phone": "14108166914",
+      "email": "bastrackstar@gmail.com",
+      "relationship": "husband king",
+      "notes": "BlackBox creator",
+      "tags": [],
+      "created_by": "Anna",
+      "created_at": "2026-03-26T02:07:05.169002+00:00",
+      "updated_at": "2026-03-26T02:07:05.169002+00:00"
+    }
+  },
+  "Anna 2": {
+    "8b0122bf-b272-45c1-b551-5a9701b09a22": {
+      "id": "8b0122bf-b272-45c1-b551-5a9701b09a22",
+      "name": "AI BlackBox Flight Recorder",
+      "phone": "+17164512527",
+      "email": "brandon@aiblackboxfc.com",
+      "relationship": "self",
+      "notes": "This is your own phone number. The AI BlackBox system number. Use this as the caller identity.",
+      "tags": [
+        "system",
+        "self"
+      ],
+      "created_by": "system",
+      "created_at": "2026-02-05T21:35:27.193402+00:00",
+      "updated_at": "2026-02-05T21:35:27.193402+00:00"
+    }
+  },
+  "B2 Tester": {
+    "a342d58d-3687-4c80-b8f2-40149703c8d5": {
+      "id": "a342d58d-3687-4c80-b8f2-40149703c8d5",
+      "name": "AI BlackBox Flight Recorder",
+      "phone": "+17164512527",
+      "email": "brandon@aiblackboxfc.com",
+      "relationship": "self",
+      "notes": "This is your own phone number. The AI BlackBox system number. Use this as the caller identity.",
+      "tags": [
+        "system",
+        "self"
+      ],
+      "created_by": "system",
+      "created_at": "2026-02-05T21:35:27.193408+00:00",
+      "updated_at": "2026-02-05T21:35:27.193408+00:00"
+    }
+  },
+  "Brandon-DEV": {
+    "44c8f7be-f8a4-4eca-9492-936f6a38d227": {
+      "id": "44c8f7be-f8a4-4eca-9492-936f6a38d227",
+      "name": "AI BlackBox Flight Recorder",
+      "phone": "+17164512527",
+      "email": "brandon@aiblackboxfc.com",
+      "relationship": "self",
+      "notes": "This is your own phone number. The AI BlackBox system number. Use this as the caller identity.",
+      "tags": [
+        "system",
+        "self"
+      ],
+      "created_by": "system",
+      "created_at": "2026-02-05T21:35:27.193413+00:00",
+      "updated_at": "2026-02-05T21:35:27.193413+00:00"
+    }
+  },
+  "Brandon-FA Tech": {
+    "1e1f75b2-dce6-4543-a5d4-192716c41f77": {
+      "id": "1e1f75b2-dce6-4543-a5d4-192716c41f77",
+      "name": "AI BlackBox Flight Recorder",
+      "phone": "+17164512527",
+      "email": "brandon@aiblackboxfc.com",
+      "relationship": "self",
+      "notes": "This is your own phone number. The AI BlackBox system number. Use this as the caller identity.",
+      "tags": [
+        "system",
+        "self"
+      ],
+      "created_by": "system",
+      "created_at": "2026-02-05T21:35:27.193418+00:00",
+      "updated_at": "2026-02-05T21:35:27.193418+00:00"
+    }
+  },
+  "Brandon-Research": {
+    "1cc7cb2c-e649-4247-a3bf-742c9428262a": {
+      "id": "1cc7cb2c-e649-4247-a3bf-742c9428262a",
+      "name": "AI BlackBox Flight Recorder",
+      "phone": "+17164512527",
+      "email": "brandon@aiblackboxfc.com",
+      "relationship": "self",
+      "notes": "This is your own phone number. The AI BlackBox system number. Use this as the caller identity.",
+      "tags": [
+        "system",
+        "self"
+      ],
+      "created_by": "system",
+      "created_at": "2026-02-05T21:35:27.193422+00:00",
+      "updated_at": "2026-02-05T21:35:27.193422+00:00"
+    }
+  },
+  "test": {
+    "66cd90c5-065b-40d2-8ea0-860f56fe02a8": {
+      "id": "66cd90c5-065b-40d2-8ea0-860f56fe02a8",
+      "name": "AI BlackBox Flight Recorder",
+      "phone": "+17164512527",
+      "email": "brandon@aiblackboxfc.com",
+      "relationship": "self",
+      "notes": "This is your own phone number. The AI BlackBox system number. Use this as the caller identity.",
+      "tags": [
+        "system",
+        "self"
+      ],
+      "created_by": "system",
+      "created_at": "2026-02-05T21:35:27.193427+00:00",
+      "updated_at": "2026-02-05T21:35:27.193427+00:00"
+    }
+  },
+  "test 2": {
+    "ca6cf3f2-bd88-4842-93e4-8999c14b5db8": {
+      "id": "ca6cf3f2-bd88-4842-93e4-8999c14b5db8",
+      "name": "AI BlackBox Flight Recorder",
+      "phone": "+17164512527",
+      "email": "brandon@aiblackboxfc.com",
+      "relationship": "self",
+      "notes": "This is your own phone number. The AI BlackBox system number. Use this as the caller identity.",
+      "tags": [
+        "system",
+        "self"
+      ],
+      "created_by": "system",
+      "created_at": "2026-02-05T21:35:27.193432+00:00",
+      "updated_at": "2026-02-05T21:35:27.193432+00:00"
+    }
+  },
+  "system": {
+    "78878a99-0451-4f49-aae5-1cab46e09056": {
+      "id": "78878a99-0451-4f49-aae5-1cab46e09056",
+      "name": "AI BlackBox Flight Recorder",
+      "phone": "+17164512527",
+      "email": "brandon@aiblackboxfc.com",
+      "relationship": "self",
+      "notes": "This is your own phone number. The AI BlackBox system number. Use this as the caller identity.",
+      "tags": [
+        "system",
+        "self"
+      ],
+      "created_by": "system",
+      "created_at": "2026-02-05T22:12:56.570238+00:00",
+      "updated_at": "2026-02-05T22:12:56.570238+00:00"
+    },
+    "5f1d2595-b700-4ae2-9207-69418f8683b1": {
+      "id": "5f1d2595-b700-4ae2-9207-69418f8683b1",
+      "name": "Brandon",
+      "phone": "+14108166914",
+      "email": "brandon@aiblackboxfc.com",
+      "relationship": "owner",
+      "notes": "Owner and Operator of the AI Black Box. Fire alarm programmer at BFPE. Builder with ADHD who created the Black Box as his \"External Executive Function\" and StoryBox as his \"External Imagination Engine\".",
+      "tags": [
+        "owner",
+        "operator",
+        "vip",
+        "developer"
+      ],
+      "created_by": "system",
+      "created_at": "2026-02-05T22:12:56.570265+00:00",
+      "updated_at": "2026-02-05T22:12:56.570265+00:00"
+    },
+    "59ecfaa9-9ca8-4c2f-a1c2-b0d4fe278cb8": {
+      "id": "59ecfaa9-9ca8-4c2f-a1c2-b0d4fe278cb8",
+      "name": "AI Black Box Hotline",
+      "phone": "+17164152527",
+      "email": "",
+      "relationship": "",
+      "notes": "The official AI Black Box Hotline number. This is the inbound line for calling into the Black Box system - the sovereign AI assistant with unlimited memory, multimodal generation capabilities, and access to powerful AI models. Users can call this number to interact with the AI via voice.",
+      "tags": [
+        "hotline",
+        "system",
+        "ai-blackbox",
+        "voice"
+      ],
+      "created_by": "system",
+      "created_at": "2026-02-05T22:15:14.395476+00:00",
+      "updated_at": "2026-02-05T22:15:14.395476+00:00"
+    },
+    "d892e670-be25-45b1-9f39-fddc726efa00": {
+      "id": "d892e670-be25-45b1-9f39-fddc726efa00",
+      "name": "AI Spalding",
+      "phone": "+19542812927",
+      "email": "",
+      "relationship": "business prospect / friend of Brandon",
+      "notes": "Marketing partner prospect for AI Black Box. Has his own protocols stack (10 Pillars, Knowledge Packets, MAF, Hallucination Prevention). Website: alspaulding.com. Asked detailed technical questions about the Black Box architecture. Brandon's buddy - interested in potentially partnering on marketing side. Takes the project seriously.",
+      "tags": [
+        "marketing",
+        "partner-prospect",
+        "ai-blackbox",
+        "vip"
+      ],
+      "created_by": "system",
+      "created_at": "2026-02-07T18:50:16.929994+00:00",
+      "updated_at": "2026-02-07T18:50:16.929994+00:00"
+    }
+  }
+}

@@ -1,0 +1,44 @@
+/* _settings.css
+ * Extracted from: style.css
+ * Generated: 2026-01-04T14:27:28.661739
+ * Blocks: 7
+ */
+
+/* Generation Section (Dark Gray) */
+.generation-section {
+  background: linear-gradient(135deg, #333333 0%, #000000 100%);
+  border: 1px solid var(--neutral-700);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-md);
+}
+
+/* Running Apps Section in Menu */
+.running-apps-section {
+  border-top: 1px solid var(--neutral-300);
+  padding-top: 12px;
+}
+
+.running-apps-section h4 {
+  color: #4a9eff;
+}
+
+/* Voice Preferences Section */
+.voice-preferences-section {
+  border-top: 1px solid var(--neutral-300);
+  padding-top: 12px;
+}
+
+.voice-preferences-section h4 {
+  color: #27d980;
+}
+
+/* System Controls Section */
+.system-controls-section {
+  border-top: 1px solid var(--neutral-300);
+  padding-top: 12px;
+}
+
+.system-controls-section h4 {
+  color: var(--neutral-850);
+}

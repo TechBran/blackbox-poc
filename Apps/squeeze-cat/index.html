@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Pelvic Vibe</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=67">
+    <script src="app.js?v=67" defer></script>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Header Bar -->
+        <header class="app-header">
+            <button class="menu-btn" id="menuBtn" aria-label="Open menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <div class="header-title">
+                <h1>Pelvic Vibe</h1>
+            </div>
+            <button class="settings-btn" id="settingsBtn" aria-label="Settings">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </button>
+        </header>
+
+        <!-- Main Timer Screen -->
+        <main class="main-content">
+            <!-- Phase Indicator -->
+            <div class="phase-display">
+                <span class="phase-label" id="phaseLabel">Ready</span>
+            </div>
+
+            <!-- Central Timer Circle -->
+            <div class="timer-container">
+                <div class="timer-ring-outer">
+                    <div class="timer-ring-inner">
+                        <svg class="timer-svg" viewBox="0 0 200 200">
+                            <circle class="timer-track" cx="100" cy="100" r="90" />
+                            <circle class="timer-progress" id="timerProgress" cx="100" cy="100" r="90" />
+                        </svg>
+                        <div class="timer-center">
+                            <span class="timer-count" id="timerCount">5</span>
+                            <span class="timer-unit">sec</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Breathing Animation Ring -->
+                <div class="breathing-ring" id="breathingRing"></div>
+            </div>
+
+            <!-- Workout Stats -->
+            <div class="workout-stats">
+                <div class="stat-item">
+                    <span class="stat-value">Set <span id="currentSet">1</span>/<span id="totalSets">1</span></span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-value">Rep <span id="currentRep">0</span>/<span id="totalReps">10</span></span>
+                </div>
+            </div>
+
+            <!-- Control Buttons -->
+            <div class="controls">
+                <button class="control-btn secondary" id="resetBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                        <path d="M3 3v5h5"></path>
+                    </svg>
+                </button>
+                <button class="control-btn primary" id="startBtn">
+                    <svg class="play-icon" id="playIcon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    <svg class="pause-icon hidden" id="pauseIcon" width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="4" width="4" height="16"></rect>
+                        <rect x="14" y="4" width="4" height="16"></rect>
+                    </svg>
+                </button>
+                <button class="control-btn secondary" id="skipBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 4 15 12 5 20 5 4"></polygon>
+                        <line x1="19" y1="5" x2="19" y2="19"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Quick Info -->
+            <div class="quick-info" id="quickInfo">
+                <span id="workoutDuration">5s squeeze / 5s relax</span>
+            </div>
+        </main>
+
+        <!-- Weekly Progress Bar (Minimal) -->
+        <div class="weekly-bar">
+            <div class="weekly-dots">
+                <div class="day-dot" data-day="0" id="day0"><span>S</span></div>
+                <div class="day-dot" data-day="1" id="day1"><span>M</span></div>
+                <div class="day-dot" data-day="2" id="day2"><span>T</span></div>
+                <div class="day-dot" data-day="3" id="day3"><span>W</span></div>
+                <div class="day-dot" data-day="4" id="day4"><span>T</span></div>
+                <div class="day-dot" data-day="5" id="day5"><span>F</span></div>
+                <div class="day-dot" data-day="6" id="day6"><span>S</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Side Menu Overlay -->
+    <div class="menu-overlay" id="menuOverlay"></div>
+
+    <!-- Side Menu -->
+    <nav class="side-menu" id="sideMenu">
+        <div class="menu-header">
+            <h2>Pelvic Vibe</h2>
+            <p>Holistic Pelvic Wellness</p>
+        </div>
+        <div class="menu-items">
+            <button class="menu-item" id="menuHowTo">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                    <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                </svg>
+                <span>How to Kegel</span>
+            </button>
+            <button class="menu-item" id="menuPoses">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="5" r="3"></circle>
+                    <path d="M12 8v8"></path>
+                    <path d="M8 14l4 4 4-4"></path>
+                    <path d="M6 20h12"></path>
+                </svg>
+                <span>Pose Library</span>
+            </button>
+            <button class="menu-item" id="menuPeriod">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+                <span>Period Tracker</span>
+            </button>
+            <button class="menu-item" id="menuTrackers">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                <span>Wellness Trackers</span>
+            </button>
+            <button class="menu-item" id="menuProgress">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                </svg>
+                <span>Weekly Progress</span>
+            </button>
+        </div>
+        <div class="menu-footer">
+            <p class="version">v2.0</p>
+        </div>
+    </nav>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="settingsModal">
+        <div class="modal-backdrop" id="settingsBackdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Workout Settings</h2>
+                <button class="modal-close" id="closeSettings">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label>Squeeze Duration</label>
+                    <div class="setting-control">
+                        <button class="adjust-btn" data-target="squeeze" data-action="decrease">-</button>
+                        <span class="setting-value" id="squeezeValue">5s</span>
+                        <button class="adjust-btn" data-target="squeeze" data-action="increase">+</button>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label>Relax Duration</label>
+                    <div class="setting-control">
+                        <button class="adjust-btn" data-target="relax" data-action="decrease">-</button>
+                        <span class="setting-value" id="relaxValue">5s</span>
+                        <button class="adjust-btn" data-target="relax" data-action="increase">+</button>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label>Reps per Set</label>
+                    <div class="setting-control">
+                        <button class="adjust-btn" data-target="reps" data-action="decrease">-</button>
+                        <span class="setting-value" id="repsValue">10</span>
+                        <button class="adjust-btn" data-target="reps" data-action="increase">+</button>
+                    </div>
+                </div>
+                <div class="setting-group">
+                    <label>Number of Sets</label>
+                    <div class="setting-control">
+                        <button class="adjust-btn" data-target="sets" data-action="decrease">-</button>
+                        <span class="setting-value" id="setsValue">1</span>
+                        <button class="adjust-btn" data-target="sets" data-action="increase">+</button>
+                    </div>
+                </div>
+                <div class="setting-group toggle-group">
+                    <label>Haptic Feedback</label>
+                    <button class="toggle-btn" id="hapticToggle">
+                        <span class="toggle-track">
+                            <span class="toggle-thumb"></span>
+                        </span>
+                    </button>
+                </div>
+                <div class="setting-group toggle-group">
+                    <label>Sound Effects</label>
+                    <button class="toggle-btn active" id="soundToggle">
+                        <span class="toggle-track">
+                            <span class="toggle-thumb"></span>
+                        </span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- How to Kegel Modal -->
+    <div class="modal" id="howToModal">
+        <div class="modal-backdrop" id="howToBackdrop"></div>
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2>How to Kegel</h2>
+                <button class="modal-close" id="closeHowTo">&times;</button>
+            </div>
+            <div class="modal-body scrollable">
+                <div class="guide-section">
+                    <div class="guide-step">
+                        <div class="step-num">1</div>
+                        <div class="step-content">
+                            <h3>Find Your Muscles</h3>
+                            <p>Imagine stopping the flow of urine mid-stream, or preventing passing gas. That's your pelvic floor engaging.</p>
+                        </div>
+                    </div>
+                    <div class="guide-step">
+                        <div class="step-num">2</div>
+                        <div class="step-content">
+                            <h3>Get Comfortable</h3>
+                            <p>Sit, stand, or lie down. Many find it easiest lying on their back with knees bent.</p>
+                        </div>
+                    </div>
+                    <div class="guide-step">
+                        <div class="step-num">3</div>
+                        <div class="step-content">
+                            <h3>Squeeze</h3>
+                            <p>Exhale and gently contract your pelvic floor. Lift inward and upward, like an elevator going up.</p>
+                        </div>
+                    </div>
+                    <div class="guide-step">
+                        <div class="step-num">4</div>
+                        <div class="step-content">
+                            <h3>Hold & Breathe</h3>
+                            <p>Hold the contraction while breathing normally. Start with 3-5 seconds.</p>
+                        </div>
+                    </div>
+                    <div class="guide-step">
+                        <div class="step-num">5</div>
+                        <div class="step-content">
+                            <h3>Release</h3>
+                            <p>Inhale and completely release. Let the pelvic floor soften fully. This is just as important as the squeeze!</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="guide-tips">
+                    <h3>Tips for Success</h3>
+                    <ul>
+                        <li>Quality over quantity - focus on form</li>
+                        <li>Keep glutes, abs, and thighs relaxed</li>
+                        <li>Practice daily for best results</li>
+                        <li>Results typically appear in 4-6 weeks</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pose Library Modal -->
+    <div class="modal" id="posesModal">
+        <div class="modal-backdrop" id="posesBackdrop"></div>
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2>Pose Library</h2>
+                <button class="modal-close" id="closePoses">&times;</button>
+            </div>
+            <div class="modal-body scrollable">
+                <p class="modal-intro">Positions designed for active Kegel practice. Hold each while performing squeeze-and-release cycles.</p>
+                <div class="pose-grid">
+                    <div class="pose-card">
+                        <div class="pose-icon">
+                            <img src="images/bridge-pose.png" alt="Bridge Pose" style="width: 100%; height: auto; border-radius: 8px;">
+                        </div>
+                        <h4>Bridge Pose</h4>
+                        <p>Lie on back, lift hips. Engages pelvic floor and glutes together.</p>
+                    </div>
+                    <div class="pose-card">
+                        <div class="pose-icon">
+                            <img src="images/cat-cow-pose.png" alt="Cat-Cow Pose" style="width: 100%; height: auto; border-radius: 8px;">
+                        </div>
+                        <h4>Cat-Cow</h4>
+                        <p>Dynamic flow. Squeeze on cat exhale, release on cow inhale.</p>
+                    </div>
+                    <div class="pose-card">
+                        <div class="pose-icon">
+                            <img src="images/chair-pose.png" alt="Chair Pose" style="width: 100%; height: auto; border-radius: 8px;">
+                        </div>
+                        <h4>Chair Pose</h4>
+                        <p>Standing squat. Practice kegels while holding the position.</p>
+                    </div>
+                    <div class="pose-card">
+                        <div class="pose-icon">
+                            <img src="images/goddess-pose.png" alt="Goddess Pose" style="width: 100%; height: auto; border-radius: 8px;">
+                        </div>
+                        <h4>Goddess Pose</h4>
+                        <p>Wide squat. Perfect for pelvic floor isolation.</p>
+                    </div>
+                    <div class="pose-card">
+                        <div class="pose-icon">
+                            <img src="images/bird-dog-pose.png" alt="Bird Dog Pose" style="width: 100%; height: auto; border-radius: 8px;">
+                        </div>
+                        <h4>Bird Dog</h4>
+                        <p>Balance pose. Requires pelvic floor activation for stability.</p>
+                    </div>
+                    <div class="pose-card">
+                        <div class="pose-icon">
+                            <img src="images/butterfly-pose.png" alt="Butterfly Pose" style="width: 100%; height: auto; border-radius: 8px;">
+                        </div>
+                        <h4>Butterfly</h4>
+                        <p>Seated hip opener. Ideal for kegel practice.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Period Tracker Modal -->
+    <div class="modal" id="periodModal">
+        <div class="modal-backdrop" id="periodBackdrop"></div>
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h2>Period Tracker</h2>
+                <button class="modal-close" id="closePeriod">&times;</button>
+            </div>
+            <div class="modal-body scrollable">
+                <div class="period-phase">
+                    <div class="phase-icon-large" id="periodPhaseIcon">
+                        <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </div>
+                    <h3 id="periodPhaseName">Follicular Phase</h3>
+                    <p id="periodPhaseDesc">Energy building. Great time for challenging workouts!</p>
+                </div>
+                <div class="period-actions">
+                    <button class="action-btn" id="logPeriodStart">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="16"></line>
+                            <line x1="8" y1="12" x2="16" y2="12"></line>
+                        </svg>
+                        Log Period Start
+                    </button>
+                    <button class="action-btn secondary" id="logPeriodEnd">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        Log Period End
+                    </button>
+                </div>
+                <div class="period-stats">
+                    <div class="period-stat">
+                        <span class="stat-label">Avg Cycle</span>
+                        <span class="stat-num" id="avgCycle">28 days</span>
+                    </div>
+                    <div class="period-stat">
+                        <span class="stat-label">Avg Period</span>
+                        <span class="stat-num" id="avgPeriod">5 days</span>
+                    </div>
+                    <div class="period-stat">
+                        <span class="stat-label">Next Expected</span>
+                        <span class="stat-num" id="nextPeriod">--</span>
+                    </div>
+                </div>
+                <div class="period-calendar" id="periodCalendar">
+                    <!-- Calendar generated by JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wellness Trackers Modal -->
+    <div class="modal" id="trackersModal">
+        <div class="modal-backdrop" id="trackersBackdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Wellness Trackers</h2>
+                <button class="modal-close" id="closeTrackers">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="tracker-section">
+                    <div class="tracker-header">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>
+                        </svg>
+                        <h3>Hydration</h3>
+                    </div>
+                    <div class="tracker-bar">
+                        <div class="tracker-fill" id="waterFill" style="width: 0%"></div>
+                    </div>
+                    <div class="tracker-info">
+                        <span><span id="waterCount">0</span> fl oz / 64 fl oz goal</span>
+                        <button class="tracker-add" id="addWater">+ Add</button>
+                    </div>
+                </div>
+                <div class="tracker-section">
+                    <div class="tracker-header">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                        </svg>
+                        <h3>Movement</h3>
+                    </div>
+                    <div class="tracker-bar">
+                        <div class="tracker-fill" id="stepFill" style="width: 0%"></div>
+                    </div>
+                    <div class="tracker-info">
+                        <span><span id="stepCount">0</span> / 10,000 steps</span>
+                        <button class="tracker-add" id="addSteps">+ Add</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Weekly Progress Modal -->
+    <div class="modal" id="progressModal">
+        <div class="modal-backdrop" id="progressBackdrop"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Weekly Progress</h2>
+                <button class="modal-close" id="closeProgress">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="progress-week">
+                    <div class="progress-day" data-day="0">
+                        <span class="day-name">Sun</span>
+                        <div class="day-check" id="progressDay0">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="progress-day" data-day="1">
+                        <span class="day-name">Mon</span>
+                        <div class="day-check" id="progressDay1">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="progress-day" data-day="2">
+                        <span class="day-name">Tue</span>
+                        <div class="day-check" id="progressDay2">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="progress-day" data-day="3">
+                        <span class="day-name">Wed</span>
+                        <div class="day-check" id="progressDay3">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="progress-day" data-day="4">
+                        <span class="day-name">Thu</span>
+                        <div class="day-check" id="progressDay4">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="progress-day" data-day="5">
+                        <span class="day-name">Fri</span>
+                        <div class="day-check" id="progressDay5">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="progress-day" data-day="6">
+                        <span class="day-name">Sat</span>
+                        <div class="day-check" id="progressDay6">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="progress-summary">
+                    <p><span id="completedDays">0</span> of 7 days completed this week</p>
+                </div>
+                <div class="streak-info">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+                    </svg>
+                    <span>Current streak: <strong id="currentStreak">0</strong> days</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Completion Toast -->
+    <div class="toast" id="completionToast">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>
+        <span>Workout Complete!</span>
+    </div>
+
+    <!-- Audio Elements -->
+    <audio id="squeezeTone" preload="auto">
+        <source src="audio/squeeze.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="relaxTone" preload="auto">
+        <source src="audio/relax.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="completeTone" preload="auto">
+        <source src="audio/workout-complete.mp3" type="audio/mpeg">
+    </audio>
+</body>
+</html>

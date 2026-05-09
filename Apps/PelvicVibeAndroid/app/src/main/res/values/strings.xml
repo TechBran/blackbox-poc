@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WorkoutVibe</string>
+    <string name="app_tagline">Universal Workout Timer</string>
+
+    <!-- Timer Phases -->
+    <string name="phase_ready">Ready</string>
+    <string name="phase_countdown">Get Ready</string>
+    <string name="phase_work">Work</string>
+    <string name="phase_rest">Rest</string>
+    <string name="phase_complete">Complete</string>
+
+    <!-- Stats -->
+    <string name="stat_set">Set</string>
+    <string name="stat_rep">Rep</string>
+    <string name="stat_of">/</string>
+    <string name="unit_seconds">sec</string>
+
+    <!-- Menu Items -->
+    <string name="menu_workout_types">Workout Types</string>
+    <string name="menu_calendar">Calendar</string>
+    <string name="menu_trackers">Step Tracker</string>
+    <string name="menu_progress">Progress</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Workout Settings</string>
+    <string name="setting_workout_type">Workout Type</string>
+    <string name="setting_work_duration">Work Duration</string>
+    <string name="setting_rest_duration">Rest Duration</string>
+    <string name="setting_reps">Reps per Set</string>
+    <string name="setting_sets">Number of Sets</string>
+    <string name="setting_haptic">Haptic Feedback</string>
+    <string name="setting_sound">Sound Effects</string>
+    <string name="setting_voice">Voice</string>
+    <string name="setting_daily_goal">Daily Goal</string>
+
+    <!-- Workout Types -->
+    <string name="workout_pushups">Push-ups</string>
+    <string name="workout_situps">Sit-ups</string>
+    <string name="workout_squats">Squats</string>
+    <string name="workout_planks">Planks</string>
+    <string name="workout_burpees">Burpees</string>
+    <string name="workout_running">Running</string>
+    <string name="workout_sprints">Sprints</string>
+    <string name="workout_custom">Custom</string>
+
+    <!-- Voice Options -->
+    <string name="voice_female">Female</string>
+    <string name="voice_male">Male</string>
+
+    <!-- Step Tracker -->
+    <string name="trackers_title">Step Tracker</string>
+    <string name="tracker_movement">Movement</string>
+    <string name="tracker_steps_goal">10,000 steps</string>
+    <string name="tracker_add">+ Add</string>
+
+    <!-- Weekly Progress -->
+    <string name="progress_title">Progress</string>
+    <string name="progress_days_completed">%1$d of 7 days completed this week</string>
+    <string name="progress_streak">Current streak: %1$d days</string>
+
+    <!-- Calendar -->
+    <string name="calendar_title">Workout Calendar</string>
+    <string name="calendar_workouts_today">workouts today</string>
+    <string name="calendar_goal_met">Goal Met!</string>
+
+    <!-- Days -->
+    <string name="day_sun">S</string>
+    <string name="day_mon">M</string>
+    <string name="day_tue">T</string>
+    <string name="day_wed">W</string>
+    <string name="day_thu">T</string>
+    <string name="day_fri">F</string>
+    <string name="day_sat">S</string>
+
+    <!-- Toast -->
+    <string name="workout_complete">Workout Complete!</string>
+
+    <!-- Notifications -->
+    <string name="notification_channel_name">Workout Timer</string>
+    <string name="notification_channel_desc">Shows workout progress</string>
+    <string name="notification_title">WorkoutVibe</string>
+    <string name="notification_workout_active">Workout in progress</string>
+</resources>

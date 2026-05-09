@@ -1,0 +1,676 @@
+/* _device-manager.css
+ * Device Manager UI styles
+ * Created: 2026-02-18
+ */
+
+/* ============================================================================
+   Manager Modal
+   ============================================================================ */
+
+.dm-manager-card {
+    width: min(760px, 95vw);
+    max-height: 85vh;
+    max-height: 85dvh;
+}
+
+.dm-manager-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+    flex: 1;
+    min-height: 0;
+}
+
+/* ============================================================================
+   Top Bar (search + filter + sync button)
+   ============================================================================ */
+
+.dm-top-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.dm-search-wrap {
+    flex: 1;
+    position: relative;
+}
+
+.dm-search-input {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--neutral-100);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm);
+    color: var(--neutral-900);
+    font-size: 13px;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.dm-search-input:focus {
+    border-color: var(--brand-primary);
+}
+
+.dm-search-input::placeholder {
+    color: var(--neutral-400);
+}
+
+.dm-filter-select {
+    padding: 8px 10px;
+    background: var(--neutral-100);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm);
+    color: var(--neutral-900);
+    font-size: 13px;
+    cursor: pointer;
+    outline: none;
+}
+
+.dm-sync-btn {
+    white-space: nowrap;
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+}
+
+.dm-sync-btn.syncing {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* ============================================================================
+   Device List
+   ============================================================================ */
+
+.dm-device-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+    padding-right: 4px;
+}
+
+.dm-device-list::-webkit-scrollbar {
+    width: 4px;
+}
+.dm-device-list::-webkit-scrollbar-thumb {
+    background: var(--neutral-300);
+    border-radius: var(--radius-full);
+}
+
+/* ============================================================================
+   Device Card
+   ============================================================================ */
+
+.dm-device-card {
+    background: var(--neutral-100);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-left: 3px solid var(--neutral-400);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.dm-device-card:hover {
+    background: var(--neutral-150, rgba(255,255,255,0.06));
+}
+
+/* Status accent borders */
+.dm-device-card.dm-status-online {
+    border-left-color: #22c55e;
+}
+.dm-device-card.dm-status-offline {
+    border-left-color: #ef4444;
+}
+.dm-device-card.dm-status-busy {
+    border-left-color: #f59e0b;
+}
+.dm-device-card.dm-status-adb-connected {
+    border-left-color: #3b82f6;
+}
+
+/* Card header row */
+.dm-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.dm-device-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+    width: 24px;
+    text-align: center;
+}
+
+.dm-device-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--neutral-900);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.dm-status-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
+}
+
+.dm-status-badge.online {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+.dm-status-badge.offline {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+.dm-status-badge.busy {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+.dm-status-badge.unknown {
+    background: rgba(156, 163, 175, 0.15);
+    color: #9ca3af;
+}
+
+.dm-adb-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    flex-shrink: 0;
+}
+
+/* Card description / metadata row */
+.dm-card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-bottom: 8px;
+}
+
+.dm-meta-item {
+    font-size: 12px;
+    color: var(--neutral-500);
+}
+
+.dm-meta-item strong {
+    color: var(--neutral-700);
+    font-weight: 500;
+}
+
+.dm-device-desc {
+    font-size: 12px;
+    color: var(--neutral-500);
+    margin-bottom: 8px;
+}
+
+/* Card actions row */
+.dm-card-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.dm-action-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: var(--radius-xs);
+    background: var(--neutral-200);
+    color: var(--neutral-800);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast);
+    font-weight: 500;
+}
+
+.dm-action-btn:hover {
+    background: var(--neutral-300);
+    color: var(--neutral-900);
+}
+
+.dm-action-btn.dm-btn-connect {
+    background: rgba(34, 197, 94, 0.12);
+    color: #22c55e;
+    border-color: rgba(34, 197, 94, 0.2);
+}
+.dm-action-btn.dm-btn-connect:hover {
+    background: rgba(34, 197, 94, 0.22);
+}
+
+.dm-action-btn.dm-btn-disconnect {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border-color: rgba(239, 68, 68, 0.2);
+}
+.dm-action-btn.dm-btn-disconnect:hover {
+    background: rgba(239, 68, 68, 0.22);
+}
+
+.dm-action-btn.dm-btn-pair {
+    background: rgba(139, 92, 246, 0.12);
+    color: #a78bfa;
+    border-color: rgba(139, 92, 246, 0.2);
+}
+.dm-action-btn.dm-btn-pair:hover {
+    background: rgba(139, 92, 246, 0.22);
+}
+
+.dm-action-btn.dm-btn-remove {
+    background: rgba(239, 68, 68, 0.08);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.12);
+}
+.dm-action-btn.dm-btn-remove:hover {
+    background: rgba(239, 68, 68, 0.18);
+}
+
+/* ============================================================================
+   Empty State
+   ============================================================================ */
+
+.dm-empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--neutral-500);
+}
+
+.dm-empty-state p:first-child {
+    font-size: 15px;
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.dm-empty-hint {
+    font-size: 13px;
+    color: var(--neutral-400);
+}
+
+/* ============================================================================
+   Pair Modal
+   ============================================================================ */
+
+.dm-pair-card {
+    width: min(440px, 92vw);
+}
+
+.dm-pair-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.dm-pair-device-info {
+    background: var(--neutral-100);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 13px;
+}
+
+.dm-pair-device-info strong {
+    color: var(--neutral-900);
+}
+
+.dm-pair-steps {
+    font-size: 13px;
+    color: var(--neutral-600);
+    line-height: 1.6;
+    padding-left: 18px;
+}
+
+.dm-pair-steps li {
+    margin-bottom: 4px;
+}
+
+.dm-pair-steps code {
+    background: var(--neutral-100);
+    padding: 1px 5px;
+    border-radius: var(--radius-xs);
+    font-size: 12px;
+    color: var(--neutral-800);
+}
+
+.dm-pair-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.dm-pair-field label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--neutral-600);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dm-pair-field input {
+    padding: 8px 12px;
+    background: var(--neutral-100);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm);
+    color: var(--neutral-900);
+    font-size: 14px;
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.dm-pair-field input:focus {
+    border-color: var(--brand-primary);
+}
+
+.dm-pair-field input.dm-input-error {
+    border-color: #ef4444;
+}
+
+.dm-pair-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+
+/* Pair warning banner */
+.dm-pair-warning {
+    background: rgba(245, 158, 11, 0.1);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 12px;
+    color: #f59e0b;
+    line-height: 1.5;
+}
+
+/* Side-by-side pair fields */
+.dm-pair-fields-row {
+    display: flex;
+    gap: 10px;
+}
+
+.dm-pair-fields-row .dm-pair-field {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Validation hint text below inputs */
+.dm-field-hint {
+    font-size: 11px;
+    color: #ef4444;
+    min-height: 16px;
+    margin-top: 2px;
+}
+
+/* Progress step list */
+.dm-pair-progress {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.dm-pair-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 13px;
+    color: var(--neutral-500);
+    background: var(--neutral-100);
+    border: 1px solid transparent;
+    transition: all var(--transition-fast);
+}
+
+.dm-step-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    flex-shrink: 0;
+    background: var(--neutral-200);
+    color: var(--neutral-500);
+    transition: all var(--transition-fast);
+}
+
+/* Step states */
+.dm-pair-step.dm-step-ok {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.06);
+    border-color: rgba(34, 197, 94, 0.15);
+}
+
+.dm-pair-step.dm-step-ok .dm-step-icon {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+}
+
+.dm-pair-step.dm-step-fail {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.06);
+    border-color: rgba(239, 68, 68, 0.15);
+}
+
+.dm-pair-step.dm-step-fail .dm-step-icon {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+}
+
+.dm-pair-step.dm-step-active {
+    color: #3b82f6;
+    background: rgba(59, 130, 246, 0.06);
+    border-color: rgba(59, 130, 246, 0.15);
+}
+
+.dm-pair-step.dm-step-active .dm-step-icon {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    animation: dm-pulse 1.2s ease-in-out infinite;
+}
+
+.dm-pair-step.dm-step-skip {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.06);
+    border-color: rgba(245, 158, 11, 0.15);
+}
+
+.dm-pair-step.dm-step-skip .dm-step-icon {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+@keyframes dm-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* Step message text */
+.dm-step-message {
+    flex: 1;
+    min-width: 0;
+}
+
+/* Error display area */
+.dm-pair-error {
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 10px 12px;
+    font-size: 13px;
+    color: #f87171;
+    line-height: 1.5;
+    display: none;
+}
+
+.dm-pair-error.visible {
+    display: block;
+}
+
+/* Fallback port section */
+.dm-fallback-section {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(245, 158, 11, 0.06);
+    border: 1px solid rgba(245, 158, 11, 0.15);
+    border-radius: var(--radius-sm);
+}
+
+.dm-fallback-section.visible {
+    display: flex;
+}
+
+.dm-fallback-hint {
+    font-size: 12px;
+    color: #f59e0b;
+    line-height: 1.5;
+}
+
+.dm-fallback-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.dm-fallback-row .dm-pair-field {
+    flex: 1;
+}
+
+.dm-fallback-row .btn {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+/* Quick pair button (Android app only) */
+.dm-quick-pair-btn {
+    background: rgba(139, 92, 246, 0.12);
+    color: #a78bfa;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: var(--radius-sm);
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: none;
+}
+
+.dm-quick-pair-btn.visible {
+    display: inline-flex;
+}
+
+.dm-quick-pair-btn:hover {
+    background: rgba(139, 92, 246, 0.22);
+}
+
+/* ============================================================================
+   Screenshot Modal
+   ============================================================================ */
+
+.dm-screenshot-card {
+    width: min(600px, 95vw);
+    max-height: 90vh;
+    max-height: 90dvh;
+}
+
+.dm-screenshot-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    overflow-y: auto;
+}
+
+.dm-screenshot-img {
+    max-width: 100%;
+    max-height: 65vh;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dm-screenshot-loading {
+    padding: 40px;
+    text-align: center;
+    color: var(--neutral-500);
+    font-size: 14px;
+}
+
+.dm-screenshot-meta {
+    font-size: 12px;
+    color: var(--neutral-500);
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    .dm-manager-card {
+        width: 100vw;
+        max-height: 100vh;
+        max-height: 100dvh;
+        border-radius: 0;
+    }
+
+    .dm-top-bar {
+        flex-wrap: wrap;
+    }
+
+    .dm-search-wrap {
+        flex-basis: 100%;
+    }
+
+    .dm-card-actions {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 480px) {
+    .dm-manager-body {
+        padding: 10px;
+    }
+
+    .dm-device-card {
+        padding: 10px 12px;
+    }
+
+    .dm-card-meta {
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .dm-pair-card {
+        width: 100vw;
+        border-radius: 0;
+    }
+
+    .dm-pair-fields-row {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 360px) {
+    .dm-action-btn {
+        font-size: 11px;
+        padding: 3px 8px;
+    }
+}

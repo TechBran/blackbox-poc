@@ -1,0 +1,1111 @@
+/* Sovereign Browser Result Styling */
+
+.browser-result {
+    margin: var(--space-sm) 0;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--neutral-100);
+    border: 1px solid var(--neutral-200);
+}
+
+.browser-result-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: linear-gradient(135deg, #6c3bd1 0%, #8b5cf6 100%);
+    color: #fff;
+}
+
+.browser-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    background: rgba(255, 255, 255, 0.2);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.browser-badge-icon {
+    width: 14px;
+    height: 14px;
+}
+
+.browser-result-summary {
+    padding: var(--space-md);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--neutral-800);
+    white-space: pre-wrap;
+}
+
+.browser-screenshot {
+    width: 100%;
+    display: block;
+    border-top: 1px solid var(--neutral-200);
+    cursor: pointer;
+    transition: opacity var(--transition-fast);
+}
+
+.browser-screenshot:hover {
+    opacity: 0.92;
+}
+
+.browser-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--space-xs);
+    padding: var(--space-sm);
+    border-top: 1px solid var(--neutral-200);
+}
+
+.browser-gallery-thumb {
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+    border: 1px solid var(--neutral-200);
+}
+
+.browser-gallery-thumb:hover {
+    transform: scale(1.03);
+    box-shadow: var(--shadow-md);
+}
+
+.browser-steps-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-xs) var(--space-md);
+    font-size: 0.75rem;
+    color: var(--neutral-500);
+    border-top: 1px solid var(--neutral-200);
+}
+
+/* Loading placeholder */
+.browser-placeholder {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-md);
+    margin: var(--space-sm) 0;
+    border-radius: var(--radius-lg);
+    background: linear-gradient(135deg, rgba(108, 59, 209, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+    border: 1px solid rgba(108, 59, 209, 0.2);
+}
+
+.browser-placeholder .browser-badge {
+    background: linear-gradient(135deg, #6c3bd1 0%, #8b5cf6 100%);
+    color: #fff;
+    animation: browser-pulse 2s ease-in-out infinite;
+}
+
+@keyframes browser-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.browser-placeholder-text {
+    font-size: 0.85rem;
+    color: var(--neutral-600);
+}
+
+/* ─── Computer Use Streaming UI ─── */
+
+.cu-screenshot-frame {
+    position: relative;
+    margin: var(--space-sm) 0;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--neutral-200);
+    background: var(--neutral-50);
+}
+
+.cu-step-badge {
+    position: absolute;
+    top: var(--space-xs);
+    right: var(--space-xs);
+    padding: 2px 10px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, #6c3bd1 0%, #8b5cf6 100%);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    z-index: 1;
+    box-shadow: var(--shadow-sm);
+}
+
+.cu-screenshot-img {
+    width: 100%;
+    display: block;
+    cursor: pointer;
+    transition: opacity var(--transition-fast);
+}
+
+.cu-screenshot-img:hover {
+    opacity: 0.92;
+}
+
+.cu-action-line {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-sm);
+    margin: 2px 0;
+    border-left: 3px solid #8b5cf6;
+    background: rgba(139, 92, 246, 0.06);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    font-size: 0.8rem;
+    color: var(--neutral-700);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.cu-action-line strong {
+    color: #6c3bd1;
+    min-width: 90px;
+}
+
+.cu-action-line code {
+    background: var(--neutral-150);
+    padding: 1px 5px;
+    border-radius: var(--radius-xs);
+    font-size: 0.78rem;
+}
+
+.cu-action-line.cu-file-edit {
+    border-left-color: #2563eb;
+    background: rgba(37, 99, 235, 0.06);
+}
+
+.cu-action-line.cu-file-edit strong {
+    color: #2563eb;
+}
+
+.cu-bash-block {
+    margin: var(--space-xs) 0;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 1px solid var(--neutral-200);
+    background: var(--neutral-900);
+}
+
+.cu-bash-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-xs) var(--space-sm);
+    background: var(--neutral-800);
+    font-size: 0.78rem;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--neutral-400);
+}
+
+.cu-bash-exit {
+    font-weight: 600;
+    font-size: 0.7rem;
+    padding: 1px 6px;
+    border-radius: var(--radius-xs);
+}
+
+.cu-bash-exit.success {
+    color: #4ade80;
+    background: rgba(74, 222, 128, 0.12);
+}
+
+.cu-bash-exit.error {
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.12);
+}
+
+.cu-bash-output {
+    padding: var(--space-sm);
+    margin: 0;
+    font-size: 0.78rem;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--neutral-300);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 300px;
+    overflow-y: auto;
+    line-height: 1.4;
+}
+
+/* ─── Computer Use Collapsible Activity Panel ─── */
+
+.cu-activity-panel {
+    margin: var(--space-sm) 0;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    background: var(--neutral-50);
+    transition: border-color var(--transition-base);
+}
+
+.cu-activity-panel:not(.collapsed) {
+    border-color: rgba(139, 92, 246, 0.4);
+}
+
+.cu-activity-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-md);
+    background: linear-gradient(135deg, rgba(108, 59, 209, 0.08) 0%, rgba(139, 92, 246, 0.08) 100%);
+    cursor: pointer;
+    user-select: none;
+    transition: background var(--transition-fast);
+}
+
+.cu-activity-header:hover {
+    background: linear-gradient(135deg, rgba(108, 59, 209, 0.14) 0%, rgba(139, 92, 246, 0.14) 100%);
+}
+
+.cu-live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: #4ade80;
+    flex-shrink: 0;
+    font-size: 0;
+    line-height: 0;
+    display: inline-block;
+}
+
+.cu-live-dot.pulse {
+    animation: cu-dot-pulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+}
+
+/* When complete, show checkmark instead of dot */
+.cu-activity-panel.collapsed .cu-live-dot:not(.pulse) {
+    width: auto;
+    height: auto;
+    background: none;
+    font-size: 0.75rem;
+    line-height: 1;
+    color: #4ade80;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+@keyframes cu-dot-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.85); }
+}
+
+.cu-activity-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #6c3bd1;
+    letter-spacing: 0.02em;
+}
+
+.cu-step-counter {
+    font-size: 0.72rem;
+    color: var(--neutral-500);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    margin-left: auto;
+}
+
+.cu-activity-toggle {
+    font-size: 0.65rem;
+    color: var(--neutral-500);
+    transition: transform var(--transition-fast);
+    margin-left: var(--space-xs);
+}
+
+.cu-activity-body {
+    padding: var(--space-sm);
+    max-height: 600px;
+    overflow-y: auto;
+    transition: max-height var(--transition-slow), padding var(--transition-slow), opacity var(--transition-base);
+}
+
+.cu-activity-panel.collapsed .cu-activity-body {
+    max-height: 0;
+    padding: 0 var(--space-sm);
+    overflow: hidden;
+    opacity: 0;
+}
+
+/* Live preview — the most recent screenshot, shown large */
+.cu-live-preview {
+    width: 100%;
+    display: block;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--neutral-200);
+    margin-bottom: var(--space-sm);
+    cursor: pointer;
+    transition: opacity var(--transition-fast);
+}
+
+.cu-live-preview:hover {
+    opacity: 0.92;
+}
+
+/* Screenshot gallery strip */
+.cu-gallery {
+    display: flex;
+    gap: var(--space-xs);
+    padding: var(--space-xs) 0;
+    overflow-x: auto;
+    margin-bottom: var(--space-sm);
+    scrollbar-width: thin;
+    scrollbar-color: var(--neutral-300) transparent;
+}
+
+.cu-gallery-thumb {
+    width: 120px;
+    height: 68px;
+    object-fit: cover;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--neutral-200);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+
+.cu-gallery-thumb:hover {
+    transform: scale(1.05);
+    box-shadow: var(--shadow-md);
+    border-color: #8b5cf6;
+}
+
+/* Nested action/bash items inside the panel — tighten margins */
+.cu-activity-body .cu-action-line {
+    margin: 2px 0;
+}
+
+.cu-activity-body .cu-bash-block {
+    margin: var(--space-xs) 0;
+}
+
+.cu-activity-body .cu-screenshot-frame {
+    margin: var(--space-xs) 0;
+}
+
+/* ─── Computer Use Background Banner ─── */
+
+.cu-bg-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 9000;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-xs) var(--space-md);
+    background: linear-gradient(135deg, #6c3bd1 0%, #8b5cf6 100%);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 500;
+    box-shadow: var(--shadow-lg);
+}
+
+.cu-bg-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: #4ade80;
+    animation: cu-dot-pulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+    flex-shrink: 0;
+}
+
+.cu-bg-label {
+    flex: 1;
+}
+
+.cu-bg-step {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.75rem;
+    opacity: 0.85;
+}
+
+.cu-bg-reconnect {
+    padding: 3px 12px;
+    border-radius: var(--radius-full);
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.cu-bg-reconnect:hover {
+    background: rgba(255, 255, 255, 0.35);
+}
+
+.cu-bg-view {
+    padding: 3px 12px;
+    border-radius: var(--radius-full);
+    background: rgba(74, 222, 128, 0.25);
+    border: 1px solid rgba(74, 222, 128, 0.4);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition-fast);
+}
+
+.cu-bg-view:hover {
+    background: rgba(74, 222, 128, 0.4);
+}
+
+/* ─── Fixed Tool Indicator for Computer Use ─── */
+
+.tool-indicator.cu-fixed {
+    position: fixed;
+    top: 55px;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: auto;
+    margin-top: 0;
+    z-index: 140;
+    max-width: 600px;
+    width: fit-content;
+    border-radius: var(--radius-full);
+    animation: cu-tool-float-in 0.25s ease-out, tool-pulse 2s 0.25s infinite;
+    border-color: rgba(139, 92, 246, 0.5);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 12px rgba(139, 92, 246, 0.3);
+}
+
+@keyframes cu-tool-float-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ─── Live View Panel (Reasoning-Style Collapsible) ─── */
+
+/* Base pill - collapsed */
+.cu-live-view-panel {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    background: rgba(30, 30, 30, 0.95);
+    border: 1.5px solid rgba(139, 92, 246, 0.5);
+    border-radius: 50px;
+    margin-top: 8px;
+    margin-bottom: 4px;
+    overflow: hidden;
+    transition: all var(--transition-slow);
+    max-width: 100%;
+    box-shadow: 0 0 8px rgba(139, 92, 246, 0.3);
+    animation: cu-live-pulse 2s ease-in-out infinite;
+}
+
+@keyframes cu-live-pulse {
+    0%, 100% { box-shadow: 0 0 8px rgba(139, 92, 246, 0.3); }
+    50% { box-shadow: 0 0 14px rgba(139, 92, 246, 0.5); }
+}
+
+/* Header */
+.cu-live-view-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    cursor: pointer;
+    user-select: none;
+    width: 100%;
+}
+
+.cu-live-view-header:hover {
+    background: rgba(139, 92, 246, 0.08);
+}
+
+.cu-live-view-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #b794f6;
+}
+
+.cu-live-view-step {
+    font-size: 12px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: var(--neutral-600);
+    padding-left: 8px;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.cu-live-view-toggle {
+    transition: transform var(--transition-fast);
+    display: inline-block;
+    font-size: 0.65rem;
+    color: var(--neutral-500);
+    margin-left: auto;
+}
+
+.cu-live-view-panel:not(.collapsed) .cu-live-view-toggle {
+    transform: rotate(90deg);
+}
+
+/* Collapsed: hide content */
+.cu-live-view-panel.collapsed .cu-live-view-content {
+    display: none;
+}
+
+/* Expanded: column layout, show image */
+.cu-live-view-panel:not(.collapsed) {
+    flex-direction: column;
+    align-items: stretch;
+    border-radius: var(--radius-xl);
+    display: flex;
+}
+
+.cu-live-view-panel:not(.collapsed) .cu-live-view-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cu-live-view-content {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 8px;
+}
+
+.cu-live-view-img {
+    width: 100%;
+    display: block;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: opacity var(--transition-fast);
+}
+
+.cu-live-view-img:hover {
+    opacity: 0.92;
+}
+
+/* Complete state */
+.cu-live-view-panel.cu-complete {
+    border-color: #27d980;
+    box-shadow: 0 0 6px rgba(39, 217, 128, 0.3);
+    animation: none;
+}
+
+.cu-live-view-panel.cu-complete .cu-live-view-label {
+    color: #27d980;
+}
+
+.cu-live-view-panel.cu-complete .cu-live-dot {
+    background: #27d980;
+    animation: none;
+}
+
+/* =============================================================================
+   Interactive CU Viewer Modal
+   ============================================================================= */
+
+.cu-interact-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 7500;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
+}
+
+.cu-interact-overlay.open {
+    display: flex;
+}
+
+.cu-interact-modal {
+    display: flex;
+    flex-direction: column;
+    width: 95vw;
+    max-width: 1360px;
+    max-height: 95vh;
+    background: var(--neutral-100, #1a1a1a);
+    border-radius: var(--radius-lg, 12px);
+    border: 1px solid var(--neutral-200, #2a2a2a);
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+
+.cu-interact-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--neutral-100, #1a1a1a);
+    border-bottom: 1px solid var(--neutral-200, #2a2a2a);
+}
+
+.cu-interact-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cu-interact-header-right {
+    display: flex;
+    gap: 4px;
+}
+
+.cu-interact-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    background: #6b7280;
+}
+
+.cu-interact-dot.pulse {
+    background: #4ade80;
+    animation: cu-dot-pulse 1.5s ease-in-out infinite;
+}
+
+.cu-interact-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: #e0e0e0;
+}
+
+.cu-interact-step {
+    font-size: 12px;
+    color: #888;
+    font-family: var(--font-mono, monospace);
+}
+
+.cu-interact-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #ccc;
+    border-radius: var(--radius-sm, 6px);
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background var(--transition-fast, 0.15s);
+}
+
+.cu-interact-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+.cu-interact-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    overflow: hidden;
+    background: #000;
+}
+
+.cu-interact-screen-wrap {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    max-height: 100%;
+}
+
+.cu-interact-screen {
+    display: block;
+    max-width: 100%;
+    max-height: calc(95vh - 150px);
+    object-fit: contain;
+    border-radius: var(--radius-sm, 6px);
+    cursor: crosshair;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.cu-interact-click-indicator {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid #f97316;
+    background: rgba(249, 115, 22, 0.25);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    opacity: 0;
+    transition: none;
+}
+
+.cu-interact-click-indicator.active {
+    opacity: 1;
+    animation: cu-interact-click-fade 0.6s ease-out forwards;
+}
+
+@keyframes cu-interact-click-fade {
+    0% {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(0.5);
+    }
+    50% {
+        opacity: 0.8;
+        transform: translate(-50%, -50%) scale(1.2);
+    }
+    100% {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(1.5);
+    }
+}
+
+.cu-interact-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 16px;
+    background: var(--neutral-100, #1a1a1a);
+    border-top: 1px solid var(--neutral-200, #2a2a2a);
+    font-size: 12px;
+    color: #888;
+    font-family: var(--font-mono, monospace);
+}
+
+.cu-interact-status-text {
+    color: #aaa;
+}
+
+.cu-interact-hint {
+    color: #666;
+}
+
+/* =============================================================================
+   Floating "Live Browser" Button (shown after page refresh when CU was active)
+   ============================================================================= */
+
+.cu-floating-browser-btn {
+    position: fixed;
+    bottom: 90px;
+    right: 16px;
+    z-index: 6000;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: var(--neutral-100, #1a1a1a);
+    border: 1px solid var(--neutral-300, #3a3a3a);
+    border-radius: var(--radius-full, 9999px);
+    color: #e0e0e0;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    transition: transform var(--transition-fast, 0.15s), box-shadow var(--transition-fast, 0.15s);
+    animation: cu-float-in 0.3s ease-out;
+}
+
+.cu-floating-browser-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+}
+
+.cu-floating-browser-btn:active {
+    transform: translateY(0);
+}
+
+.cu-floating-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #4ade80;
+    animation: cu-dot-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes cu-float-in {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* =============================================================================
+   Mobile Typing Bar (inside interactive modal)
+   ============================================================================= */
+
+.cu-interact-typing-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    background: var(--neutral-100, #1a1a1a);
+    border-top: 1px solid var(--neutral-200, #2a2a2a);
+}
+
+.cu-interact-typing-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 12px;
+    background: var(--neutral-50, #111);
+    border: 1px solid var(--neutral-300, #3a3a3a);
+    border-radius: var(--radius-md, 8px);
+    color: #e0e0e0;
+    font-size: 15px;
+    font-family: inherit;
+    outline: none;
+    transition: border-color var(--transition-fast, 0.15s);
+}
+
+.cu-interact-typing-input::placeholder {
+    color: #666;
+}
+
+.cu-interact-typing-input:focus {
+    border-color: #4ade80;
+    box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.15);
+}
+
+.cu-interact-key-btn {
+    flex-shrink: 0;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-sm, 6px);
+    color: #ccc;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background var(--transition-fast, 0.15s);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.cu-interact-key-btn:hover,
+.cu-interact-key-btn:active {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+}
+
+/* =============================================================================
+   CU Control Drawer (inside operator-menu-bubble)
+   ============================================================================= */
+
+.cu-drawer {
+    border-top: 1px solid rgba(139, 92, 246, 0.3);
+    background: linear-gradient(135deg, rgba(108, 59, 209, 0.08) 0%, rgba(139, 92, 246, 0.05) 100%);
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+    padding: 0 var(--space-sm);
+}
+
+.cu-drawer.visible {
+    max-height: 110px;
+    opacity: 1;
+    padding: 5px var(--space-sm) 6px;
+}
+
+.cu-drawer-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 22px;
+}
+
+.cu-drawer-tool-row {
+    margin-bottom: 2px;
+}
+
+/* ─── Status Dot ─── */
+.cu-drawer-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: var(--neutral-500);
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+
+.cu-drawer-dot.running {
+    background: #4ade80;
+}
+
+.cu-drawer-dot.pulse {
+    animation: cu-dot-pulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 6px rgba(74, 222, 128, 0.5);
+}
+
+.cu-drawer-dot.stopped {
+    background: #f87171;
+    box-shadow: 0 0 5px rgba(248, 113, 113, 0.4);
+}
+
+.cu-drawer-dot.complete {
+    background: #4ade80;
+    box-shadow: none;
+    animation: none;
+}
+
+/* ─── Tool Label ─── */
+.cu-drawer-tool-label {
+    font-size: 0.72rem;
+    color: #c4b5fd;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    min-width: 0;
+    font-weight: 500;
+}
+
+/* ─── Step Counter ─── */
+.cu-drawer-step {
+    font-size: 0.68rem;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: #a78bfa;
+    white-space: nowrap;
+    margin-left: auto;
+    font-weight: 600;
+}
+
+/* ─── E-Stop Button ─── */
+.cu-drawer-estop {
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    background: rgba(239, 68, 68, 0.2);
+    border: 1px solid rgba(239, 68, 68, 0.5);
+    color: #fca5a5;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+    flex-shrink: 0;
+    line-height: 1.3;
+}
+
+.cu-drawer-estop:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.35);
+    border-color: rgba(239, 68, 68, 0.7);
+    transform: scale(1.04);
+}
+
+.cu-drawer-estop:active:not(:disabled) {
+    transform: scale(0.96);
+}
+
+.cu-drawer-estop:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* ─── Queue Badge ─── */
+.cu-drawer-queue-badge {
+    padding: 1px 7px;
+    border-radius: var(--radius-full);
+    background: rgba(245, 158, 11, 0.2);
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    color: #fbbf24;
+    font-size: 0.62rem;
+    font-weight: 600;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.cu-drawer-queue-badge.hide {
+    display: none;
+}
+
+/* ─── Session ID ─── */
+.cu-drawer-session-id {
+    font-size: 0.62rem;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    color: #a78bfa;
+    white-space: nowrap;
+    flex: 1;
+    text-align: right;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0.85;
+}
+
+/* ─── New Session Button ─── */
+.cu-drawer-new {
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    color: #c4b5fd;
+    font-size: 0.62rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
+    flex-shrink: 0;
+    line-height: 1.3;
+}
+
+.cu-drawer-new:hover:not(:disabled) {
+    background: rgba(139, 92, 246, 0.25);
+    color: #ddd6fe;
+    transform: scale(1.04);
+}
+
+.cu-drawer-new:active:not(:disabled) {
+    transform: scale(0.96);
+}
+
+.cu-drawer-new:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* ─── Device Selector Row ─── */
+.cu-drawer-device-row {
+    display: flex;
+    align-items: center;
+    padding: 2px 8px;
+    gap: 6px;
+}
+
+.cu-drawer-device-label {
+    font-size: 0.68rem;
+    color: #a78bfa;
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 600;
+}
+
+.cu-drawer-device-select {
+    flex: 1;
+    font-size: 0.7rem;
+    padding: 2px 6px;
+    border-radius: var(--radius-sm, 6px);
+    border: 1px solid rgba(139, 92, 246, 0.3);
+    background: rgba(30, 20, 50, 0.6);
+    color: #e2d9f3;
+    outline: none;
+    cursor: pointer;
+    max-width: 200px;
+    transition: border-color var(--transition-fast, 0.15s), box-shadow var(--transition-fast, 0.15s);
+}
+
+.cu-drawer-device-select:focus {
+    border-color: rgba(139, 92, 246, 0.6);
+    box-shadow: 0 0 4px rgba(139, 92, 246, 0.2);
+}
+
+.cu-drawer-device-select:hover {
+    border-color: rgba(139, 92, 246, 0.5);
+}
+
+.cu-drawer-device-select option {
+    background: #1a1025;
+    color: #e2d9f3;
+}
+
+.cu-drawer-device-select option:disabled {
+    color: #666;
+}
+
+/* ─── Responsive ─── */
+@media (max-width: 480px) {
+    .cu-drawer-session-id {
+        display: none;
+    }
+    .cu-drawer-tool-label {
+        max-width: 120px;
+    }
+}

@@ -1,0 +1,686 @@
+/* _sms.css
+ * SMS Inbox — polished dark theme with BlackBox aesthetic
+ * Optimized for both desktop (two-panel) and Android/mobile (full-screen)
+ * Created: 2026-03-25
+ */
+
+/* ============================================================================
+   Modal Card
+   ============================================================================ */
+
+.sms-inbox-card {
+    width: min(880px, 96vw);
+    max-height: 88vh;
+    max-height: 88dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--neutral-100);
+    border: 1px solid var(--neutral-250);
+    box-shadow: var(--shadow-xl), 0 0 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================================
+   Body — thread list + conversation side by side
+   ============================================================================ */
+
+.sms-inbox-body {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+/* ============================================================================
+   Thread List (Left Panel)
+   ============================================================================ */
+
+.sms-thread-list {
+    width: 300px;
+    min-width: 300px;
+    border-right: 1px solid var(--neutral-200);
+    overflow-y: auto;
+    flex-shrink: 0;
+    background: var(--neutral-50);
+    scrollbar-width: thin;
+    scrollbar-color: var(--neutral-300) transparent;
+}
+
+.sms-thread-list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sms-thread-list::-webkit-scrollbar-thumb {
+    background: var(--neutral-300);
+    border-radius: var(--radius-full);
+}
+
+/* New message button */
+.sms-new-msg-btn {
+    padding: 14px 16px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--accent, #6ea8fe);
+    cursor: pointer;
+    border-bottom: 1px solid var(--neutral-200);
+    transition: background var(--transition-fast), color var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+}
+
+.sms-new-msg-btn:hover {
+    background: var(--neutral-150);
+    color: #8fc4ff;
+}
+
+.sms-new-msg-btn:active {
+    background: var(--neutral-200);
+}
+
+/* New message input area */
+.sms-new-msg {
+    display: flex;
+    gap: 8px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--neutral-200);
+    background: var(--neutral-100);
+    animation: sms-slide-down 0.15s ease-out;
+}
+
+@keyframes sms-slide-down {
+    from { opacity: 0; transform: translateY(-8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.sms-new-msg input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid var(--neutral-300);
+    border-radius: var(--radius-md);
+    background: var(--neutral-150);
+    color: var(--neutral-950);
+    font-size: 0.85rem;
+    outline: none;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.sms-new-msg input:focus {
+    border-color: var(--accent, #6ea8fe);
+    box-shadow: 0 0 0 2px rgba(110, 168, 254, 0.15);
+}
+
+.sms-new-msg .btn {
+    padding: 8px 14px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Thread Items
+   -------------------------------------------------------------------------- */
+
+.sms-thread {
+    padding: 14px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    transition: background var(--transition-fast), border-color var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
+    border-left: 3px solid transparent;
+    position: relative;
+}
+
+.sms-thread:hover {
+    background: var(--neutral-150);
+}
+
+.sms-thread:active {
+    background: var(--neutral-200);
+}
+
+.sms-thread.active {
+    background: var(--neutral-150);
+    border-left-color: var(--accent, #6ea8fe);
+}
+
+/* Unread thread gets brighter text */
+.sms-thread.has-unread .sms-thread-name {
+    color: var(--neutral-1000);
+}
+
+.sms-thread.has-unread .sms-thread-preview {
+    color: var(--neutral-800);
+    font-weight: 500;
+}
+
+.sms-thread-name {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--neutral-900);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+.sms-thread-phone {
+    font-size: 0.75rem;
+    color: var(--neutral-500);
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+}
+
+.sms-thread-preview {
+    font-size: 0.82rem;
+    color: var(--neutral-600);
+    margin-top: 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+.sms-thread-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 6px;
+}
+
+.sms-thread-time {
+    font-size: 0.72rem;
+    color: var(--neutral-500);
+    font-variant-numeric: tabular-nums;
+}
+
+.sms-thread-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, #e53935, #d32f2f);
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+    box-shadow: 0 1px 4px rgba(229, 57, 53, 0.4);
+    animation: sms-badge-pop 0.25s ease-out;
+}
+
+@keyframes sms-badge-pop {
+    0%   { transform: scale(0); }
+    60%  { transform: scale(1.15); }
+    100% { transform: scale(1); }
+}
+
+/* --------------------------------------------------------------------------
+   Conversation Panel (Right)
+   -------------------------------------------------------------------------- */
+
+.sms-conversation {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    background: var(--neutral-100);
+}
+
+/* Conversation header */
+.sms-conv-header {
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--neutral-200);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    background: var(--neutral-50);
+}
+
+.sms-conv-back {
+    cursor: pointer;
+    font-size: 1.2rem;
+    color: var(--accent, #6ea8fe);
+    padding: 4px 8px 4px 2px;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition-fast);
+    -webkit-tap-highlight-color: transparent;
+    display: none;  /* shown on mobile */
+    flex-shrink: 0;
+}
+
+.sms-conv-back:hover {
+    background: var(--neutral-200);
+}
+
+.sms-conv-header-info {
+    min-width: 0;
+    flex: 1;
+}
+
+.sms-conv-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--neutral-950);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sms-conv-phone {
+    font-size: 0.76rem;
+    color: var(--neutral-500);
+    margin-top: 1px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Status indicator dot */
+.sms-conv-status {
+    width: 8px;
+    height: 8px;
+    border-radius: var(--radius-full);
+    background: #27d980;
+    flex-shrink: 0;
+    box-shadow: 0 0 6px rgba(39, 217, 128, 0.5);
+}
+
+/* --------------------------------------------------------------------------
+   Scrollable Message Area
+   -------------------------------------------------------------------------- */
+
+.sms-conv-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--neutral-300) transparent;
+    scroll-behavior: smooth;
+}
+
+.sms-conv-messages::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sms-conv-messages::-webkit-scrollbar-thumb {
+    background: var(--neutral-300);
+    border-radius: var(--radius-full);
+}
+
+/* --------------------------------------------------------------------------
+   Message Bubbles
+   -------------------------------------------------------------------------- */
+
+.sms-bubble-in,
+.sms-bubble-out {
+    max-width: 78%;
+    padding: 10px 14px;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    animation: sms-bubble-appear 0.2s ease-out;
+    position: relative;
+}
+
+@keyframes sms-bubble-appear {
+    from { opacity: 0; transform: translateY(6px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Inbound: left-aligned */
+.sms-bubble-in {
+    align-self: flex-start;
+    background: var(--neutral-250);
+    color: var(--neutral-950);
+    border-radius: 4px var(--radius-xl) var(--radius-xl) var(--radius-xl);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+/* Outbound: right-aligned, blue tint */
+.sms-bubble-out {
+    align-self: flex-end;
+    background: linear-gradient(135deg, #1a3f65, #183a5c);
+    color: #e4ecf5;
+    border-radius: var(--radius-xl) 4px var(--radius-xl) var(--radius-xl);
+    box-shadow: 0 1px 4px rgba(0, 60, 120, 0.25);
+}
+
+.sms-bubble-body {
+    margin-bottom: 4px;
+    white-space: pre-wrap;
+}
+
+.sms-bubble-footer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: flex-end;
+}
+
+.sms-bubble-time {
+    font-size: 0.68rem;
+    color: var(--neutral-500);
+    font-variant-numeric: tabular-nums;
+}
+
+.sms-bubble-out .sms-bubble-time {
+    color: rgba(160, 195, 230, 0.7);
+}
+
+.sms-bubble-status {
+    font-size: 0.65rem;
+    text-transform: lowercase;
+    color: var(--neutral-500);
+}
+
+.sms-bubble-out .sms-bubble-status {
+    color: rgba(160, 195, 230, 0.7);
+}
+
+/* Delivered status — subtle checkmark style */
+.sms-bubble-status[data-status="delivered"] {
+    color: #27d980;
+}
+
+.sms-bubble-status[data-status="failed"] {
+    color: #e53935;
+}
+
+/* Date separator between message groups */
+.sms-date-sep {
+    text-align: center;
+    font-size: 0.72rem;
+    color: var(--neutral-500);
+    padding: 12px 0 4px;
+    user-select: none;
+}
+
+.sms-date-sep span {
+    background: var(--neutral-100);
+    padding: 2px 12px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--neutral-200);
+}
+
+/* --------------------------------------------------------------------------
+   Compose Bar
+   -------------------------------------------------------------------------- */
+
+.sms-conv-compose {
+    display: flex;
+    gap: 10px;
+    padding: 12px 16px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    border-top: 1px solid var(--neutral-200);
+    background: var(--neutral-50);
+    flex-shrink: 0;
+    align-items: flex-end;
+}
+
+.sms-conv-compose input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid var(--neutral-300);
+    border-radius: var(--radius-lg);
+    background: var(--neutral-150);
+    color: var(--neutral-950);
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    min-height: 42px;
+}
+
+.sms-conv-compose input:focus {
+    border-color: var(--accent, #6ea8fe);
+    box-shadow: 0 0 0 2px rgba(110, 168, 254, 0.12);
+}
+
+.sms-conv-compose input::placeholder {
+    color: var(--neutral-500);
+}
+
+.sms-send-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, #2979ff, #1565c0);
+    border: none;
+    color: #fff;
+    font-size: 1.1rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+    box-shadow: 0 2px 8px rgba(41, 121, 255, 0.35);
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sms-send-btn:hover {
+    transform: scale(1.05);
+    box-shadow: 0 3px 12px rgba(41, 121, 255, 0.5);
+}
+
+.sms-send-btn:active {
+    transform: scale(0.95);
+}
+
+.sms-send-btn:disabled {
+    opacity: 0.4;
+    cursor: default;
+    transform: none;
+    box-shadow: none;
+}
+
+.sms-send-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+}
+
+/* Sending state animation */
+.sms-sending .sms-send-btn {
+    animation: sms-pulse 1s infinite;
+}
+
+@keyframes sms-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.5; }
+}
+
+/* --------------------------------------------------------------------------
+   Empty / Placeholder States
+   -------------------------------------------------------------------------- */
+
+.sms-empty {
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--neutral-500);
+    font-size: 0.88rem;
+    line-height: 1.5;
+}
+
+.sms-empty-icon {
+    font-size: 2.5rem;
+    margin-bottom: 12px;
+    opacity: 0.4;
+    display: block;
+}
+
+/* --------------------------------------------------------------------------
+   System Menu Badge
+   -------------------------------------------------------------------------- */
+
+#smsBadge {
+    display: none;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: var(--radius-full);
+    background: linear-gradient(135deg, #e53935, #d32f2f);
+    color: #fff;
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    margin-left: 4px;
+    vertical-align: middle;
+    box-shadow: 0 1px 3px rgba(229, 57, 53, 0.4);
+}
+
+/* --------------------------------------------------------------------------
+   Preferences Bar
+   -------------------------------------------------------------------------- */
+
+.sms-prefs-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--neutral-200);
+    background: var(--neutral-100);
+    flex-wrap: wrap;
+}
+
+.sms-prefs-label {
+    font-size: 0.75rem;
+    color: var(--neutral-500);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.sms-prefs-select {
+    padding: 5px 8px;
+    border: 1px solid var(--neutral-300);
+    border-radius: var(--radius-sm);
+    background: var(--neutral-150);
+    color: var(--neutral-950);
+    font-size: 0.8rem;
+    outline: none;
+}
+
+.sms-prefs-select:focus {
+    border-color: var(--accent, #6ea8fe);
+}
+
+.sms-prefs-input {
+    flex: 1;
+    min-width: 120px;
+    padding: 5px 8px;
+    border: 1px solid var(--neutral-300);
+    border-radius: var(--radius-sm);
+    background: var(--neutral-150);
+    color: var(--neutral-950);
+    font-size: 0.8rem;
+    outline: none;
+}
+
+.sms-prefs-input:focus {
+    border-color: var(--accent, #6ea8fe);
+}
+
+/* ============================================================================
+   Mobile / Android — Full-Screen Experience
+   ============================================================================ */
+
+@media (max-width: 640px) {
+    .sms-inbox-card {
+        width: 100vw;
+        max-height: 100vh;
+        max-height: 100dvh;
+        border-radius: 0;
+        border: none;
+    }
+
+    .sms-inbox-body {
+        position: relative;
+    }
+
+    /* Thread list takes full width */
+    .sms-thread-list {
+        width: 100%;
+        min-width: unset;
+        border-right: none;
+    }
+
+    /* Thread items get bigger touch targets */
+    .sms-thread {
+        padding: 16px 18px;
+    }
+
+    .sms-thread-name {
+        font-size: 0.95rem;
+    }
+
+    .sms-thread-preview {
+        font-size: 0.85rem;
+    }
+
+    .sms-new-msg-btn {
+        padding: 16px 18px;
+        font-size: 0.9rem;
+    }
+
+    /* Conversation overlays the full body */
+    .sms-conversation {
+        position: absolute;
+        inset: 0;
+        background: var(--neutral-100);
+        z-index: 2;
+        display: none;
+    }
+
+    .sms-conversation.sms-conv-visible {
+        display: flex;
+    }
+
+    /* Show back button on mobile */
+    .sms-conv-back {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+    }
+
+    /* Bubbles can be wider on mobile */
+    .sms-bubble-in,
+    .sms-bubble-out {
+        max-width: 85%;
+        font-size: 0.92rem;
+    }
+
+    /* Compose bar respects safe area */
+    .sms-conv-compose {
+        padding: 10px 14px;
+        padding-bottom: max(10px, env(safe-area-inset-bottom, 10px));
+    }
+
+    .sms-conv-compose input {
+        font-size: 1rem;  /* prevents iOS zoom */
+    }
+
+    /* Full-height messages area */
+    .sms-conv-messages {
+        padding: 14px 12px;
+    }
+}
+
+/* Tablet tweaks */
+@media (min-width: 641px) and (max-width: 900px) {
+    .sms-thread-list {
+        width: 260px;
+        min-width: 260px;
+    }
+}

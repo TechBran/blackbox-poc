@@ -1,0 +1,12 @@
+[Unit]
+Description=Auto-detect APN after modem plug/SIM swap
+After=ModemManager.service NetworkManager.service
+Wants=ModemManager.service
+
+[Service]
+Type=oneshot
+# Give ModemManager time to fully initialize the modem and read the SIM
+ExecStartPre=/bin/sleep 10
+ExecStart=/etc/NetworkManager/dispatcher.d/pre-up.d/10-auto-apn
+# Allow re-triggering
+RemainAfterExit=no

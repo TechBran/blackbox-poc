@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Recording state (activated) - pulsing red -->
+    <item android:state_activated="true">
+        <shape android:shape="oval">
+            <solid android:color="#FF4444" />
+            <stroke
+                android:width="2dp"
+                android:color="#FF6666" />
+        </shape>
+    </item>
+    <!-- Pressed state -->
+    <item android:state_pressed="true">
+        <shape android:shape="oval">
+            <solid android:color="#FF4444" />
+        </shape>
+    </item>
+    <!-- Muted/disabled state -->
+    <item android:state_enabled="false">
+        <shape android:shape="oval">
+            <solid android:color="#333333" />
+            <stroke
+                android:width="2dp"
+                android:color="#555555" />
+        </shape>
+    </item>
+    <!-- Default state - large circle with gradient red -->
+    <item>
+        <shape android:shape="oval">
+            <gradient
+                android:type="radial"
+                android:gradientRadius="32dp"
+                android:centerColor="#2A2A2A"
+                android:endColor="#1A1A1A" />
+            <stroke
+                android:width="2dp"
+                android:color="#FF4444" />
+        </shape>
+    </item>
+</selector>

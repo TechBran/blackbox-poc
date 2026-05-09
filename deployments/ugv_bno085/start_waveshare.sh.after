@@ -1,0 +1,66 @@
+#!/bin/bash
+# UGV Beast — Waveshare stock with calibration
+# Runs inside ugv_waveshare container on boot
+
+# DNS: docker regenerates /etc/resolv.conf on container start; Tailscale-only
+# (100.100.100.100) cannot resolve external domains. Prepend public fallbacks.
+cat > /etc/resolv.conf <<DNSEOF
+nameserver 1.1.1.1
+nameserver 8.8.8.8
+nameserver 100.100.100.100
+search tail401fb3.ts.net
+DNSEOF
+
+
+mkdir -p /ugv_jetson
+# Clear stale mute-flag if previous TTS playback was killed mid-speech by
+# a container restart (ears would otherwise stay paused forever).
+rm -f /tmp/ugv_ears_muted
+service ssh start 2>/dev/null
+
+# PID calibration (Kp=80 for Beast track responsiveness)
+python3 /home/ws/ugv_ws/tune_pid.py 2>/dev/null || true
+
+# Environment
+source /opt/ros/humble/setup.bash
+source /home/ws/ugv_ws/install/setup.bash
+export UGV_MODEL=ugv_beast
+export LDLIDAR_MODEL=ld19
+
+# Wait for serial
+for i in $(seq 1 10); do
+    [ -c /dev/ttyTHS1 ] && break
+    sleep 1
+done
+
+# BNO085 IMU driver — wrapped in auto-respawn loop so a mid-mission crash
+# (chip glitch, I2C bus transient, etc.) immediately retries. The driver's
+# own SHTP preflight handles chip recovery, so the loop just kicks it back
+# up and lets preflight do its work.
+(while true; do
+    /home/ws/ugv_ws/install/ugv_bno085/lib/ugv_bno085/imu_node \
+        --ros-args -r __node:=bno085_imu \
+        > /tmp/bno_node_$(date +%s).log 2>&1
+    echo "[$(date)] bno085 imu_node exited, respawn in 5s..." >> /tmp/bno_respawn.log
+    sleep 5
+done) &
+BNO_PID=$!
+# Wait for the BNO085 driver to be publishing before SLAM/EKF subscribe.
+# 12s gives the SHTP preflight (up to 30s capable) plenty of time even on
+# a marginal chip-recovery boot.
+sleep 12
+
+# SLAM + Nav2 (Waveshare stock)
+ros2 launch ugv_nav slam_nav.launch.py use_rviz:=false &
+SLAM_PID=$!
+sleep 25
+
+# Vizanti
+ros2 launch vizanti_server vizanti_server.launch.py &
+
+# Auto-explore orchestrator (IDLE until /explore/start called)
+python3 /home/ws/ugv_ws/ugv_explore_node.py &
+sleep 5
+
+echo "UGV Beast running — Vizanti http://$(hostname -I | awk '{print $1}'):5100"
+wait $SLAM_PID

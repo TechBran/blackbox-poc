@@ -1,0 +1,497 @@
+/* _cellular.css
+ * Cellular Internet Manager UI styles
+ * Created: 2026-03-02
+ */
+
+/* ============================================================================
+   Manager Modal
+   ============================================================================ */
+
+.cellular-manager-card {
+    width: min(800px, 95vw);
+    max-height: 85vh;
+    max-height: 85dvh;
+    display: flex;
+    flex-direction: column;
+}
+
+.cellular-manager-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+/* ============================================================================
+   Status Card
+   ============================================================================ */
+
+.cell-status-card {
+    background: var(--neutral-100);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.cell-signal-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.cell-signal-bars .bar {
+    width: 5px;
+    border-radius: 1px;
+    background: var(--neutral-300);
+    transition: background var(--transition-fast), height var(--transition-fast);
+}
+
+.cell-signal-bars .bar:nth-child(1) { height: 6px; }
+.cell-signal-bars .bar:nth-child(2) { height: 10px; }
+.cell-signal-bars .bar:nth-child(3) { height: 14px; }
+.cell-signal-bars .bar:nth-child(4) { height: 18px; }
+.cell-signal-bars .bar:nth-child(5) { height: 24px; }
+
+.cell-signal-bars.strength-1 .bar:nth-child(1),
+.cell-signal-bars.strength-2 .bar:nth-child(1),
+.cell-signal-bars.strength-2 .bar:nth-child(2),
+.cell-signal-bars.strength-3 .bar:nth-child(1),
+.cell-signal-bars.strength-3 .bar:nth-child(2),
+.cell-signal-bars.strength-3 .bar:nth-child(3),
+.cell-signal-bars.strength-4 .bar:nth-child(1),
+.cell-signal-bars.strength-4 .bar:nth-child(2),
+.cell-signal-bars.strength-4 .bar:nth-child(3),
+.cell-signal-bars.strength-4 .bar:nth-child(4),
+.cell-signal-bars.strength-5 .bar {
+    background: #4ade80;
+}
+
+.cell-signal-bars.strength-1 .bar:nth-child(1) {
+    background: #f87171;
+}
+
+.cell-signal-bars.strength-2 .bar:nth-child(1),
+.cell-signal-bars.strength-2 .bar:nth-child(2) {
+    background: #fbbf24;
+}
+
+.cell-status-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.cell-status-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.cell-operator-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--neutral-950);
+}
+
+.cell-band-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 600;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+    white-space: nowrap;
+}
+
+.cell-access-tech {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--neutral-700);
+}
+
+.cell-status-detail {
+    font-size: 12px;
+    color: var(--neutral-600);
+    margin-top: 4px;
+}
+
+.cell-status-detail code {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    color: var(--neutral-800);
+}
+
+.cell-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: var(--radius-full);
+    flex-shrink: 0;
+}
+
+.cell-status-dot.connected { background: #4ade80; box-shadow: 0 0 6px rgba(74, 222, 128, 0.4); }
+.cell-status-dot.connecting { background: #fbbf24; animation: cell-pulse 1.5s infinite; }
+.cell-status-dot.disconnected { background: var(--neutral-500); }
+.cell-status-dot.throttled { background: #f87171; animation: cell-pulse 1s infinite; }
+.cell-status-dot.error { background: #f87171; }
+
+@keyframes cell-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* ============================================================================
+   Backoff Indicator
+   ============================================================================ */
+
+.cell-backoff-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    margin-bottom: 12px;
+    font-size: 13px;
+}
+
+.cell-backoff-bar.warning {
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.25);
+    color: #fbbf24;
+}
+
+.cell-backoff-bar.danger {
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+    color: #f87171;
+}
+
+.cell-backoff-bar .backoff-label {
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.cell-backoff-bar .backoff-detail {
+    flex: 1;
+    min-width: 0;
+}
+
+.cell-backoff-bar .backoff-countdown {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+
+/* ============================================================================
+   Controls
+   ============================================================================ */
+
+.cell-controls {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.cell-controls .btn {
+    flex: 1;
+    min-width: 100px;
+}
+
+/* ============================================================================
+   Sections
+   ============================================================================ */
+
+.cell-section {
+    background: var(--neutral-100);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    margin-bottom: 12px;
+}
+
+.cell-section-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--neutral-700);
+    margin-bottom: 10px;
+}
+
+/* APN Section */
+
+.cell-apn-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cell-apn-row input {
+    flex: 1;
+    min-width: 0;
+    background: var(--neutral-50);
+    border: 1px solid var(--neutral-300);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.cell-apn-row input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* Failover / Routing */
+
+.cell-route-table {
+    width: 100%;
+    font-size: 13px;
+    border-collapse: collapse;
+}
+
+.cell-route-table th {
+    text-align: left;
+    font-weight: 600;
+    color: var(--neutral-700);
+    padding: 4px 8px 4px 0;
+    font-size: 12px;
+}
+
+.cell-route-table td {
+    padding: 4px 8px 4px 0;
+    color: var(--neutral-900);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+}
+
+.cell-route-active {
+    color: #4ade80 !important;
+    font-weight: 600;
+}
+
+/* ============================================================================
+   Speed Test
+   ============================================================================ */
+
+.cell-speed-results {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.cell-speed-metric {
+    text-align: center;
+}
+
+.cell-speed-value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--neutral-950);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    line-height: 1.2;
+}
+
+.cell-speed-unit {
+    font-size: 11px;
+    color: var(--neutral-600);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ============================================================================
+   AT Console
+   ============================================================================ */
+
+.cell-at-console {
+    margin-bottom: 12px;
+}
+
+.cell-at-console summary {
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--neutral-700);
+    padding: 10px 14px;
+    background: var(--neutral-100);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    list-style: none;
+    user-select: none;
+}
+
+.cell-at-console summary::-webkit-details-marker { display: none; }
+
+.cell-at-console summary::before {
+    content: '\25B6';
+    display: inline-block;
+    margin-right: 6px;
+    font-size: 10px;
+    transition: transform var(--transition-fast);
+}
+
+.cell-at-console[open] summary::before {
+    transform: rotate(90deg);
+}
+
+.cell-at-console[open] summary {
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+    border-bottom: none;
+}
+
+.cell-at-inner {
+    padding: 12px 14px;
+    background: var(--neutral-50);
+    border: 1px solid var(--neutral-200);
+    border-top: none;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+}
+
+.cell-at-input-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.cell-at-input-row input {
+    flex: 1;
+    background: var(--neutral-0);
+    border: 1px solid var(--neutral-300);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    color: var(--text);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+}
+
+.cell-at-input-row input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.cell-at-output {
+    background: var(--neutral-0);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-sm);
+    padding: 8px 10px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    color: var(--neutral-800);
+    max-height: 200px;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    min-height: 60px;
+}
+
+/* ============================================================================
+   Event Log
+   ============================================================================ */
+
+.cell-event-log {
+    background: var(--neutral-100);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    max-height: 220px;
+    overflow-y: auto;
+}
+
+.cell-event-log-title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--neutral-700);
+    margin-bottom: 8px;
+}
+
+.cell-event-item {
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    padding: 3px 0;
+    font-size: 12px;
+    border-bottom: 1px solid var(--neutral-150);
+}
+
+.cell-event-item:last-child {
+    border-bottom: none;
+}
+
+.cell-event-time {
+    color: var(--neutral-500);
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    flex-shrink: 0;
+    min-width: 55px;
+}
+
+.cell-event-type {
+    font-weight: 600;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: var(--radius-xs);
+    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.cell-event-type.connected { background: rgba(74, 222, 128, 0.15); color: #4ade80; }
+.cell-event-type.disconnected { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+.cell-event-type.throttle { background: rgba(251, 191, 36, 0.15); color: #fbbf24; }
+.cell-event-type.backoff { background: rgba(99, 102, 241, 0.15); color: #818cf8; }
+.cell-event-type.apn { background: rgba(45, 212, 191, 0.15); color: #2dd4bf; }
+.cell-event-type.error { background: rgba(248, 113, 113, 0.15); color: #f87171; }
+.cell-event-type.info { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+
+.cell-event-detail {
+    color: var(--neutral-800);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+/* ============================================================================
+   Empty / Loading States
+   ============================================================================ */
+
+.cell-empty {
+    text-align: center;
+    padding: 40px 16px;
+    color: var(--neutral-600);
+    font-size: 14px;
+}
+
+.cell-empty .cell-empty-icon {
+    font-size: 32px;
+    margin-bottom: 8px;
+    opacity: 0.5;
+}
+
+.cell-loading-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--neutral-400);
+    border-top-color: var(--neutral-800);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}

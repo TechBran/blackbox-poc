@@ -1,0 +1,44 @@
+# Derived from ugv_jetson_ros_humble:nvblox (25.5GB) — has working ament index
+# for nvblox_ros, isaac_ros_common, isaac_ros_nitros.
+# Adds VPI 3.x runtime (libnvvpi3) which the upstream image was missing.
+# Built on Jetson Orin Nano with JetPack 6.1; uses configured apt index
+# at jetson.webredirect.org for libnvvpi3 + nvidia-vpi packages.
+#
+# IMPORTANT: This Dockerfile is FYI only — the host's docker daemon currently
+# uses Tailscale-only DNS (100.100.100.100) which is unreachable inside the
+# build network namespace. `docker build` cannot override DNS in legacy builder
+# mode, so this image was built via the docker-run + docker-commit fallback:
+#
+#   sudo docker run -d --name vpi-build --network=host \
+#     --dns 8.8.8.8 --dns 8.8.4.4 ugv_jetson_ros_humble:nvblox sleep 600
+#   sudo docker cp /etc/apt/sources.list.d/nvidia-l4t-apt-source.list vpi-build:/etc/apt/sources.list.d/
+#   sudo docker cp /etc/apt/trusted.gpg.d/jetson-ota-public.asc vpi-build:/etc/apt/trusted.gpg.d/
+#   sudo docker exec vpi-build bash -c "apt-get update && \
+#       apt-get install -y --no-install-recommends libnvvpi3 nvidia-vpi && \
+#       rm -rf /var/lib/apt/lists/*"
+#   sudo docker commit \
+#     --change 'LABEL parent=ugv_jetson_ros_humble:nvblox' \
+#     --change 'LABEL purpose=nvblox-sidecar-with-VPI3-runtime' \
+#     --change 'LABEL build_date=2026-05-07' \
+#     --change 'LABEL maintainer=UGV-Beast-project' \
+#     vpi-build ugv_jetson_nvblox:vpi-fixed
+#   sudo docker stop vpi-build && sudo docker rm vpi-build
+#
+# Notes:
+#  - The base image only has the Isaac ROS apt repo; the JetPack repo
+#    (repo.download.nvidia.com/jetson/common, where libnvvpi3 lives) must be
+#    copied in from the host before apt-get update.
+#  - Verification of nvblox_node load: source /opt/ros/humble/setup.bash
+#    (NOT install/setup.bash — that one doesn't populate AMENT_PREFIX_PATH).
+FROM ugv_jetson_ros_humble:nvblox
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        libnvvpi3 \
+        nvidia-vpi && \
+    rm -rf /var/lib/apt/lists/*
+
+LABEL maintainer="UGV Beast project"
+LABEL purpose="Isaac ROS nvblox sidecar with VPI 3.x runtime"
+LABEL parent="ugv_jetson_ros_humble:nvblox"
+LABEL build_date="2026-05-07"

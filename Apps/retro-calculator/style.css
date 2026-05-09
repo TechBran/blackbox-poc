@@ -1,0 +1,283 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Courier New', monospace;
+    background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #2a1f3a 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.calculator-container {
+    perspective: 1000px;
+}
+
+.calculator {
+    background: linear-gradient(145deg, #1a1f35, #0f1220);
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow:
+        0 20px 60px rgba(0, 0, 0, 0.5),
+        0 0 40px rgba(139, 92, 246, 0.2),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(139, 92, 246, 0.3);
+    max-width: 400px;
+    animation: float 6s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px) rotateX(2deg); }
+    50% { transform: translateY(-10px) rotateX(-2deg); }
+}
+
+.brand {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.brand-text {
+    font-size: 24px;
+    font-weight: bold;
+    color: #8b5cf6;
+    text-shadow: 0 0 10px rgba(139, 92, 246, 0.8);
+    letter-spacing: 4px;
+}
+
+.brand-model {
+    font-size: 12px;
+    color: #64748b;
+    letter-spacing: 2px;
+}
+
+.display-panel {
+    background: linear-gradient(180deg, #0a0e1a 0%, #0f1525 100%);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 25px;
+    border: 2px solid rgba(16, 185, 129, 0.3);
+    box-shadow:
+        inset 0 2px 10px rgba(0, 0, 0, 0.5),
+        0 0 20px rgba(16, 185, 129, 0.2);
+    position: relative;
+}
+
+.display-secondary {
+    font-size: 16px;
+    color: #64748b;
+    text-align: right;
+    height: 24px;
+    margin-bottom: 8px;
+    font-family: 'Courier New', monospace;
+}
+
+.display-main {
+    font-size: 48px;
+    color: #10b981;
+    text-align: right;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    text-shadow: 0 0 10px rgba(16, 185, 129, 0.8);
+    min-height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    overflow: hidden;
+}
+
+.display-indicator {
+    position: absolute;
+    top: 10px;
+    left: 15px;
+    display: flex;
+    gap: 6px;
+}
+
+.led {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.3);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.led:nth-child(2) {
+    animation-delay: 0.3s;
+}
+
+.led:nth-child(3) {
+    animation-delay: 0.6s;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        background: rgba(239, 68, 68, 0.3);
+        box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5);
+    }
+    50% {
+        background: rgba(239, 68, 68, 0.9);
+        box-shadow:
+            inset 0 1px 2px rgba(0, 0, 0, 0.5),
+            0 0 8px rgba(239, 68, 68, 0.8);
+    }
+}
+
+.button-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.btn {
+    padding: 20px;
+    font-size: 24px;
+    font-weight: bold;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: 'Courier New', monospace;
+    transition: all 0.15s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.3s, height 0.3s;
+}
+
+.btn:active::before {
+    width: 200px;
+    height: 200px;
+}
+
+.btn-number {
+    background: linear-gradient(145deg, #334155, #1e293b);
+    color: #e2e8f0;
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-number:hover {
+    background: linear-gradient(145deg, #3b4a5f, #252f3f);
+    box-shadow:
+        0 6px 12px rgba(0, 0, 0, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.btn-number:active {
+    transform: translateY(2px);
+    box-shadow:
+        0 2px 4px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-operator {
+    background: linear-gradient(145deg, #7c3aed, #6d28d9);
+    color: #ffffff;
+    border: 1px solid rgba(139, 92, 246, 0.4);
+    box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.3),
+        0 0 15px rgba(139, 92, 246, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.btn-operator:hover {
+    background: linear-gradient(145deg, #8b5cf6, #7c3aed);
+    box-shadow:
+        0 6px 12px rgba(0, 0, 0, 0.4),
+        0 0 20px rgba(139, 92, 246, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.btn-operator:active {
+    transform: translateY(2px);
+}
+
+.btn-function {
+    background: linear-gradient(145deg, #475569, #334155);
+    color: #fbbf24;
+    border: 1px solid rgba(251, 191, 36, 0.3);
+    box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-function:hover {
+    background: linear-gradient(145deg, #526478, #3b4a5f);
+    box-shadow:
+        0 6px 12px rgba(0, 0, 0, 0.4),
+        0 0 10px rgba(251, 191, 36, 0.3),
+        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.btn-equals {
+    background: linear-gradient(145deg, #10b981, #059669);
+    color: #ffffff;
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    box-shadow:
+        0 4px 6px rgba(0, 0, 0, 0.3),
+        0 0 15px rgba(16, 185, 129, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.btn-equals:hover {
+    background: linear-gradient(145deg, #14c997, #10b981);
+    box-shadow:
+        0 6px 12px rgba(0, 0, 0, 0.4),
+        0 0 25px rgba(16, 185, 129, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.btn-equals:active {
+    transform: translateY(2px);
+}
+
+.btn-wide {
+    grid-column: span 2;
+}
+
+.serial {
+    margin-top: 20px;
+    text-align: center;
+    font-size: 10px;
+    color: #475569;
+    letter-spacing: 1px;
+    opacity: 0.5;
+}
+
+/* Responsive */
+@media (max-width: 480px) {
+    .calculator {
+        padding: 20px;
+    }
+
+    .display-main {
+        font-size: 36px;
+    }
+
+    .btn {
+        padding: 15px;
+        font-size: 20px;
+    }
+}

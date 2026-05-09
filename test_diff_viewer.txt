@@ -1,0 +1,8 @@
+This is a test file for the diff viewer.
+
+Line 1: Original content has been updated!
+Line 2: This line was MODIFIED through Claude Code CLI
+Line 3: Another line of text (unchanged)
+Line 4: Final line with additional info
+
+Testing the AI BlackBox Flight Recorder diff capabilities.

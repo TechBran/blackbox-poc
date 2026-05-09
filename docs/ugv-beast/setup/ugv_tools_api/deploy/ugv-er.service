@@ -1,0 +1,25 @@
+[Unit]
+Description=UGV Gemini ER 1.6 on-device agent
+Requires=ugv-tools-api.service docker.service
+After=ugv-tools-api.service
+
+[Service]
+Type=simple
+EnvironmentFile=/home/jetson/ugv_ws_waveshare/ugv_tools_api/deploy/er.env
+ExecStart=/usr/bin/docker exec \
+  -e GOOGLE_API_KEY -e ER_USE_VERTEX \
+  -e GOOGLE_APPLICATION_CREDENTIALS -e GOOGLE_CLOUD_PROJECT -e GOOGLE_CLOUD_LOCATION \
+  -e ER_MODEL_ID -e ER_MAX_STEPS -e ER_PORT -e ER_HOST \
+  -e OPENAI_API_KEY -e TOOLS_API_URL -e SPEAK_URL \
+  ugv_waveshare /bin/bash /home/ws/ugv_ws/ugv_tools_api/deploy/start_er.sh
+# systemctl stop/restart only kills the docker-exec wrapper on the host; the
+# Python process inside the container survives and holds :8082. Explicitly
+# kill it so port rebinds cleanly.
+ExecStopPost=-/usr/bin/docker exec ugv_waveshare pkill -9 -f "ugv_tools_api.er.server"
+Restart=on-failure
+RestartSec=5
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>The Last Dragon of Westmoor - Epic Fantasy Production v13</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000000;
+            color: #ffffff;
+            font-family: 'Georgia', serif;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .title-screen {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(to bottom, #000000, #1a0000);
+        }
+
+        .main-title {
+            font-size: 4rem;
+            font-weight: bold;
+            color: #ff4444;
+            text-shadow: 0 0 20px rgba(255, 68, 68, 0.5);
+            margin-bottom: 1rem;
+            letter-spacing: 0.1em;
+        }
+
+        .subtitle {
+            font-size: 1.5rem;
+            color: #cccccc;
+            margin-bottom: 3rem;
+            font-style: italic;
+        }
+
+        .start-btn {
+            padding: 20px 60px;
+            font-size: 1.5rem;
+            background: #ff4444;
+            color: white;
+            border: 2px solid #ffffff;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-family: 'Georgia', serif;
+        }
+
+        .start-btn:hover {
+            background: #cc0000;
+            transform: scale(1.05);
+            box-shadow: 0 0 30px rgba(255, 68, 68, 0.8);
+        }
+
+        .scene-container {
+            min-height: 100vh;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+            opacity: 0;
+            transform: scale(1.02);
+        }
+
+        .scene-container.active {
+            display: flex;
+            animation: sceneEnter 1.2s ease-out forwards;
+        }
+
+        .scene-container.exiting {
+            display: flex;
+            animation: sceneExit 0.8s ease-in forwards;
+        }
+
+        /* Scene entrance animation */
+        @keyframes sceneEnter {
+            0% {
+                opacity: 0;
+                transform: scale(1.05);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* Scene exit animation */
+        @keyframes sceneExit {
+            0% {
+                opacity: 1;
+                transform: scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+        }
+
+        /* Transition overlay for dramatic fade to black */
+        .transition-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 500;
+            transition: opacity 0.6s ease;
+        }
+
+        .transition-overlay.active {
+            opacity: 1;
+        }
+
+        /* Cinematic bars for letterbox effect */
+        .cinema-bar {
+            position: fixed;
+            left: 0;
+            width: 100%;
+            height: 0;
+            background: #000;
+            z-index: 499;
+            transition: height 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .cinema-bar.top {
+            top: 0;
+        }
+
+        .cinema-bar.bottom {
+            bottom: 0;
+        }
+
+        .cinema-bar.active {
+            height: 60px;
+        }
+
+        .act-title {
+            font-size: 2.5rem;
+            color: #ff4444;
+            margin-bottom: 2rem;
+            text-align: center;
+            text-shadow: 0 0 10px rgba(255, 68, 68, 0.5);
+            opacity: 0;
+            transform: translateY(-30px);
+            animation: titleSlideIn 1s ease-out 0.3s forwards;
+        }
+
+        .scene-title {
+            font-size: 1.8rem;
+            color: #cccccc;
+            margin-bottom: 2rem;
+            text-align: center;
+            font-style: italic;
+            opacity: 0;
+            transform: translateY(-20px);
+            animation: titleSlideIn 0.8s ease-out 0.4s forwards;
+        }
+
+        @keyframes titleSlideIn {
+            0% {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .video-wrapper {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto 2rem;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(255, 68, 68, 0.3);
+            opacity: 0;
+            transform: scale(0.95);
+            animation: videoReveal 1.2s ease-out 0.2s forwards;
+        }
+
+        @keyframes videoReveal {
+            0% {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            50% {
+                opacity: 1;
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .video-wrapper video {
+            width: 100%;
+            height: auto;
+            display: block;
+            animation: slowZoom 20s ease-in-out infinite alternate;
+        }
+
+        @keyframes slowZoom {
+            0% { transform: scale(1); }
+            100% { transform: scale(1.08); }
+        }
+
+        .image-wrapper {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto 2rem;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(255, 68, 68, 0.3);
+            opacity: 0;
+            transform: scale(0.95);
+            animation: videoReveal 1.2s ease-out 0.2s forwards;
+        }
+
+        .image-wrapper img {
+            width: 100%;
+            height: auto;
+            display: block;
+            animation: slowZoom 20s ease-in-out infinite alternate;
+        }
+
+        .narration-text {
+            max-width: 800px;
+            font-size: 1.3rem;
+            line-height: 2;
+            text-align: center;
+            color: #eeeeee;
+            margin: 2rem auto;
+            padding: 20px;
+            background: rgba(255, 68, 68, 0.1);
+            border-left: 4px solid #ff4444;
+            border-radius: 8px;
+            opacity: 0;
+            transform: translateY(30px);
+            animation: narrationFadeUp 1s ease-out 0.8s forwards;
+        }
+
+        @keyframes narrationFadeUp {
+            0% {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Glowing pulse effect for narration during playback */
+        .narration-text.speaking {
+            animation: narrationFadeUp 1s ease-out 0.8s forwards, narrationPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes narrationPulse {
+            0%, 100% {
+                box-shadow: 0 0 20px rgba(255, 68, 68, 0.2);
+                border-left-color: #ff4444;
+            }
+            50% {
+                box-shadow: 0 0 40px rgba(255, 68, 68, 0.5);
+                border-left-color: #ff6666;
+            }
+        }
+
+        .character-name {
+            color: #ff4444;
+            font-weight: bold;
+            font-size: 1.1em;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            gap: 15px;
+            z-index: 1000;
+        }
+
+        .control-btn {
+            padding: 15px 30px;
+            background: rgba(255, 68, 68, 0.9);
+            color: white;
+            border: 2px solid #ffffff;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            transition: all 0.3s;
+        }
+
+        .control-btn:hover {
+            background: #cc0000;
+            transform: translateY(-2px);
+        }
+
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 0%;
+            height: 4px;
+            background: linear-gradient(to right, #ff4444, #cc0000);
+            transition: width 0.5s;
+            z-index: 1001;
+        }
+
+        .credits {
+            min-height: 100vh;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .credits.active {
+            display: flex;
+        }
+
+        .credits-title {
+            font-size: 3rem;
+            color: #ff4444;
+            margin-bottom: 2rem;
+        }
+
+        .credits-text {
+            font-size: 1.3rem;
+            color: #cccccc;
+            line-height: 2;
+            max-width: 600px;
+        }
+
+        @media (max-width: 768px) {
+            .main-title {
+                font-size: 2.5rem;
+            }
+            .subtitle {
+                font-size: 1.2rem;
+            }
+            .act-title {
+                font-size: 2rem;
+            }
+            .narration-text {
+                font-size: 1.1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Transition overlay for fade to black effect -->
+    <div class="transition-overlay" id="transitionOverlay"></div>
+
+    <!-- Cinematic letterbox bars -->
+    <div class="cinema-bar top" id="cinemaBarTop"></div>
+    <div class="cinema-bar bottom" id="cinemaBarBottom"></div>
+
+    <div class="progress-bar" id="progressBar"></div>
+
+    <!-- Background Music (loops) -->
+    <audio id="bgMusic" loop>
+        <source src="http://localhost:9091/ui/uploads/778c3b31-b3b5-4620-8380-a708ecf5225e_music.wav" type="audio/wav">
+    </audio>
+
+    <!-- Title Screen -->
+    <div class="title-screen" id="titleScreen">
+        <h1 class="main-title">The Last Dragon of Westmoor</h1>
+        <p class="subtitle">An Epic Fantasy Production</p>
+        <button class="start-btn" onclick="startProduction()">Begin Experience</button>
+    </div>
+
+    <!-- Act I: The Throne in Shadow -->
+    <div class="scene-container" id="scene1">
+        <h2 class="act-title">Act I: The Throne in Shadow</h2>
+        <div class="video-wrapper">
+            <video id="video1" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/8f025786-b004-4abd-8f12-26da20e6f9dd.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">NARRATOR</span>
+            <p>In the kingdom of Westmoor, where dragons once ruled the skies and kings bent their knees to ancient magic, a new darkness rises...</p>
+            <audio id="narr1" src="http://localhost:9091/ui/uploads/8d2d28a2-caa1-430f-b52c-265fd6d275b7.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 2: King Aldric -->
+    <div class="scene-container" id="scene2">
+        <h2 class="scene-title">The Throne Room</h2>
+        <div class="video-wrapper">
+            <video id="video2" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/05dd7e21-d4dd-42be-8b88-6d9fb8b62622.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">KING ALDRIC</span>
+            <p>Forty winters I have held this crown. Forty winters of blood and steel. And now, when I am weakest, the Dragon's Egg awakens.</p>
+            <audio id="narr2" src="http://localhost:9091/ui/uploads/0b7cf08b-b993-4902-8c6b-d8424d68b0dc.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 3: Queen Seraphina -->
+    <div class="scene-container" id="scene3">
+        <h2 class="scene-title">The Queen's Warning</h2>
+        <div class="video-wrapper">
+            <video id="video3" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/d7947e0d-5273-454d-b4eb-6a68b2707e2e.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">QUEEN SERAPHINA</span>
+            <p>My lord, the prophecy speaks of fire and ash. The last dragon will rise, and only those of true blood can command it. We must act before Lady Morgana claims it for herself.</p>
+            <audio id="narr3" src="http://localhost:9091/ui/uploads/f51fe99c-697c-4bd3-922b-74e56149a135.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 4: Lady Morgana -->
+    <div class="scene-container" id="scene4">
+        <h2 class="scene-title">The Advisor's Scheme</h2>
+        <div class="video-wrapper">
+            <video id="video4" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/9a0472dd-7ce9-485a-827c-f4dbb4bdaa5f.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">LADY MORGANA</span>
+            <p>Your Majesty speaks of prophecies and old magic. But the realm needs more than legends. It needs strength. And I offer you that strength... for a price.</p>
+            <audio id="narr4" src="http://localhost:9091/ui/uploads/1730eaa8-98de-41a5-baa0-fa436c0f07ac.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Act II: The Dragon Awakens -->
+    <div class="scene-container" id="scene5">
+        <h2 class="act-title">Act II: The Dragon Awakens</h2>
+        <div class="video-wrapper">
+            <video id="video5" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/a219941c-921d-4cbe-bfd5-2974aa618e11.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">NARRATOR</span>
+            <p>Deep beneath the Crimson Mountains, where no man dared tread for a thousand years, the Dragon's Egg began to crack. Its power called to those who sought dominion, and three rivals raced to claim it.</p>
+            <audio id="narr5" src="http://localhost:9091/ui/uploads/1e7b8715-ad53-4fb5-8dc9-b55c648d8bc5.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 6: Commander Theron -->
+    <div class="scene-container" id="scene6">
+        <h2 class="scene-title">The Mountain Path</h2>
+        <div class="video-wrapper">
+            <video id="video6" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/fb0b51fa-a54c-4171-a605-0d415e968791.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">COMMANDER THERON</span>
+            <p>My queen, the path ahead is treacherous. Lady Morgana's forces move through the northern pass. If she reaches the egg first, all is lost.</p>
+            <audio id="narr6" src="http://localhost:9091/ui/uploads/201b0a6e-c51d-450d-97e4-721175483958.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 7: Queen's Resolve -->
+    <div class="scene-container" id="scene7">
+        <h2 class="scene-title">The Race Begins</h2>
+        <div class="video-wrapper">
+            <video id="video7" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/be21ec28-184b-4af7-969e-b499c64c6f15.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">QUEEN SERAPHINA</span>
+            <p>Then we ride faster, Commander. The king's bloodline ends with us. If we fall, so does the kingdom.</p>
+            <audio id="narr7" src="http://localhost:9091/ui/uploads/b1e7cdde-1dd1-49ba-a882-a151ccfa66bc.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 8: Morgana's Plot -->
+    <div class="scene-container" id="scene8">
+        <h2 class="scene-title">Dark Whispers</h2>
+        <div class="video-wrapper">
+            <video id="video8" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/01583a75-79d1-4ca6-afa5-6a90ecdc0476.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">LADY MORGANA</span>
+            <p>Fools... they race toward their doom. The dragon does not serve bloodlines. It serves power. And I have paid the price in blood.</p>
+            <audio id="narr8" src="http://localhost:9091/ui/uploads/fff9b5d0-d494-4b9c-8389-4ad65b2a9ec7.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Act III: Fire and Ash -->
+    <div class="scene-container" id="scene9">
+        <h2 class="act-title">Act III: Fire and Ash</h2>
+        <div class="video-wrapper">
+            <video id="video9" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/9d36ee00-93f0-4a7e-9f52-944fb9042659.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">NARRATOR</span>
+            <p>As the three forces converged upon the ancient chamber, the egg shattered. Fire erupted from the mountain's heart, and the last dragon of Westmoor spread its wings. Its roar shook the very foundations of the realm.</p>
+            <audio id="narr9" src="http://localhost:9091/ui/uploads/ea6aa364-966c-48a8-95b2-e44a82a9ebfe.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 10: King's Claim -->
+    <div class="scene-container" id="scene10">
+        <h2 class="scene-title">The Dragon Emerges</h2>
+        <div class="video-wrapper">
+            <video id="video10" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/639dcf9f-75e6-44a6-9992-1857617c0e83.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">KING ALDRIC</span>
+            <p>I am Aldric, son of Aldric, descendant of the Dragon Lords! Hear me, child of fire! Your oath is to my bloodline!</p>
+            <audio id="narr10" src="http://localhost:9091/ui/uploads/7640cfec-8d16-4407-88fe-90437c2186d9.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 11: Queen's Challenge -->
+    <div class="scene-container" id="scene11">
+        <h2 class="scene-title">Courage Over Blood</h2>
+        <div class="video-wrapper">
+            <video id="video11" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/6eda527a-93e2-4066-a25a-f87672f298fc.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">QUEEN SERAPHINA</span>
+            <p>The dragon chooses not blood... but courage. I claim you in the name of those who would protect this realm!</p>
+            <audio id="narr11" src="http://localhost:9091/ui/uploads/7991e3aa-c64f-4ecd-a59a-1438cb50bd80.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 12: Morgana's Truth -->
+    <div class="scene-container" id="scene12">
+        <h2 class="scene-title">Wild Magic</h2>
+        <div class="video-wrapper">
+            <video id="video12" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/e8d8719f-0080-4932-bb35-cab303e3b1b6.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">LADY MORGANA</span>
+            <p>You both misunderstand. The dragon chooses nothing. It is wild magic, untamed fury. And it will burn you all.</p>
+            <audio id="narr12" src="http://localhost:9091/ui/uploads/2e1f62ba-ca51-46db-b4a5-8738503e742f.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 13: Finale -->
+    <div class="scene-container" id="scene13">
+        <h2 class="scene-title">The Choice</h2>
+        <div class="video-wrapper">
+            <video id="video13" loop muted autoplay playsinline>
+                <source src="http://localhost:9091/ui/uploads/5791b7bd-06a9-4042-bb56-f8f07f526eef.mp4" type="video/mp4">
+            </video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">NARRATOR</span>
+            <p>The dragon's eyes blazed with ancient wisdom. It saw the king's pride, the queen's determination, and the advisor's hunger. In one terrible moment, it chose. Fire rained upon the mountain, and when the smoke cleared, only one remained standing. The age of dragons had returned... but at what cost?</p>
+            <audio id="narr13" src="http://localhost:9091/ui/uploads/ecab9789-7172-467a-acb2-bc6d1708daf9.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Credits -->
+    <div class="credits" id="credits">
+        <h2 class="credits-title">The Last Dragon of Westmoor</h2>
+        <div class="credits-text">
+            <p><strong>Created using BlackBox AI Production Pipeline</strong></p>
+            <p><br></p>
+            <p>Music: Google Lyria</p>
+            <p>Voices: Google Gemini Pro TTS</p>
+            <p>Videos: Google Veo 3.1</p>
+            <p>Images: Google Imagen 3</p>
+            <p>Analysis: Google Gemini</p>
+            <p><br></p>
+            <p>A demonstration of iterative multimodal AI workflow:<br>
+            Generate → Analyze → Verify → Scale</p>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls" id="controls" style="display: none;">
+        <button class="control-btn" onclick="previousScene()">◀ Previous</button>
+        <button class="control-btn" onclick="nextScene()">Next ▶</button>
+    </div>
+
+    <script>
+        // Dynamic base URL - works from Portal iframe or standalone
+        const API_BASE = window.parent !== window
+            ? window.parent.location.origin  // Running in iframe from Portal
+            : window.location.origin;        // Running standalone
+
+        let currentScene = -1;
+        const totalScenes = 13;
+        let scenes = [];
+
+        // Fix all media URLs to use dynamic base
+        function fixMediaUrls() {
+            // Fix all video sources
+            document.querySelectorAll('video source').forEach(source => {
+                const src = source.getAttribute('src');
+                if (src && src.includes('localhost:9091')) {
+                    source.setAttribute('src', src.replace('http://localhost:9091', API_BASE));
+                    // Reload the video element
+                    source.parentElement.load();
+                }
+            });
+
+            // Fix all image sources
+            document.querySelectorAll('img').forEach(img => {
+                const src = img.getAttribute('src');
+                if (src && src.includes('localhost:9091')) {
+                    img.setAttribute('src', src.replace('http://localhost:9091', API_BASE));
+                }
+            });
+
+            // Fix all audio sources
+            document.querySelectorAll('audio').forEach(audio => {
+                const src = audio.getAttribute('src');
+                if (src && src.includes('localhost:9091')) {
+                    audio.setAttribute('src', src.replace('http://localhost:9091', API_BASE));
+                }
+                // Also check source children
+                audio.querySelectorAll('source').forEach(source => {
+                    const srcInner = source.getAttribute('src');
+                    if (srcInner && srcInner.includes('localhost:9091')) {
+                        source.setAttribute('src', srcInner.replace('http://localhost:9091', API_BASE));
+                    }
+                });
+                audio.load();
+            });
+
+            console.log('Media URLs fixed to use:', API_BASE);
+        }
+
+        // Initialize
+        for (let i = 1; i <= totalScenes; i++) {
+            scenes.push(document.getElementById('scene' + i));
+        }
+
+        // Fix URLs on page load
+        fixMediaUrls();
+
+        // Transition elements
+        const transitionOverlay = document.getElementById('transitionOverlay');
+        const cinemaBarTop = document.getElementById('cinemaBarTop');
+        const cinemaBarBottom = document.getElementById('cinemaBarBottom');
+
+        function startProduction() {
+            // Fade out title screen
+            const titleScreen = document.getElementById('titleScreen');
+            titleScreen.style.transition = 'opacity 1s ease';
+            titleScreen.style.opacity = '0';
+
+            setTimeout(() => {
+                titleScreen.style.display = 'none';
+                document.getElementById('controls').style.display = 'flex';
+
+                // Add cinematic bars
+                cinemaBarTop.classList.add('active');
+                cinemaBarBottom.classList.add('active');
+
+                const bgMusic = document.getElementById('bgMusic');
+                bgMusic.volume = 0.15;
+                bgMusic.play();
+                nextScene();
+            }, 1000);
+        }
+
+        // Smooth scene transition with fade to black
+        function transitionToScene(callback) {
+            transitionOverlay.classList.add('active');
+
+            setTimeout(() => {
+                callback();
+                setTimeout(() => {
+                    transitionOverlay.classList.remove('active');
+                }, 100);
+            }, 600);
+        }
+
+        function nextScene() {
+            // For first scene, no transition needed
+            if (currentScene === -1) {
+                currentScene++;
+                showCurrentScene();
+                return;
+            }
+
+            // Use fade transition for subsequent scenes
+            transitionToScene(() => {
+                // Stop all currently playing audio and video
+                if (currentScene >= 0 && currentScene < totalScenes) {
+                    // Add exit animation
+                    scenes[currentScene].classList.add('exiting');
+                    scenes[currentScene].classList.remove('active');
+
+                    // Stop current video
+                    const currentVideo = document.getElementById('video' + (currentScene + 1));
+                    if (currentVideo) {
+                        currentVideo.pause();
+                        currentVideo.currentTime = 0;
+                    }
+
+                    // Remove speaking class from narration
+                    const currentNarration = scenes[currentScene].querySelector('.narration-text');
+                    if (currentNarration) {
+                        currentNarration.classList.remove('speaking');
+                    }
+
+                    // CRITICAL: Stop current audio to prevent overlap
+                    const currentAudio = document.getElementById('narr' + (currentScene + 1));
+                    if (currentAudio) {
+                        currentAudio.pause();
+                        currentAudio.currentTime = 0;
+                        currentAudio.onended = null;
+                    }
+
+                    // Remove exiting class after animation
+                    setTimeout(() => {
+                        scenes[currentScene - 1]?.classList.remove('exiting');
+                    }, 800);
+                }
+
+                currentScene++;
+                showCurrentScene();
+            });
+        }
+
+        function showCurrentScene() {
+            if (currentScene < totalScenes) {
+                scenes[currentScene].classList.add('active');
+                updateProgress();
+
+                // Play video with error handling
+                const video = document.getElementById('video' + (currentScene + 1));
+                if (video) {
+                    video.currentTime = 0;
+                    video.play().catch(err => console.log('Video autoplay blocked:', err));
+                }
+
+                // Play narration with error handling
+                const audio = document.getElementById('narr' + (currentScene + 1));
+                const narrationText = scenes[currentScene].querySelector('.narration-text');
+
+                if (audio) {
+                    audio.volume = 1.0;
+                    audio.currentTime = 0;
+
+                    // Add speaking glow effect
+                    if (narrationText) {
+                        narrationText.classList.add('speaking');
+                    }
+
+                    audio.play().catch(err => {
+                        console.log('Audio playback blocked:', err);
+                        setTimeout(nextScene, 5000);
+                    });
+
+                    // Auto-advance when narration ends
+                    audio.onended = () => {
+                        if (narrationText) {
+                            narrationText.classList.remove('speaking');
+                        }
+                        setTimeout(nextScene, 2000);
+                    };
+                }
+            } else {
+                // Show credits with fade
+                const credits = document.getElementById('credits');
+                credits.classList.add('active');
+                credits.style.animation = 'sceneEnter 1.5s ease-out forwards';
+                document.getElementById('controls').style.display = 'none';
+
+                // Remove cinema bars for credits
+                cinemaBarTop.classList.remove('active');
+                cinemaBarBottom.classList.remove('active');
+
+                updateProgress();
+            }
+        }
+
+        function previousScene() {
+            if (currentScene > 0) {
+                transitionToScene(() => {
+                    scenes[currentScene].classList.add('exiting');
+                    scenes[currentScene].classList.remove('active');
+
+                    // Stop current video
+                    const currentVideo = document.getElementById('video' + (currentScene + 1));
+                    if (currentVideo) {
+                        currentVideo.pause();
+                        currentVideo.currentTime = 0;
+                    }
+
+                    // Remove speaking class
+                    const currentNarration = scenes[currentScene].querySelector('.narration-text');
+                    if (currentNarration) {
+                        currentNarration.classList.remove('speaking');
+                    }
+
+                    // Stop current audio to prevent overlap
+                    const currentAudio = document.getElementById('narr' + (currentScene + 1));
+                    if (currentAudio) {
+                        currentAudio.pause();
+                        currentAudio.currentTime = 0;
+                        currentAudio.onended = null;
+                    }
+
+                    setTimeout(() => {
+                        scenes[currentScene]?.classList.remove('exiting');
+                    }, 800);
+
+                    currentScene--;
+                    showCurrentScene();
+                });
+            }
+        }
+
+        function updateProgress() {
+            const progress = ((currentScene + 1) / (totalScenes + 1)) * 100;
+            document.getElementById('progressBar').style.width = progress + '%';
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') nextScene();
+            if (e.key === 'ArrowLeft') previousScene();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,80 @@
+[Unit]
+# nvblox sidecar — GPU-accelerated 3D occupancy / ESDF mapping.
+# Runs in a separate container (ugv_jetson_nvblox:vpi-fixed) sharing the
+# host network namespace with ugv_waveshare. Communicates via DDS over
+# UDP loopback (FastRTPS shared-memory transport disabled — see
+# fastrtps_no_shm.xml for rationale).
+Description=UGV Beast nvblox sidecar (Isaac ROS GPU obstacle map)
+Documentation=file:///home/jetson/ugv_ws_waveshare/ugv_tools_api/deploy/isaac/start_isaac.sh
+After=docker.service ugv-tools-api.service network-online.target
+Wants=ugv-tools-api.service
+Requires=docker.service
+
+# Cap restart attempts so we don't loop forever on a fundamentally broken
+# config (e.g. image gone). After 5 failures in 5 min, systemd gives up.
+# (StartLimit* keys must live in [Unit], not [Service], in modern systemd.)
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+[Service]
+# Type=simple — systemd tracks the foreground `docker run` client. When
+# systemd sends SIGTERM, docker forwards it to the container, which
+# triggers our entrypoint's TERM trap and exits cleanly.
+Type=simple
+
+# Drop pagecache + dentries + inodes BEFORE launching nvblox. On Orin
+# Nano with the full ugv-* stack running for hours, MemFree drops to
+# ~78 MB despite ~4 GB MemAvailable (mostly cached). Without this,
+# nvblox's first cudaMallocAsync fails with NvMapMemAllocInternalTagged
+# error 12 (ENOMEM at the Tegra NvMap allocator — needs physically
+# contiguous pages). The drop frees ~3.7 GB MemFree reliably.
+# No-op on a fresh boot (nothing cached yet).
+ExecStartPre=/bin/sh -c 'sync && echo 3 > /proc/sys/vm/drop_caches && grep -m1 MemFree /proc/meminfo'
+
+# Make sure no stale container with this name is in the way (e.g. from
+# a manual debug run). Idempotent.
+ExecStartPre=-/usr/bin/docker rm -f ugv_isaac
+
+# Foreground docker run — same shape as the manual debug command, with
+# --rm so failed containers don't accumulate. Critical env / mount notes:
+#   --network host                       share host loopback (DDS discovery)
+#   --runtime nvidia                     GPU access
+#   NVIDIA_VISIBLE_DEVICES=all           override image's baked "void"
+#   NVIDIA_DRIVER_CAPABILITIES=all       CUDA + compute caps
+#   RMW_IMPLEMENTATION=rmw_fastrtps_cpp  match ugv_waveshare
+#   ROS_DOMAIN_ID=0                      match ugv_waveshare
+#   FASTRTPS_DEFAULT_PROFILES_FILE=...   disable SHM transport
+#                                        (fixes silent cross-container data loss)
+ExecStart=/usr/bin/docker run --rm --name ugv_isaac \
+    --network host \
+    --runtime nvidia \
+    -e NVIDIA_VISIBLE_DEVICES=all \
+    -e NVIDIA_DRIVER_CAPABILITIES=all \
+    -e RMW_IMPLEMENTATION=rmw_fastrtps_cpp \
+    -e ROS_DOMAIN_ID=0 \
+    -e FASTRTPS_DEFAULT_PROFILES_FILE=/isaac_params/fastrtps_no_shm.xml \
+    -v /home/jetson/ugv_ws_waveshare/ugv_tools_api/deploy/isaac/start_isaac.sh:/start_isaac.sh:ro \
+    -v /home/jetson/ugv_ws_waveshare/src/ugv_main/ugv_nav/param/nvblox_config.yaml:/isaac_params/nvblox_config.yaml:ro \
+    -v /home/jetson/ugv_ws_waveshare/ugv_tools_api/deploy/isaac/fastrtps_no_shm.xml:/isaac_params/fastrtps_no_shm.xml:ro \
+    -v /home/jetson/ugv_ws_waveshare/ugv_tools_api/deploy/isaac/nvblox_costmap_relay.py:/isaac_params/nvblox_costmap_relay.py:ro \
+    ugv_jetson_nvblox:vpi-fixed /start_isaac.sh
+
+# Graceful stop — `docker stop` sends SIGTERM (10s grace), then SIGKILL.
+# Our entrypoint's `trap '... TERM INT'` handles SIGTERM cleanly.
+ExecStop=/usr/bin/docker stop --time=10 ugv_isaac
+
+# Belt-and-suspenders: if stop-then-rm leaves a zombie, force-rm. The
+# leading `-` makes the failure non-fatal (e.g. container already gone).
+ExecStopPost=-/usr/bin/docker rm -f ugv_isaac
+
+# Restart on failure (e.g. OOM kill from memory wall, Docker daemon hiccup).
+# RestartSec=15 backs off enough that the cache-drop gets a fair chance.
+Restart=on-failure
+RestartSec=15
+
+# Generous timeouts — nvblox warmup is ~25s, integration latency is real.
+TimeoutStartSec=90
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

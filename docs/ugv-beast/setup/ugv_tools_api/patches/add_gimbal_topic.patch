@@ -1,0 +1,209 @@
+--- ugv_driver.py.orig	2026-04-16 15:43:56.897773163 -0400
++++ ugv_driver.py	2026-04-16 17:03:18.909355300 -0400
+@@ -1,11 +1,11 @@
+ #!/usr/bin/env python3
+ import rclpy
+ from rclpy.node import Node
+-from geometry_msgs.msg import Twist
+-import serial  
+-import json  
++from geometry_msgs.msg import Twist, Point, PointStamped
++import serial
++import json
+ from sensor_msgs.msg import JointState
+-from std_msgs.msg import Float32, Float32MultiArray
++from std_msgs.msg import Float32, Float32MultiArray, String
+ import subprocess
+ import time
+ import os
+@@ -38,6 +38,35 @@
+         # Subscribe to voltage data (voltage topic)
+         self.voltage_sub = self.create_subscription(Float32, 'voltage', self.voltage_callback, 10)
+ 
++        # Subscribe to absolute gimbal position commands (/gimbal/absolute topic).
++        # geometry_msgs/Point where x=pan(deg), y=tilt(deg), z=servo_speed (0 uses default 600).
++        # Forwards to Waveshare ESP32 firmware as T=134 (pan-tilt goto) over /dev/ttyTHS1.
++        # This is the SOLE authoritative pan-tilt command path; the /ugv/joint_states callback
++        # below has the firmware T=134 send disarmed so absolute commands are not overwritten.
++        self.gimbal_abs_sub = self.create_subscription(Point, '/gimbal/absolute', self._on_gimbal_absolute, 10)
++
++        # Cache of the last commanded gimbal pan/tilt (degrees). The Waveshare pan-tilt board
++        # uses open-loop PWM servos with no encoder feedback -- the ESP32's T=1001 telemetry
++        # `pan`/`tilt` fields are frozen at magic values and do NOT track actual servo
++        # position. Instead we cache the most recent /gimbal/absolute command and republish
++        # it as /gimbal/state. After one servo settle-time (~300ms for a 90deg move at
++        # speed=600) the commanded position is effectively the actual position.
++        # Initialized to (0, 0) so subscribers get a sane default before any command lands.
++        self._last_gimbal_pan = 0.0
++        self._last_gimbal_tilt = 0.0
++        self.gimbal_state_pub = self.create_publisher(PointStamped, '/gimbal/state', 10)
++        # 10 Hz publish timer -- matches the cadence of the rest of the stock telemetry.
++        self.gimbal_state_timer = self.create_timer(0.1, self._publish_gimbal_state)
++
++        # Subscribe to raw JSON command passthrough (/ugv/json_cmd topic).
++        # The std_msgs/String payload must be a valid JSON object that the Waveshare ESP32
++        # firmware understands (e.g. {"T": 0} for emergency stop). The driver re-serializes
++        # the parsed dict and writes "<json>\n" to the same /dev/ttyTHS1 port used by the
++        # other callbacks. This is the escape hatch for ad-hoc / experimental T-codes
++        # (system tools, servo center, servo release, ...) without growing the driver
++        # surface every time a new command is needed. Malformed JSON is logged + dropped.
++        self.json_cmd_sub = self.create_subscription(String, '/ugv/json_cmd', self._on_json_cmd, 10)
++
+     # Callback for processing velocity commands
+     def cmd_vel_callback(self, msg):
+         linear_velocity = msg.linear.x
+@@ -54,7 +83,18 @@
+         data = json.dumps({'T': '13', 'X': linear_velocity, 'Z': angular_velocity}) + "\n"
+         ser.write(data.encode())
+ 
+-    # Callback for processing joint state updates
++    # Callback for processing joint state updates.
++    #
++    # NOTE: The firmware pan-tilt command (T=134) send that used to live at the tail of
++    # this callback has been DISARMED. The stock joint_state_publisher republishes pan/tilt
++    # joints at 10 Hz with positions pinned to 0.0 (no hardware feedback closes the loop
++    # in the URDF), which meant this callback was continuously driving the servos back to
++    # zero every 100 ms and overwriting any command issued on /gimbal/absolute.
++    #
++    # Gimbal pan-tilt is now driven exclusively by _on_gimbal_absolute (subscriber on
++    # /gimbal/absolute). If you need to restore the joint_states -> servo path, re-add
++    # the ser.write of joint_data below AND remove the /gimbal/absolute subscription to
++    # avoid racing writes on /dev/ttyTHS1.
+     def joint_states_callback(self, msg):
+         header = {
+             'stamp': {
+@@ -64,39 +104,98 @@
+             'frame_id': msg.header.frame_id,
+         }
+ 
+-        # Extract joint positions and convert to degrees
++        # Extract joint positions and convert to degrees (kept for parity / future use).
+         name = msg.name
+         position = msg.position
+ 
+-        x_rad = position[name.index('pt_base_link_to_pt_link1')]
+-        y_rad = position[name.index('pt_link1_to_pt_link2')]
+-
+-        x_degree = (180 * x_rad) / 3.1415926
+-        y_degree = (180 * y_rad) / 3.1415926
+-
+-        # Send the joint data as a JSON string to the UGV
+-        joint_data = json.dumps({
+-            'T': 134, 
+-            'X': x_degree, 
+-            'Y': y_degree, 
+-            "SX": 600,
+-            "SY": 600,
++        try:
++            x_rad = position[name.index('pt_base_link_to_pt_link1')]
++            y_rad = position[name.index('pt_link1_to_pt_link2')]
++        except (ValueError, IndexError):
++            # Pan/tilt joints not present in this JointState message; nothing to do.
++            return
++
++        _x_degree = (180 * x_rad) / 3.1415926  # noqa: F841 -- retained for reference
++        _y_degree = (180 * y_rad) / 3.1415926  # noqa: F841 -- retained for reference
++
++        # ---- DISARMED T=134 send ----
++        # The block below is intentionally disabled. See class docstring / method docstring.
++        # joint_data = json.dumps({
++        #     'T': 134,
++        #     'X': _x_degree,
++        #     'Y': _y_degree,
++        #     "SX": 600,
++        #     "SY": 600,
++        # }) + "\n"
++        # ser.write(joint_data.encode())
++
++    # Callback for absolute gimbal position commands over /gimbal/absolute.
++    # Uses the firmware pan-tilt command (T=134), letting external clients (e.g.
++    # ugv_tools_api) command the gimbal directly in degrees without constructing a
++    # JointState message. This is the authoritative gimbal command path.
++    #   msg.x -> pan  (degrees, typically -180..180)
++    #   msg.y -> tilt (degrees, typically -45..90)
++    #   msg.z -> servo speed (1..2000; 0 falls back to 600 default)
++    def _on_gimbal_absolute(self, msg: Point):
++        pan_deg = float(msg.x)
++        tilt_deg = float(msg.y)
++        speed = int(msg.z) if msg.z else 600
++        cmd = json.dumps({
++            'T': 134,
++            'X': pan_deg,
++            'Y': tilt_deg,
++            'SX': speed,
++            'SY': speed,
+         }) + "\n"
+-                
+-        ser.write(joint_data.encode())
++        ser.write(cmd.encode())
++        # Update the cached commanded pan/tilt so /gimbal/state reflects the latest target.
++        # Open-loop servos: this is our best estimate of "actual" position after settle.
++        self._last_gimbal_pan = pan_deg
++        self._last_gimbal_tilt = tilt_deg
++
++    # 10 Hz publisher for /gimbal/state. Republishes the cached last-commanded pan/tilt as a
++    # PointStamped so downstream tools (e.g. ugv_tools_api gimbal status) can read the current
++    # commanded position without subscribing to the full ESP32 telemetry stream. frame_id is
++    # 'pantilt_base' as a placeholder -- Waveshare's URDF doesn't define this frame, and we
++    # are not doing TF lookups against /gimbal/state today. Rename when URDF gains the frame.
++    def _publish_gimbal_state(self):
++        m = PointStamped()
++        m.header.stamp = self.get_clock().now().to_msg()
++        m.header.frame_id = 'pantilt_base'
++        m.point.x = self._last_gimbal_pan
++        m.point.y = self._last_gimbal_tilt
++        m.point.z = 0.0
++        self.gimbal_state_pub.publish(m)
++
++    # Callback for /ugv/json_cmd raw-JSON passthrough. msg.data is a JSON object
++    # string (e.g. '{"T": 0}'); we parse to validate, then re-serialize and write
++    # "<json>\n" to /dev/ttyTHS1. Used by ugv_tools_api system tools to issue
++    # ad-hoc firmware T-codes (emergency stop, servo center/release, ...) without
++    # adding a dedicated subscription per command. Parse errors are logged and
++    # the message is dropped so a malformed publisher cannot crash the driver.
++    def _on_json_cmd(self, msg: String):
++        try:
++            cmd = json.loads(msg.data)
++        except Exception as e:
++            self.get_logger().warn(f"/ugv/json_cmd parse error: {e!r} payload={msg.data!r}")
++            return
++        try:
++            ser.write((json.dumps(cmd) + "\n").encode())
++        except Exception as e:
++            self.get_logger().warn(f"/ugv/json_cmd serial write error: {e!r}")
+ 
+     # Callback for processing LED control commands
+     def led_ctrl_callback(self, msg):
+         IO4 = msg.data[0]
+         IO5 = msg.data[1]
+-        
++
+         # Send LED control data as a JSON string to the UGV
+         led_ctrl_data = json.dumps({
+-            'T': 132, 
++            'T': 132,
+             "IO4": IO4,
+             "IO5": IO5,
+         }) + "\n"
+-                
++
+         ser.write(led_ctrl_data.encode())
+ 
+     # Callback for processing voltage data
+@@ -104,14 +203,14 @@
+         voltage_value = msg.data
+ 
+         # If voltage drops below a threshold, play a low battery warning sound
+-        if 0.1 < voltage_value < 9: 
++        if 0.1 < voltage_value < 9:
+             subprocess.run(['aplay', '-D', 'plughw:3,0', '/home/ws/ugv_ws/src/ugv_main/ugv_bringup/ugv_bringup/low_battery.wav'])
+             time.sleep(5)
+ 
+ def main(args=None):
+     rclpy.init(args=args)
+     node = UgvDriver("ugv_driver")
+-    
++
+     try:
+         rclpy.spin(node)  # Keep the node running and handling callbacks
+     except KeyboardInterrupt:

@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Rick and Morty: The Probability Cascade v5</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000000;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            overflow-x: hidden;
+        }
+
+        .title-screen {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: radial-gradient(circle at center, #001a00, #000000);
+        }
+
+        .main-title {
+            font-size: 4.5rem;
+            font-weight: 900;
+            background: linear-gradient(45deg, #00ff00, #00ffff, #00ff00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+            letter-spacing: 0.2em;
+            text-shadow: 0 0 40px rgba(0, 255, 0, 0.8);
+            animation: glitch 3s infinite;
+        }
+
+        @keyframes glitch {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(-2px, 2px); }
+            50% { transform: translate(2px, -2px); }
+            75% { transform: translate(-2px, -2px); }
+        }
+
+        .episode-title {
+            font-size: 2.5rem;
+            color: #00ffff;
+            margin-bottom: 1rem;
+            font-style: italic;
+        }
+
+        .subtitle {
+            font-size: 1.5rem;
+            color: #88ff88;
+            margin-bottom: 3rem;
+            font-weight: 300;
+        }
+
+        .start-btn {
+            padding: 20px 60px;
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, #00ff00, #00ffff);
+            color: #000;
+            border: 3px solid #00ffff;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 900;
+            text-transform: uppercase;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.6);
+        }
+
+        .start-btn:hover {
+            background: linear-gradient(135deg, #00ffff, #00ff00);
+            transform: scale(1.1);
+            box-shadow: 0 0 50px rgba(0, 255, 0, 1);
+        }
+
+        .scene-container {
+            min-height: 100vh;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 40px 20px;
+            background: radial-gradient(circle at center, #001a00, #000000);
+        }
+
+        .scene-container.active {
+            display: flex;
+        }
+
+        .act-title {
+            font-size: 3rem;
+            background: linear-gradient(to right, #00ff00, #00ffff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 2rem;
+            text-align: center;
+            font-weight: 900;
+            text-transform: uppercase;
+        }
+
+        .scene-title {
+            font-size: 2rem;
+            color: #00ffff;
+            margin-bottom: 2rem;
+            text-align: center;
+            font-weight: 700;
+        }
+
+        .image-wrapper {
+            width: 100%;
+            max-width: 1000px;
+            margin: 0 auto 2rem;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 0 60px rgba(0, 255, 0, 0.5);
+            border: 4px solid #00ff00;
+        }
+
+        .image-wrapper img,
+        .image-wrapper video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .narration-text {
+            max-width: 900px;
+            font-size: 1.4rem;
+            line-height: 1.8;
+            text-align: center;
+            color: #88ff88;
+            margin: 2rem auto;
+            padding: 30px;
+            background: rgba(0, 255, 0, 0.05);
+            border-left: 5px solid #00ff00;
+            border-right: 5px solid #00ffff;
+            border-radius: 15px;
+        }
+
+        .character-name {
+            color: #00ffff;
+            font-weight: 900;
+            font-size: 1.3em;
+            display: block;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            text-shadow: 0 0 10px #00ffff;
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            gap: 15px;
+            z-index: 1000;
+        }
+
+        .control-btn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #00ff00, #00ffff);
+            color: #000;
+            border: 3px solid #00ffff;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            font-weight: 900;
+            transition: all 0.3s;
+        }
+
+        .control-btn:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.8);
+        }
+
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 0%;
+            height: 6px;
+            background: linear-gradient(to right, #00ff00, #00ffff, #00ff00);
+            transition: width 0.5s;
+            z-index: 1001;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 1);
+        }
+
+        .credits {
+            min-height: 100vh;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: radial-gradient(circle at center, #001a00, #000000);
+        }
+
+        .credits.active {
+            display: flex;
+        }
+
+        .credits-title {
+            font-size: 4rem;
+            background: linear-gradient(45deg, #00ff00, #00ffff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 2rem;
+            font-weight: 900;
+        }
+
+        .credits-text {
+            font-size: 1.5rem;
+            color: #88ff88;
+            line-height: 2.5;
+            max-width: 800px;
+        }
+
+        @media (max-width: 768px) {
+            .main-title { font-size: 3rem; }
+            .episode-title { font-size: 1.8rem; }
+            .subtitle { font-size: 1.2rem; }
+            .act-title { font-size: 2.2rem; }
+            .narration-text { font-size: 1.2rem; padding: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="progress-bar" id="progressBar"></div>
+
+    <!-- Title Screen -->
+    <div class="title-screen" id="titleScreen">
+        <h1 class="main-title">RICK AND MORTY</h1>
+        <h2 class="episode-title">The Probability Cascade</h2>
+        <p class="subtitle">Season ∞ • Episode ∞</p>
+        <button class="start-btn" onclick="startEpisode()">▶ WATCH NOW</button>
+    </div>
+
+    <!-- Scene 1: Cold Open -->
+    <div class="scene-container" id="scene1">
+        <h2 class="act-title">Cold Open - Rick's Garage</h2>
+        <div class="image-wrapper">
+            <video data-path="/ui/uploads/53a01485-657e-4056-8297-e9597f82d4a4.mp4" loop muted autoplay playsinline></video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">RICK</span>
+            <p>Morty! Get in here with that quantum stabilizer!</p>
+            <audio id="narr1" data-path="/ui/uploads/ad71a3b9-3dd5-42d8-b0eb-77758a434b70.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 2: Morty's Response -->
+    <div class="scene-container" id="scene2">
+        <h2 class="scene-title">Morty's Anxiety Kicks In</h2>
+        <div class="image-wrapper">
+            <video data-path="/ui/uploads/243e3008-45b7-425a-a719-b6e619b55a08.mp4" loop muted autoplay playsinline></video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">MORTY</span>
+            <p>Aw geez, Rick... Last time I collapsed seventeen dimensions!</p>
+            <audio id="narr2" data-path="/ui/uploads/fecc18c9-ea3e-493e-a55f-3913bb799a1b.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 3: Rick Explains the Problem -->
+    <div class="scene-container" id="scene3">
+        <h2 class="scene-title">The Cascade Begins</h2>
+        <div class="image-wrapper">
+            <video data-path="/ui/uploads/adfe09ff-a47f-4639-8c2a-a450418c6b5c.mp4" loop muted autoplay playsinline></video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">RICK</span>
+            <p>I may have accidentally created a device that collapses all probable realities...</p>
+            <audio id="narr3" data-path="/ui/uploads/1d2ae32e-7b5d-4b4e-84c0-f73064b03131.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 4: Morty Panics -->
+    <div class="scene-container" id="scene4">
+        <h2 class="scene-title">Oh God Oh Geez</h2>
+        <div class="image-wrapper">
+            <video data-path="/ui/uploads/4268bd43-a9c5-429d-8aee-41f73d5f9f5f.mp4" loop muted autoplay playsinline></video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">MORTY</span>
+            <p>We're collapsing the entire multiverse?!</p>
+            <audio id="narr4" data-path="/ui/uploads/d90bb814-dbd1-4f3e-91e5-043e754f59c0.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 5: The Probability Zone -->
+    <div class="scene-container" id="scene5">
+        <h2 class="act-title">Act II - The Probability Zone</h2>
+        <div class="image-wrapper">
+            <video data-path="/ui/uploads/a776e901-d2c8-49d3-ade3-01791286d777.mp4" loop muted autoplay playsinline></video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">RICK</span>
+            <p>Welcome to where all possible timelines exist simultaneously!</p>
+            <audio id="narr5" data-path="/ui/uploads/538be56d-1517-43d9-a3e1-7b84be3bf4f7.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 6: The Probability Entity -->
+    <div class="scene-container" id="scene6">
+        <h2 class="scene-title">The Entity Appears</h2>
+        <div class="image-wrapper">
+            <video data-path="/ui/uploads/4dfe46ee-ecfd-4752-a899-d28c0ce5cc27.mp4" loop muted autoplay playsinline></video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">PROBABILITY ENTITY</span>
+            <p>You have violated the fundamental law of causality...</p>
+            <audio id="narr6" data-path="/ui/uploads/18820970-4fc6-4efc-b537-3213da94d731.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 7: Morty's Determination -->
+    <div class="scene-container" id="scene7">
+        <h2 class="scene-title">Morty Steps Up</h2>
+        <div class="image-wrapper">
+            <video data-path="/ui/uploads/c2217cd1-1425-49d5-8aa7-c9ccd976cb6d.mp4" loop muted autoplay playsinline></video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">MORTY</span>
+            <p>We HAVE to stop it! Jessica doesn't even know I exist in this timeline!</p>
+            <audio id="narr7" data-path="/ui/uploads/792ace1a-59bb-4ec3-9917-2153d5d9bd78.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 8: Rick's Proud Moment -->
+    <div class="scene-container" id="scene8">
+        <h2 class="scene-title">A Rare Tender Moment</h2>
+        <div class="image-wrapper">
+            <video data-path="/ui/uploads/a359b0d1-0115-4707-9db2-124a31dfff58.mp4" loop muted autoplay playsinline></video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">RICK</span>
+            <p>I'm proud of you, buddy. In like, a deeply cynical way.</p>
+            <audio id="narr8" data-path="/ui/uploads/e91802d1-b02f-4901-921c-79ec5e94cbbd.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 9: The Solution -->
+    <div class="scene-container" id="scene9">
+        <h2 class="act-title">Act III - Quantum Chaos</h2>
+        <div class="image-wrapper">
+            <video data-path="/ui/uploads/adc7eab9-5ed9-473f-ac7b-4fac63981221.mp4" loop muted autoplay playsinline></video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">RICK</span>
+            <p>We embrace the chaos! Quantum Chaos Generator activated!</p>
+            <audio id="narr9" data-path="/ui/uploads/bb4250ba-ed74-4fe5-9692-8a7a598fa7dd.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 10: Back to Normal -->
+    <div class="scene-container" id="scene10">
+        <h2 class="scene-title">Mission Accomplished</h2>
+        <div class="image-wrapper">
+            <video data-path="/ui/uploads/474a7640-84d8-469f-b03f-1d59ad1ab48a.mp4" loop muted autoplay playsinline></video>
+        </div>
+        <div class="narration-text">
+            <span class="character-name">RICK</span>
+            <p>Multiverse saved. Reality back to regularly scheduled chaos.</p>
+            <audio id="narr10" data-path="/ui/uploads/2f6556da-a43e-4ac0-897b-a23c93f32160.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 11: The Toaster Problem -->
+    <div class="scene-container" id="scene11">
+        <h2 class="scene-title">Side Effects May Vary</h2>
+        <div class="image-wrapper">
+            <img data-path="/ui/uploads/c1f48d56-87d4-4691-b80d-0625d32d26e4.png" alt="Finale">
+        </div>
+        <div class="narration-text">
+            <span class="character-name">MORTY</span>
+            <p>There's still seventeen toasters... and one is sentient.</p>
+            <audio id="narr11" data-path="/ui/uploads/d13f9ffb-4a80-4165-b3ff-9380a14f738e.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 12: Finale -->
+    <div class="scene-container" id="scene12">
+        <h2 class="scene-title">What Really Matters</h2>
+        <div class="image-wrapper">
+            <img data-path="/ui/uploads/c1f48d56-87d4-4691-b80d-0625d32d26e4.png" alt="Finale">
+        </div>
+        <div class="narration-text">
+            <span class="character-name">RICK</span>
+            <p>It's a REALLY interesting life, Morty. Wubba lubba dub dub!</p>
+            <audio id="narr12" data-path="/ui/uploads/7a16b773-4c37-4fe1-86e2-eceb21f00056.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Scene 13: Post-Credits -->
+    <div class="scene-container" id="scene13">
+        <h2 class="scene-title">Post-Credits Scene</h2>
+        <div class="image-wrapper">
+            <img data-path="/ui/uploads/c1f48d56-87d4-4691-b80d-0625d32d26e4.png" alt="Garage">
+        </div>
+        <div class="narration-text">
+            <span class="character-name">SENTIENT TOASTER</span>
+            <p>Am I the sidekick now...?</p>
+            <audio id="narr13" data-path="/ui/uploads/8d6b453a-1b2c-4807-bed9-fd5143b4f4b0.wav"></audio>
+        </div>
+    </div>
+
+    <!-- Credits -->
+    <div class="credits" id="credits">
+        <h2 class="credits-title">THE PROBABILITY CASCADE</h2>
+        <div class="credits-text">
+            <p><strong>A Rick and Morty AI Production</strong></p>
+            <p><br></p>
+            <p>Voices: Google Gemini Pro TTS</p>
+            <p>Images: Google Imagen 3</p>
+            <p>Script: AI-Generated with Emotional Cues</p>
+            <p><br></p>
+            <p>Created using BlackBox Multimodal Pipeline<br>
+            Generate → Analyze → Verify → Iterate</p>
+            <p><br></p>
+            <p style="color: #00ffff;">🧪 Science isn't about WHY. It's about WHY NOT!</p>
+        </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls" id="controls" style="display: none;">
+        <button class="control-btn" onclick="previousScene()">◀ BACK</button>
+        <button class="control-btn" onclick="nextScene()">NEXT ▶</button>
+    </div>
+
+    <script>
+        let currentScene = -1;
+        const totalScenes = 13;
+        let scenes = [];
+
+        // Dynamic base URL detection for Tailscale proxy support
+        function getApiBaseUrl() {
+            const hostname = window.location.hostname;
+            const protocol = window.location.protocol;
+
+            // If accessing through localhost, use direct connection
+            if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                return 'http://localhost:9091';
+            }
+
+            // If accessing through Tailscale or external host,
+            // use the same host but route through the main app port
+            // The reverse proxy will handle /ui/uploads paths
+            return `${protocol}//${hostname}`;
+        }
+
+        // Set media URLs from data-path attributes using the correct base URL
+        function initializeMediaUrls() {
+            const baseUrl = getApiBaseUrl();
+            console.log('Using API base URL:', baseUrl);
+
+            // Set all image sources from data-path
+            document.querySelectorAll('img[data-path]').forEach(img => {
+                const path = img.getAttribute('data-path');
+                const fullUrl = baseUrl + path;
+                img.setAttribute('src', fullUrl);
+                console.log('Set image src:', fullUrl);
+            });
+
+            // Set all audio sources from data-path
+            document.querySelectorAll('audio[data-path]').forEach(audio => {
+                const path = audio.getAttribute('data-path');
+                const fullUrl = baseUrl + path;
+                audio.setAttribute('src', fullUrl);
+                console.log('Set audio src:', fullUrl);
+            });
+
+            // Set all video sources from data-path
+            document.querySelectorAll('video[data-path]').forEach(video => {
+                const path = video.getAttribute('data-path');
+                const fullUrl = baseUrl + path;
+                video.setAttribute('src', fullUrl);
+                video.load(); // Force reload with new src
+                console.log('Set video src:', fullUrl);
+            });
+        }
+
+        // Run URL initialization when DOM is ready
+        document.addEventListener('DOMContentLoaded', initializeMediaUrls);
+
+        // Initialize scenes
+        for (let i = 1; i <= totalScenes; i++) {
+            scenes.push(document.getElementById('scene' + i));
+        }
+
+        function startEpisode() {
+            document.getElementById('titleScreen').style.display = 'none';
+            document.getElementById('controls').style.display = 'flex';
+            nextScene();
+        }
+
+        function nextScene() {
+            // Stop all currently playing audio
+            if (currentScene >= 0 && currentScene < totalScenes) {
+                scenes[currentScene].classList.remove('active');
+
+                // CRITICAL: Stop current audio to prevent overlap
+                const currentAudio = document.getElementById('narr' + (currentScene + 1));
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                    currentAudio.onended = null;
+                }
+            }
+
+            currentScene++;
+
+            if (currentScene < totalScenes) {
+                scenes[currentScene].classList.add('active');
+                updateProgress();
+
+                // Play narration at FULL VOLUME (100%)
+                const audio = document.getElementById('narr' + (currentScene + 1));
+                if (audio) {
+                    audio.volume = 1.0;
+                    audio.currentTime = 0;
+                    audio.play().catch(err => {
+                        console.log('Audio playback blocked:', err);
+                        setTimeout(nextScene, 5000);
+                    });
+                    // Auto-advance when narration ends
+                    audio.onended = () => {
+                        setTimeout(nextScene, 2000); // 2 second pause
+                    };
+                }
+            } else {
+                // Show credits
+                document.getElementById('credits').classList.add('active');
+                document.getElementById('controls').style.display = 'none';
+                updateProgress();
+            }
+        }
+
+        function previousScene() {
+            if (currentScene > 0) {
+                scenes[currentScene].classList.remove('active');
+
+                // Stop current audio
+                const currentAudio = document.getElementById('narr' + (currentScene + 1));
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio.currentTime = 0;
+                    currentAudio.onended = null;
+                }
+
+                currentScene--;
+                scenes[currentScene].classList.add('active');
+                updateProgress();
+
+                const audio = document.getElementById('narr' + (currentScene + 1));
+                if (audio) {
+                    audio.volume = 1.0;
+                    audio.currentTime = 0;
+                    audio.play().catch(err => console.log('Audio blocked:', err));
+                }
+            }
+        }
+
+        function updateProgress() {
+            const progress = ((currentScene + 1) / (totalScenes + 1)) * 100;
+            document.getElementById('progressBar').style.width = progress + '%';
+        }
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowRight') nextScene();
+            if (e.key === 'ArrowLeft') previousScene();
+        });
+    </script>
+</body>
+</html>

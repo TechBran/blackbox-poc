@@ -1,0 +1,196 @@
+# ============================================================================
+# AI BlackBox Flight Recorder — .gitignore (DRAFT for review)
+# ============================================================================
+#
+# Designed for the mono-repo at /home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/
+# Goal: drop the project from 23 GB to <500 MB by excluding generated artifacts,
+# build caches, venvs, BlackBox storage, and binary assets — while preserving
+# all source code, plans, docs (text), and configuration.
+#
+# CRITICAL: Secrets must never be committed. The `.env` patterns below are
+# load-bearing — if you change them, double-check no real keys leak into git.
+
+# ============================================================================
+# SECRETS — never commit (load-bearing for security)
+# ============================================================================
+
+# Top-level and per-component .env files (real values)
+.env
+.env.local
+**/Secrets/
+**/secrets/
+**/.env
+**/.env.local
+**/supervisor.env
+
+# Credential files & directories
+credentials/
+**/credentials/
+**/*credentials*.json
+**/*token*.json
+**/*service-account*.json
+**/*.pem
+**/*.key
+**/*.p12
+
+# Asterisk / FreeSWITCH config files (contain inline SIP/ARI passwords)
+Orchestrator/asterisk/configs/*.conf
+Docker/freeswitch/config/freeswitch.xml
+Docker/freeswitch/config/directory/
+
+# Claude Code local config (per-machine permissions, not project source)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# SQLite databases (runtime data; not source)
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+**/*.db-wal
+**/*.db-shm
+**/*.sqlite-wal
+**/*.sqlite-shm
+
+# Allow templates / examples (these have placeholders, not real values)
+!**/.env.template
+!**/.env.example
+!**/*.env.example
+
+# ============================================================================
+# BlackBox immutable storage — not suitable for git
+# ============================================================================
+
+Volumes/
+Manifest/
+Fossils/
+
+# ============================================================================
+# Generated media — outputs of BlackBox tools, not source
+# ============================================================================
+
+Portal/uploads/
+media_files/
+
+# ============================================================================
+# Python — venvs, bytecode, caches
+# ============================================================================
+
+**/venv/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/htmlcov/
+**/.coverage
+**/.coverage.*
+**/coverage.xml
+**/*.egg-info/
+
+# ============================================================================
+# Android / Gradle / IntelliJ — build outputs and IDE state
+# ============================================================================
+
+**/build/
+**/.gradle/
+**/.idea/
+**/captures/
+**/local.properties
+**/*.apk
+**/*.aab
+**/*.aar
+**/*.dex
+**/*.iml
+**/.cxx/
+**/proguard/
+
+# ============================================================================
+# Node / NPM
+# ============================================================================
+
+**/node_modules/
+**/.npm/
+**/yarn.lock
+
+# ============================================================================
+# Browser profiles + binaries (Sovereign Browser feature)
+# ============================================================================
+
+Orchestrator/browser/profiles/
+Orchestrator/browser/chromedriver*
+
+# ============================================================================
+# Large model files / firmware images / binary assets
+# ============================================================================
+
+docs/ugv-beast/images/
+**/*.onnx
+**/*.tflite
+**/*.pt
+**/*.pth
+**/*.safetensors
+**/*.gguf
+**/*.bin
+**/jetson-image.zip
+**/*-firmware.zip
+
+# ============================================================================
+# Archive — explicitly archived, doesn't ship
+# ============================================================================
+
+Archive/
+
+# ============================================================================
+# Operating-system + editor cruft
+# ============================================================================
+
+**/.DS_Store
+**/Thumbs.db
+**/*.swp
+**/*.swo
+**/*~
+**/.vscode/
+**/*.bak
+**/*.backup
+
+# ============================================================================
+# Project-specific transient state
+# ============================================================================
+
+dev_snapshot.json
+AI_BlackBox_Portal_Android_MVP*.zip
+**/state.json.tmp
+**/*.lock.tmp
+
+# ============================================================================
+# Logs (don't ship runtime logs)
+# ============================================================================
+
+**/*.log
+**/logs/
+!docs/**/*.log    # exception: docs that include log examples
+
+# ============================================================================
+# Per-component gradle/build leftovers we might miss above
+# ============================================================================
+
+AI_BlackBox_Portal_Android_MVP*/AI_BlackBox_Portal_Android_MVP/AI_BlackBox_Portal/app/build/
+AI_BlackBox_Portal_Android_MVP*/AI_BlackBox_Portal_Android_MVP/AI_BlackBox_Portal/build/
+AI_BlackBox_Portal_Android_MVP*/AI_BlackBox_Portal_Android_MVP/AI_BlackBox_Portal/.gradle/
+AI_BlackBox_Portal_Android_MVP*/AI_BlackBox_Portal_Android_MVP/AI_BlackBox_Portal/.idea/
+
+# ============================================================================
+# Notes for future maintainers
+# ============================================================================
+# 1. The `Apps/` directory IS committed — those are user-created sub-projects
+#    that are part of the blackbox example/test surface.
+# 2. The `Apps/PelvicVibeAndroid/` sub-project may have its own gradle/build/
+#    dirs — those are caught by the `**/build/` and `**/.gradle/` patterns.
+# 3. Templates (.env.template, .env.example) are explicitly ALLOWED via the
+#    `!**/.env.template` etc. negations — they document expected env shape.
+# 4. If you add new generated-output directories (e.g. a new feature that
+#    writes media to /Outputs/), add them to the "Generated media" section
+#    above before doing the next commit.

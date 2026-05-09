@@ -1,0 +1,97 @@
+/* _audio.css
+ * Extracted from: style.css
+ * Generated: 2026-01-04T14:27:28.661926
+ * Blocks: 12
+ */
+
+/* --- Google SSML Modal (Tool #1) --- */
+.ssml-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.ssml-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.ssml-sliders {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: center;
+}
+
+.ssml-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+}
+
+.ssml-result {
+    margin-top: 12px;
+    border-top: 1px solid var(--border);
+    padding-top: 12px;
+}
+
+.ssml-result audio {
+    width: 100%;
+}
+
+/* --- Music Generation Modal (Lyria-002) --- */
+.music-gen-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 8px;
+    overflow-y: auto;
+    max-height: calc(100vh - 200px);
+    padding-right: 8px;
+}
+
+.music-gen-info {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0;
+    padding: 10px 12px;
+    background: rgba(39, 217, 128, 0.1);
+    border-radius: var(--radius-md);
+    border-left: 3px solid #27d980;
+}
+
+.music-presets {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.music-prompt-section,
+.music-negative-section,
+.music-seed-section,
+.music-variations-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.music-prompt-section label,
+.music-negative-section label,
+.music-seed-section label,
+.music-variations-section label {
+    font-size: 12px;
+    color: var(--muted);
+    font-weight: 500;
+}
+
+.music-gen-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+}

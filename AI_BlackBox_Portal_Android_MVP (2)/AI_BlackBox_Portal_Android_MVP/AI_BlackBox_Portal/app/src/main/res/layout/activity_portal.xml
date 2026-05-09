@@ -1,0 +1,55 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:background="@color/bbx_black"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <WebView
+        android:id="@+id/portalWeb"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"/>
+
+    <LinearLayout
+        android:id="@+id/retryPanel"
+        android:visibility="gone"
+        android:background="#CC0E0E10"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="24dp"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <TextView
+            android:text="Unable to reach the appliance"
+        android:textColor="@color/bbx_text"
+        android:textSize="16sp"
+        android:layout_marginBottom="12dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
+
+        <Button
+            android:id="@+id/btnRetry"
+            android:text="Retry"
+            android:textAllCaps="false"
+            android:backgroundTint="@color/bbx_red"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <Button
+            android:id="@+id/btnRescan"
+            android:text="Rescan QR"
+            android:textAllCaps="false"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="@color/bbx_red"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+
+        <Button
+            android:id="@+id/btnOpenTailscale"
+            android:text="Open Tailscale"
+            android:textAllCaps="false"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="@color/bbx_red"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"/>
+    </LinearLayout>
+</FrameLayout>

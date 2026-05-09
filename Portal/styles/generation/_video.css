@@ -1,0 +1,79 @@
+/* _video.css
+ * Extracted from: style.css
+ * Generated: 2026-01-04T14:27:28.662039
+ * Blocks: 10
+ */
+
+/* =============================================================================
+   Video Generation Modal (Veo 3.1 Full Features)
+   ============================================================================= */
+.video-gen-modal-card {
+    width: min(600px, 95vw);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.video-gen-modal-card .modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.video-gen-modal-card .modal-head h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.video-gen-body {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+    max-height: calc(90vh - 100px);
+    padding: 4px;
+}
+
+.video-gen-info {
+    font-size: 13px;
+    color: var(--muted);
+    margin: 0;
+    padding: 10px 12px;
+    background: rgba(74, 158, 255, 0.1);
+    border-radius: var(--radius-md);
+    border-left: 3px solid #4a9eff;
+}
+
+/* Video Prompt Section */
+.video-prompt-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.video-prompt-section label {
+    font-size: 13px;
+    color: var(--muted);
+}
+
+/* Video Settings Row */
+.video-settings-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.video-settings-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+/* Video Generation Actions */
+.video-gen-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 8px;
+}

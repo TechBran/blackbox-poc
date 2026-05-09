@@ -1,0 +1,390 @@
+/* _composer.css
+ * Modern Android-native floating composer design
+ * Updated: 2026-01-26
+ */
+
+/* =====================================================================
+   FLOATING BUBBLE COMPOSER - Minimal, transparent, native feel
+   ===================================================================== */
+
+/* Composer container - completely transparent, positions floating elements */
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* Tighter spacing between rows */
+  padding: 10px 16px;
+  background: transparent;
+  padding-left: calc(10px + env(safe-area-inset-left));
+  padding-right: calc(10px + env(safe-area-inset-right));
+  padding-bottom: calc(26px + env(safe-area-inset-bottom)); /* Extra space above nav bar */
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  border: none;
+  pointer-events: none; /* Allow clicks through empty space */
+}
+
+/* Restore pointer-events on interactive elements */
+.composer > *,
+.composer .input-row,
+.composer .control-row,
+.composer .control-row > * {
+  pointer-events: auto;
+}
+
+/* =====================================================================
+   ROW 1: Input Bubble - Full width floating pill
+   ===================================================================== */
+.composer .input-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.composer .input-row .textarea-wrapper {
+  flex: 1;
+  max-width: 100%;
+}
+
+/* Textarea wrapper - frosted glass floating bubble */
+.textarea-wrapper {
+  position: relative;
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  /* Glassmorphism effect */
+  background: rgba(28, 28, 30, 0.92);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-radius: var(--radius-2xl);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 8px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all var(--transition-spring);
+}
+
+.textarea-wrapper:focus-within {
+  background: rgba(38, 38, 40, 0.95);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    0 12px 40px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Textarea styling */
+.composer textarea {
+  flex: 1;
+  min-height: 44px;
+  max-height: 200px;
+  padding: 13px 8px 13px 4px;
+  border: none;
+  border-radius: 24px;
+  background: transparent;
+  color: var(--text);
+  min-width: 0;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.4;
+  resize: none;
+  width: 100%;
+}
+
+.composer textarea:focus {
+  outline: none;
+}
+
+.composer textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Mic button inside input bubble */
+.textarea-wrapper .mic-btn {
+  margin-right: 4px;
+}
+
+/* =====================================================================
+   ROW 2: Control Row - Floating bubbles with transparent gap
+   ===================================================================== */
+.composer .control-row {
+  display: flex;
+  align-items: center;
+  gap: 0; /* No gap - use margin-left: auto for spacing */
+  justify-content: flex-start; /* Left-align provider/model */
+  padding: 0 4px;
+}
+
+/* --- Provider + Model Merged Bubble --- */
+.provider-model-bubble {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  /* Frosted glass pill */
+  background: rgba(28, 28, 30, 0.88);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  padding: 0;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.25),
+    0 4px 16px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: all var(--transition-spring);
+  overflow: hidden;
+}
+
+.provider-model-bubble:hover {
+  background: rgba(44, 44, 46, 0.92);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+  box-shadow:
+    0 4px 10px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Provider select */
+.provider-model-bubble #providerSelect {
+  background: transparent;
+  color: var(--text);
+  border: none;
+  border-radius: 0;
+  padding: 10px 8px 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  max-width: 115px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: background var(--transition-fast);
+}
+
+.provider-model-bubble #providerSelect:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.provider-model-bubble #providerSelect:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Divider between provider and model */
+.provider-model-bubble .bubble-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.12);
+  flex-shrink: 0;
+}
+
+/* Model select */
+.provider-model-bubble #modelSelect {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border: none;
+  border-radius: 0;
+  padding: 10px 14px 10px 8px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.2;
+  cursor: pointer;
+  max-width: 130px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.provider-model-bubble #modelSelect:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+.provider-model-bubble #modelSelect:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Dropdown options */
+.provider-model-bubble select option {
+  background: #1c1c1e;
+  color: var(--text);
+  padding: 10px;
+}
+
+/* Legacy control-group - hidden */
+.composer .control-group {
+  display: none;
+}
+
+/* --- Speaker Button (Auto-TTS) - Circular floating bubble --- */
+.composer .control-row .toolbar-btn {
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Frosted glass circle */
+  background: rgba(28, 28, 30, 0.88);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.25),
+    0 4px 16px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: all var(--transition-spring);
+  margin-left: auto; /* Push to right - creates transparent gap */
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.composer .control-row .toolbar-btn:hover {
+  background: rgba(50, 50, 52, 0.92);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: var(--text);
+  transform: scale(1.05);
+  box-shadow:
+    0 4px 10px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.composer .control-row .toolbar-btn:active {
+  transform: scale(0.95);
+}
+
+/* Auto-TTS ENABLED state - Red glow */
+.composer .control-row .toolbar-btn[aria-pressed="true"] {
+  background: rgba(255, 74, 74, 0.15);
+  border-color: rgba(255, 74, 74, 0.5);
+  color: var(--accent);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    0 0 20px rgba(255, 74, 74, 0.25),
+    0 0 40px rgba(255, 74, 74, 0.1);
+  animation: auto-tts-glow 2s ease-in-out infinite;
+}
+
+.composer .control-row .toolbar-btn[aria-pressed="true"]:hover {
+  background: rgba(255, 74, 74, 0.25);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    0 0 24px rgba(255, 74, 74, 0.35),
+    0 0 48px rgba(255, 74, 74, 0.15);
+}
+
+/* Playing state */
+.composer .control-row .toolbar-btn.playing {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+@keyframes auto-tts-glow {
+  0%, 100% {
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      0 0 20px rgba(255, 74, 74, 0.25),
+      0 0 40px rgba(255, 74, 74, 0.1);
+  }
+  50% {
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      0 0 28px rgba(255, 74, 74, 0.35),
+      0 0 56px rgba(255, 74, 74, 0.18);
+  }
+}
+
+/* =====================================================================
+   MOBILE RESPONSIVE
+   ===================================================================== */
+@media (max-width: 768px) {
+  .composer {
+    gap: 6px;
+    padding: 8px 12px;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .textarea-wrapper {
+    border-radius: 22px;
+  }
+
+  .provider-model-bubble {
+    border-radius: 18px;
+  }
+
+  .provider-model-bubble #providerSelect {
+    max-width: 95px;
+    padding: 9px 6px 9px 12px;
+    font-size: 12px;
+  }
+
+  .provider-model-bubble #modelSelect {
+    max-width: 105px;
+    padding: 9px 12px 9px 6px;
+    font-size: 11px;
+  }
+
+  .provider-model-bubble .bubble-divider {
+    height: 16px;
+  }
+
+  .composer .control-row .toolbar-btn {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+@media (max-width: 480px) {
+  .composer {
+    gap: 5px;
+    padding: 6px 10px;
+    padding-bottom: calc(22px + env(safe-area-inset-bottom));
+  }
+
+  .textarea-wrapper {
+    border-radius: 20px;
+  }
+
+  .composer textarea {
+    min-height: 40px;
+    padding: 11px 6px 11px 2px;
+    font-size: 15px;
+  }
+
+  .provider-model-bubble {
+    border-radius: var(--radius-xl);
+  }
+
+  .provider-model-bubble #providerSelect {
+    max-width: 80px;
+    padding: 8px 5px 8px 10px;
+    font-size: 11px;
+  }
+
+  .provider-model-bubble #modelSelect {
+    max-width: 85px;
+    padding: 8px 10px 8px 5px;
+    font-size: 10px;
+  }
+
+  .provider-model-bubble .bubble-divider {
+    height: 14px;
+  }
+
+  .composer .control-row .toolbar-btn {
+    width: 36px;
+    height: 36px;
+  }
+}

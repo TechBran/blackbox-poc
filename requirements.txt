@@ -1,0 +1,39 @@
+# AI BlackBox Flight Recorder - Python Dependencies
+# Pinned versions for reproducible deployments
+
+# Web Framework
+fastapi==0.118.0
+uvicorn[standard]==0.30.0
+python-multipart==0.0.9
+
+# Data Validation
+pydantic==2.9.0
+
+# HTTP Client
+requests==2.32.3
+
+# Environment Variables
+python-dotenv==1.0.1
+
+# ASGI Server Dependencies (included with uvicorn[standard])
+# websockets==13.1
+# httptools==0.6.1
+# uvloop==0.21.0
+# watchfiles==0.24.0
+
+# Phone Integration (optional - for phone calling features)
+# greenswitch==0.2.0    # FreeSwitch ESL async client
+# scipy>=1.11.0         # High-quality audio resampling (optional enhancement)
+websockets>=13.0        # Twilio Media Streams and AI backend WebSockets
+aiohttp>=3.9.0          # Async HTTP client for STT/TTS APIs
+
+# CLI Agent (interactive Claude Code/Gemini/Codex via WebSocket+tmux)
+ptyprocess>=0.7.0       # PTY allocation for /ws/cli-agent route
+
+# Note: No additional dependencies needed for:
+# - json, os, time, re, hashlib (Python stdlib)
+# - threading, configparser, math (Python stdlib)
+# - datetime, pathlib, typing (Python stdlib)
+# - collections, dataclasses, uuid (Python stdlib)
+# - base64, io, wave, sqlite3 (Python stdlib)
+# - signal, sys, enum (Python stdlib)

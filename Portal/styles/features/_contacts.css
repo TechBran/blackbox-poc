@@ -1,0 +1,301 @@
+/* _contacts.css
+ * Contact Book Manager — dark theme with BlackBox aesthetic
+ * Follows _telephony.css and _sms.css token patterns
+ * Created: 2026-03-25
+ */
+
+/* ============================================================================
+   Modal Card
+   ============================================================================ */
+
+.contacts-manager-card {
+    width: min(700px, 95vw);
+    max-height: 85vh;
+    max-height: 85dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--neutral-100);
+    border: 1px solid var(--neutral-250);
+    box-shadow: var(--shadow-xl), 0 0 60px rgba(0, 0, 0, 0.5);
+}
+
+/* ============================================================================
+   Body
+   ============================================================================ */
+
+.contacts-manager-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--neutral-300) transparent;
+}
+
+.contacts-manager-body::-webkit-scrollbar {
+    width: 4px;
+}
+
+.contacts-manager-body::-webkit-scrollbar-thumb {
+    background: var(--neutral-300);
+    border-radius: var(--radius-full);
+}
+
+/* ============================================================================
+   Top Bar — search + add button
+   ============================================================================ */
+
+.contacts-top-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.contacts-top-bar input {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 14px;
+    background: var(--neutral-50);
+    color: var(--neutral-950);
+    border: 1px solid var(--neutral-250);
+    border-radius: var(--radius-md);
+    outline: none;
+    transition: border-color var(--transition-fast);
+}
+
+.contacts-top-bar input::placeholder {
+    color: var(--neutral-500);
+}
+
+.contacts-top-bar input:focus {
+    border-color: var(--accent, #6ea8fe);
+}
+
+/* ============================================================================
+   Contact Cards
+   ============================================================================ */
+
+.contact-card {
+    background: var(--neutral-100);
+    border-bottom: 1px solid var(--neutral-200);
+    padding: 14px 16px;
+    transition: background var(--transition-fast);
+}
+
+.contact-card:hover {
+    background: var(--neutral-150);
+}
+
+.contact-card:last-child {
+    border-bottom: none;
+}
+
+.contact-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+
+.contact-card-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+}
+
+.contact-card-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--neutral-950);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.contact-card-phone {
+    font-size: 13px;
+    color: var(--neutral-500);
+    font-variant-numeric: tabular-nums;
+    margin-top: 2px;
+}
+
+.contact-card-email {
+    font-size: 13px;
+    color: var(--neutral-500);
+    margin-top: 1px;
+}
+
+.contact-card-relationship {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--neutral-700);
+    background: var(--neutral-300);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    text-transform: capitalize;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.contact-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.contact-tag-badge {
+    font-size: 11px;
+    color: var(--neutral-700);
+    background: var(--neutral-250);
+    padding: 1px 7px;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+}
+
+.contact-card-notes {
+    font-size: 12px;
+    color: var(--neutral-600);
+    font-style: italic;
+    margin-top: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.contact-card-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.contact-card-actions .btn-sm {
+    font-size: 12px;
+    padding: 3px 10px;
+    border-radius: var(--radius-sm);
+}
+
+.contact-card-actions .btn-danger {
+    color: #ef4444;
+}
+
+.contact-card-actions .btn-danger:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+/* ============================================================================
+   Edit Form
+   ============================================================================ */
+
+.contacts-edit-form {
+    background: var(--neutral-100);
+    padding: 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--neutral-250);
+    margin-bottom: 16px;
+}
+
+.contacts-edit-form .form-row {
+    margin-bottom: 10px;
+}
+
+.contacts-edit-form .form-label {
+    display: block;
+    font-size: 12px;
+    color: var(--neutral-600);
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.contacts-edit-form input,
+.contacts-edit-form textarea {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 14px;
+    background: var(--neutral-50);
+    color: var(--neutral-950);
+    border: 1px solid var(--neutral-250);
+    border-radius: var(--radius-md);
+    outline: none;
+    transition: border-color var(--transition-fast);
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+.contacts-edit-form input::placeholder,
+.contacts-edit-form textarea::placeholder {
+    color: var(--neutral-500);
+}
+
+.contacts-edit-form input:focus,
+.contacts-edit-form textarea:focus {
+    border-color: var(--accent, #6ea8fe);
+}
+
+.contacts-edit-form textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.contacts-edit-form .form-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 14px;
+}
+
+/* ============================================================================
+   Empty State
+   ============================================================================ */
+
+.contacts-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--neutral-500);
+    font-size: 14px;
+}
+
+/* ============================================================================
+   Mobile Responsive
+   ============================================================================ */
+
+@media (max-width: 640px) {
+    .contacts-manager-card {
+        width: 100vw;
+        max-height: 100vh;
+        max-height: 100dvh;
+        border-radius: 0;
+    }
+
+    .contacts-manager-body {
+        padding: 12px;
+    }
+
+    .contacts-top-bar {
+        flex-direction: column;
+    }
+
+    .contacts-top-bar input {
+        width: 100%;
+    }
+
+    .contact-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .contact-card-actions {
+        align-self: flex-end;
+        margin-top: 4px;
+    }
+
+    .contacts-edit-form {
+        padding: 12px;
+    }
+}

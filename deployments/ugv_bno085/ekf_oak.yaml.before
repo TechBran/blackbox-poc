@@ -1,0 +1,77 @@
+### robot_localization EKF config for UGV Beast — OAK-D IMU Vyaw + wheel Vx.
+###
+### Stage 2 (cutover, live): publish_tf=true. base_node's pub_odom_tf is
+###   false (set by slam_nav.launch.py). base_node's /odom is remapped to
+###   /odom_wheel (set by bringup_lidar.launch.py). EKF owns /odom via
+###   remap /odometry/filtered -> /odom and owns the odom->base_footprint
+###   TF. EKF is the sole odom authority.
+###
+### Sources:
+### - odom0 = /odom_wheel (from base_node, remapped via bringup_lidar.launch.py
+###   since EKF now owns /odom). We use ONLY twist.linear.x because
+###   base_node.cpp:217 populates it directly from wheel-derived vx, which
+###   is yaw-integration-independent. Pose is ignored; yaw is ignored.
+### - imu0 = /oak/imu (from patched oakd_camera.py, 95 Hz, BMI270).
+###   We use ONLY the yaw rate (imu0_config index 11). The static TF
+###   3d_camera_link -> oak_imu_frame (rpy 1.5708 0 0) rotates IMU's
+###   y-axis angular velocity into base_footprint's z-axis, which is
+###   what robot_localization reads out as "Vyaw".
+###
+### Not consumed here:
+### - /odom_rf2o, /imu/data (fake RF2O-generated IMU). Those stay published
+###   because other nodes still rely on them, but EKF ignores them entirely.
+
+ekf_filter_node:
+  ros__parameters:
+    frequency: 30.0
+    sensor_timeout: 0.1
+    two_d_mode: true
+    transform_time_offset: 0.0
+    transform_timeout: 0.0
+
+    publish_tf: true
+    publish_acceleration: false
+    reset_on_time_jump: true
+
+    odom_frame: odom
+    base_link_frame: base_footprint
+    world_frame: odom
+
+    odom0: /odom_wheel
+    odom0_config: [false, false, false,
+                   false, false, false,
+                   true,  false, false,
+                   false, false, false,
+                   false, false, false]
+    odom0_differential: false
+    odom0_relative: false
+    odom0_queue_size: 10
+    odom0_nodelay: false
+
+    imu0: /oak/imu_zupt
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  false, false, false,
+                  false, false, true,
+                  false, false, false]
+    imu0_differential: false
+    imu0_relative: false
+    imu0_queue_size: 10
+    imu0_nodelay: false
+    imu0_remove_gravitational_acceleration: false
+
+    process_noise_covariance: [0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.05, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.06, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.03, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.03, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.0, 0.06, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.025, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.025, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.04, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.02, 0.0, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.0, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.01, 0.0,
+                               0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.015]

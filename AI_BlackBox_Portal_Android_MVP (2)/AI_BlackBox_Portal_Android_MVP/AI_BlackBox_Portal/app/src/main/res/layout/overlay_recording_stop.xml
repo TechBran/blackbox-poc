@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/recording_stop_background"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="12dp"
+    android:elevation="8dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Pulsing red recording indicator -->
+    <View
+        android:id="@+id/recordingIndicator"
+        android:layout_width="12dp"
+        android:layout_height="12dp"
+        android:background="@drawable/recording_dot"
+        android:layout_marginEnd="10dp" />
+
+    <!-- Recording timer -->
+    <TextView
+        android:id="@+id/recordingTimer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="00:00"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:fontFamily="monospace"
+        android:layout_marginEnd="12dp" />
+
+    <!-- Stop button -->
+    <ImageView
+        android:id="@+id/btnStopRecording"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:src="@android:drawable/ic_media_pause"
+        android:background="@drawable/stop_button_background"
+        android:padding="6dp"
+        android:scaleType="fitCenter"
+        android:contentDescription="Stop Recording" />
+
+</LinearLayout>

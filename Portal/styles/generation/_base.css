@@ -1,0 +1,39 @@
+/* _base.css
+ * Extracted from: style.css
+ * Generated: 2026-01-04T14:27:28.661965
+ * Blocks: 5
+ */
+
+/* --- Generation Modal Card (Nano Banana Pro) --- */
+.generation-modal-card {
+    width: min(600px, 95vw);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.generation-modal-card .modal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.generation-modal-card .modal-head .btn {
+    padding: 4px 8px;
+    font-size: 14px;
+    background: transparent;
+    border: 1px solid var(--border);
+}
+
+/* --- Generation Prompt Section with Whisper --- */
+.generation-prompt-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+}
+
+.generation-prompt-section label {
+    font-size: 13px;
+    color: var(--muted);
+}

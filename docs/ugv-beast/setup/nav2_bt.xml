@@ -1,0 +1,42 @@
+<!--
+  Custom BT for UGV Beast — rotation-only recovery, no backup.
+  Tracked robot recovers by: clear costmaps → spin 180° → wait → spin again.
+  No BackUp behavior — backing up confuses LiDAR and wastes time.
+  Changes from default:
+  - NavigateRecovery: 12 retries (was 6)
+  - ComputePathToPose: 3 retries (was 1)
+  - FollowPath: 3 retries (was 1)
+  - BackUp REMOVED — tracked robot spins in place instead
+  - Spin increased to 3.14 rad (180°) for full direction reversal
+  - Wait reduced to 2s (was 5s)
+-->
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RecoveryNode number_of_retries="12" name="NavigateRecovery">
+      <PipelineSequence name="NavigateWithReplanning">
+        <RateController hz="1.0">
+          <RecoveryNode number_of_retries="3" name="ComputePathToPose">
+            <ComputePathToPose goal="{goal}" path="{path}" planner_id="GridBased"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </RateController>
+        <RecoveryNode number_of_retries="3" name="FollowPath">
+          <FollowPath path="{path}" controller_id="FollowPath"/>
+          <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+        </RecoveryNode>
+      </PipelineSequence>
+      <ReactiveFallback name="RecoveryFallback">
+        <GoalUpdated/>
+        <RoundRobin name="RecoveryActions">
+          <Sequence name="ClearingActions">
+            <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
+          </Sequence>
+          <Spin spin_dist="3.14"/>
+          <Wait wait_duration="2"/>
+          <Spin spin_dist="-1.57"/>
+        </RoundRobin>
+      </ReactiveFallback>
+    </RecoveryNode>
+  </BehaviorTree>
+</root>

@@ -1,0 +1,118 @@
+/* _variables.css
+ * Extracted from: style.css
+ * Generated: 2026-01-04T14:27:28.661131
+ * Blocks: 1
+ */
+
+:root{
+  --bg:#000000;          /* main background - pure black for maximum contrast */
+  --bubble:#000000;      /* assistant bubble - jet black to blend with background */
+  --bubble-user:#2C2C2C; /* user bubble - Slightly Lighter Surface */
+  --text:#ffffff;
+  --muted:#c9c9c9;
+  --border:#333333;      /* top/footer border - lighter gray */
+  --accent:#ff4a4a;      /* red for buttons/icons & section labels */
+
+  /* Syntax highlighting colors */
+  --highlight-snapshot:#bb86fc;   /* Purple for snapshot IDs */
+  --highlight-citation:#4dd0e1;   /* Cyan for citations */
+  --highlight-header:#ffa726;     /* Orange for headers */
+  --highlight-keyword:#66bb6a;    /* Green for keywords */
+  --highlight-link:#64b5f6;       /* Light blue for links */
+  --highlight-number:#ff4a4a;     /* Red for numbers */
+  --highlight-label:#64b5f6;      /* Blue for labels and list numbers */
+  --highlight-quote-mark:#ffd700; /* Gold for quotation marks */
+  --highlight-quoted-text:#ffeb3b; /* Yellow for text inside quotes */
+  --highlight-square-bracket:#ff6ec7; /* Pink/Magenta for square brackets [] */
+  --highlight-round-bracket:#26c6da;  /* Teal for round brackets () */
+  --highlight-bracket-text:#80deea;   /* Light teal for text inside brackets */
+
+  /* ── Neutral Gray Scale ── */
+  --neutral-0: #000000;
+  --neutral-50: #0a0a0a;
+  --neutral-100: #141414;
+  --neutral-150: #1a1a1a;
+  --neutral-200: #222222;
+  --neutral-250: #2c2c2c;
+  --neutral-300: #333333;
+  --neutral-400: #444444;
+  --neutral-500: #555555;
+  --neutral-600: #666666;
+  --neutral-700: #888888;
+  --neutral-800: #aaaaaa;
+  --neutral-850: #bbbbbb;
+  --neutral-900: #cccccc;
+  --neutral-950: #dddddd;
+  --neutral-1000: #e0e0e0;
+
+  /* ── Border-Radius Scale ── */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+
+  /* ── Shadow / Elevation Scale ── */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-sm: 0 2px 6px rgba(0,0,0,0.25);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.35);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.45);
+  --shadow-xl: 0 12px 48px rgba(0,0,0,0.55);
+  --shadow-glow-accent: 0 0 20px rgba(255,74,74,0.25);
+  --shadow-glow-blue: 0 0 20px rgba(74,158,255,0.25);
+  --shadow-glow-green: 0 0 20px rgba(39,217,128,0.25);
+
+  /* ── Z-Index Layers ── */
+  --z-banner: 99;
+  --z-sticky: 100;
+  --z-preview: 101;
+  --z-upload: 102;
+  --z-todo: 103;
+  --z-thinking: 104;
+  --z-waveform: 200;
+  --z-app-registry: 1000;
+  --z-task-monitor: 1100;
+  --z-modal: 5000;
+  --z-popup: 6000;
+  --z-media-preview: 7000;
+
+  /* ── Transitions ── */
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.2s ease;
+  --transition-slow: 0.3s ease;
+  --transition-spring: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ── Blur ── */
+  --blur-sm: blur(10px);
+  --blur-md: blur(16px);
+  --blur-lg: blur(20px);
+  --blur-xl: blur(24px);
+
+  /* ── Glass Presets ── */
+  --glass-bg: rgba(20, 20, 20, 0.75);
+  --glass-bg-hover: rgba(30, 30, 30, 0.8);
+  --glass-border: 1px solid rgba(255,255,255,0.08);
+  --glass-border-hover: 1px solid rgba(255,255,255,0.14);
+  --glass-inset-highlight: inset 0 1px 0 rgba(255,255,255,0.04);
+
+  /* ── Focus Ring ── */
+  --focus-ring: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+
+  /* ── Typography Scale ── */
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+  --text-4xl: 3rem;
+  --text-5xl: 4rem;
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --font-extrabold: 800;
+}

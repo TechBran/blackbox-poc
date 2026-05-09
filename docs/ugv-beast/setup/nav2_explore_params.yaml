@@ -1,0 +1,333 @@
+# Nav2 Parameters for UGV Beast — RotationShim + MPPI DiffDrive + SmacPlanner2D
+# Controller: RotationShimController wrapping MPPI DiffDrive
+#   → Rotate in place to face path direction, THEN drive (point-and-shoot)
+#   → No more swooping car-like turns that confuse LiDAR obstacle avoidance
+# Planner: SmacPlanner2D (holonomic A* — no kinematic constraints, works in tight spaces)
+# Inflation: Tuned for corridor centering (high cost_scaling_factor = fast decay = center preference)
+
+bt_navigator:
+  ros__parameters:
+    use_sim_time: false
+    global_frame: map
+    robot_base_frame: base_footprint
+    odom_topic: /odom
+    bt_loop_duration: 10
+    default_server_timeout: 20
+    default_nav_to_pose_bt_xml: /home/ws/ugv_ws/nav2_bt.xml
+    plugin_lib_names:
+      - nav2_compute_path_to_pose_action_bt_node
+      - nav2_compute_path_through_poses_action_bt_node
+      - nav2_smooth_path_action_bt_node
+      - nav2_follow_path_action_bt_node
+      - nav2_spin_action_bt_node
+      - nav2_wait_action_bt_node
+      - nav2_back_up_action_bt_node
+      - nav2_drive_on_heading_bt_node
+      - nav2_clear_costmap_service_bt_node
+      - nav2_is_stuck_condition_bt_node
+      - nav2_goal_reached_condition_bt_node
+      - nav2_goal_updated_condition_bt_node
+      - nav2_globally_updated_goal_condition_bt_node
+      - nav2_is_path_valid_condition_bt_node
+      - nav2_initial_pose_received_condition_bt_node
+      - nav2_reinitialize_global_localization_service_bt_node
+      - nav2_rate_controller_bt_node
+      - nav2_distance_controller_bt_node
+      - nav2_speed_controller_bt_node
+      - nav2_truncate_path_action_bt_node
+      - nav2_truncate_path_local_action_bt_node
+      - nav2_goal_updater_node_bt_node
+      - nav2_recovery_node_bt_node
+      - nav2_pipeline_sequence_bt_node
+      - nav2_round_robin_node_bt_node
+      - nav2_transform_available_condition_bt_node
+      - nav2_time_expired_condition_bt_node
+      - nav2_path_expiring_timer_condition
+      - nav2_distance_traveled_condition_bt_node
+      - nav2_single_trigger_bt_node
+      - nav2_goal_updated_controller_bt_node
+      - nav2_navigate_through_poses_action_bt_node
+      - nav2_navigate_to_pose_action_bt_node
+      - nav2_remove_passed_goals_action_bt_node
+      - nav2_planner_selector_bt_node
+      - nav2_controller_selector_bt_node
+      - nav2_goal_checker_selector_bt_node
+      - nav2_controller_cancel_bt_node
+      - nav2_path_longer_on_approach_bt_node
+      - nav2_wait_cancel_bt_node
+      - nav2_spin_cancel_bt_node
+      - nav2_back_up_cancel_bt_node
+      - nav2_drive_on_heading_cancel_bt_node
+
+bt_navigator_navigate_through_poses_rclcpp_node:
+  ros__parameters:
+    use_sim_time: false
+
+bt_navigator_navigate_to_pose_rclcpp_node:
+  ros__parameters:
+    use_sim_time: false
+
+controller_server:
+  ros__parameters:
+    use_sim_time: false
+    controller_frequency: 10.0              # Must be 10Hz+ — lower causes TF extrapolation errors
+    min_x_velocity_threshold: 0.001
+    min_y_velocity_threshold: 0.5
+    min_theta_velocity_threshold: 0.001
+    progress_checker_plugin: "progress_checker"
+    goal_checker_plugin: "goal_checker"
+    controller_plugins: ["FollowPath"]
+    progress_checker:
+      plugin: "nav2_controller::SimpleProgressChecker"
+      required_movement_radius: 0.10        # Detect stuck faster (was 0.15)
+      movement_time_allowance: 5.0         # Give up in 5s — don't linger at dead ends
+    goal_checker:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 0.35                # Was 0.20 — tracked robot has 3-5cm lateral slip per meter at 0.15 m/s; tight tolerance caused goals to hang in 'navigating' as the controller tried to inch the last few cm
+      yaw_goal_tolerance: 0.40              # ~23° — RotationShim handles final heading now (was 3.14 = don't care)
+      stateful: True
+    # RotationShimController wraps MPPI — rotate in place to face path, then drive
+    # This is the community standard for tracked/skid-steer: point-and-shoot behavior
+    FollowPath:
+      plugin: "nav2_rotation_shim_controller::RotationShimController"
+      primary_controller: "nav2_mppi_controller::MPPIController"
+      angular_dist_threshold: 0.785         # ~45° — spin in place if heading off by more than this
+      forward_sampling_distance: 0.5        # Look 0.5m ahead on path to determine target heading
+      rotate_to_heading_angular_vel: 1.0    # rad/s spin speed during in-place rotation
+      max_angular_accel: 1.5                # rad/s² angular acceleration during spin
+      simulate_ahead_time: 1.0              # Seconds to simulate rotation for collision check
+      rotate_to_goal_heading: true          # Spin to face goal orientation on arrival
+      # ── MPPI DiffDrive (primary controller, same namespace) ──
+      # Built from source on Jetson ARM64 (apt binary has SIGILL bug)
+      time_steps: 25                        # 25 × 0.1 = 2.5s lookahead (same as before)
+      model_dt: 0.1                         # Must be >= controller period (1/10Hz = 0.1s)
+      batch_size: 300                       # Conservative for Jetson 8GB
+      vx_std: 0.2
+      vy_std: 0.0
+      wz_std: 0.4
+      vx_max: 0.18                          # Exploration speed
+      vx_min: -0.10                         # Allow reverse
+      vy_max: 0.0
+      wz_max: 1.0                           # Community uses 1.0-1.9 for tracked (was 0.4 — too slow)
+      iteration_count: 1
+      prune_distance: 1.5
+      transform_tolerance: 2.0
+      temperature: 0.3
+      gamma: 0.015
+      motion_model: "DiffDrive"
+      visualize: false
+      retry_attempt_limit: 1
+      regenerate_noises: false
+      TrajectoryVisualizer:
+        trajectory_step: 5
+        time_step: 3
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic",
+                "PathFollowCritic", "PathAlignCritic", "PathAngleCritic", "PreferForwardCritic"]
+      ConstraintCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 4.0
+      CostCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.81
+        critical_cost: 300.0
+        consider_footprint: false
+        collision_cost: 1000000.0
+        near_goal_distance: 1.0
+      GoalCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        threshold_to_consider: 1.4
+      GoalAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 3.0
+        threshold_to_consider: 0.5
+      PathFollowCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 5.0
+        offset_from_furthest: 5
+        threshold_to_consider: 1.4
+      PathAlignCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 10.0
+        max_path_occupancy_ratio: 0.05
+        trajectory_point_step: 4
+        threshold_to_consider: 0.5
+        offset_from_furthest: 20
+        use_path_orientations: false
+      PathAngleCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 2.0
+        offset_from_furthest: 4
+        threshold_to_consider: 0.5
+        max_angle_to_furthest: 1.0
+        mode: 0
+      PreferForwardCritic:
+        enabled: true
+        cost_power: 1
+        cost_weight: 50.0                   # Strong forward bias — fixes ARM64 direction reversal
+        threshold_to_consider: 0.5
+
+local_costmap:
+  local_costmap:
+    ros__parameters:
+      update_frequency: 5.0                # Jetson CPU can't sustain 10Hz with YOLO+SLAM running
+      publish_frequency: 2.0               # Match update rate
+      global_frame: odom
+      robot_base_frame: base_footprint
+      use_sim_time: false
+      rolling_window: true
+      width: 3
+      height: 3
+      resolution: 0.05
+      robot_radius: 0.12
+      plugins: ["obstacle_layer", "nvblox_layer", "inflation_layer"]
+      nvblox_layer:
+        plugin: "nvblox::nav2::NvbloxCostmapLayer"
+        enabled: True
+        nav2_costmap_global_frame: odom
+        nvblox_map_slice_topic: "/nvblox_node/static_map_slice"
+        convert_to_binary_costmap: True
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 5.0          # Fast decay — costs drop quickly from walls, keeps corridor centers low-cost
+        inflation_radius: 0.25            # Was 0.30 — tightened. Footprint is ~0.30m, this gives ~0.05m safety margin without choking narrow corridors
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        footprint_clearing_enabled: true
+        max_obstacle_height: 2.0
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.5
+          raytrace_min_range: 0.12          # Ignore readings < 12cm (robot body reflections)
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.12          # Match raytrace min
+          inf_is_valid: false               # LD19 dead zone produces inf — NOT real obstacles
+      always_send_full_costmap: True
+      transform_tolerance: 2.0
+
+global_costmap:
+  global_costmap:
+    ros__parameters:
+      update_frequency: 2.0               # Faster global map updates for frontier detection (was 1)
+      publish_frequency: 2.0               # Faster publish to explore_lite (was 1)
+      global_frame: map
+      robot_base_frame: base_footprint
+      use_sim_time: false
+      robot_radius: 0.12
+      transform_tolerance: 2.0
+      resolution: 0.05
+      track_unknown_space: true
+      plugins: ["static_layer", "obstacle_layer", "nvblox_layer", "inflation_layer"]
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: scan
+        footprint_clearing_enabled: true
+        scan:
+          topic: /scan
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "LaserScan"
+          raytrace_max_range: 3.0
+          raytrace_min_range: 0.12          # Ignore robot body reflections
+          obstacle_max_range: 2.5
+          obstacle_min_range: 0.12          # Match local
+      nvblox_layer:
+        plugin: "nvblox::nav2::NvbloxCostmapLayer"
+        enabled: True
+        nav2_costmap_global_frame: map
+        nvblox_map_slice_topic: "/nvblox_node/static_map_slice"
+        convert_to_binary_costmap: True
+      inflation_layer:
+        plugin: "nav2_costmap_2d::InflationLayer"
+        cost_scaling_factor: 5.0          # Match local — fast decay, corridor centering
+        inflation_radius: 0.25            # Match local — see local costmap comment above
+      always_send_full_costmap: True
+
+planner_server:
+  ros__parameters:
+    expected_planner_frequency: 10.0        # 20 was too aggressive (TF warnings on Jetson); 5 was too slow to replan when dynamic obstacles appear. 10 Hz = 100ms update latency, fine for 0.15 m/s robot
+    use_sim_time: false
+    planner_plugins: ["GridBased"]
+    GridBased:
+      plugin: "nav2_smac_planner/SmacPlanner2D"
+      tolerance: 0.25
+      allow_unknown: true
+      max_iterations: -1                    # No iteration limit — let it search exhaustively
+      max_on_approach_iterations: 1000
+      max_planning_time: 8.0                # Was 5.0 — SmacPlanner2D on Jetson ARM64 can take 3-4s on medium maps; 5s was timing out in tight spaces. 8s covers worst case without feeling unresponsive
+      cost_travel_multiplier: 2.0
+      use_final_approach_orientation: true
+      smoother:
+        max_iterations: 1000
+        w_smooth: 0.3
+        w_data: 0.2
+        tolerance: 1.0e-10
+
+smoother_server:
+  ros__parameters:
+    use_sim_time: false
+    smoother_plugins: ["simple_smoother"]
+    simple_smoother:
+      plugin: "nav2_smoother::SimpleSmoother"
+      tolerance: 1.0e-10
+      max_its: 1000
+      do_refinement: True
+
+behavior_server:
+  ros__parameters:
+    costmap_topic: local_costmap/costmap_raw
+    footprint_topic: local_costmap/published_footprint
+    cycle_frequency: 10.0
+    # Recovery: spin-only for our custom BT. Backup/drive_on_heading registered
+    # but never called — needed because navigate_through_poses default BT references them.
+    behavior_plugins: ["spin", "wait", "backup", "drive_on_heading"]
+    spin:
+      plugin: "nav2_behaviors/Spin"
+    wait:
+      plugin: "nav2_behaviors/Wait"
+    backup:
+      plugin: "nav2_behaviors/BackUp"
+    drive_on_heading:
+      plugin: "nav2_behaviors/DriveOnHeading"
+    global_frame: odom
+    robot_base_frame: base_footprint
+    transform_tolerance: 1.0              # Was 0.3 — too tight for Jetson under load
+    use_sim_time: false
+    simulate_ahead_time: 1.0              # Was 2.0 — less simulation = less "collision ahead" false positives
+    max_rotational_vel: 1.0               # Was 0.4 — faster spin recovery (matches MPPI wz_max)
+    min_rotational_vel: 0.15              # Was 0.1 — ensure spin actually moves
+    rotational_acc_lim: 1.5               # Was 1.0 — snappier recovery rotation
+
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: false
+    smoothing_frequency: 20.0
+    scale_velocities: false
+    feedback: "OPEN_LOOP"
+    max_velocity: [0.18, 0.0, 1.0]
+    min_velocity: [-0.10, 0.0, -1.0]
+    max_accel: [1.5, 0.0, 3.2]
+    max_decel: [-1.5, 0.0, -3.2]
+    odom_topic: "odom"
+    odom_duration: 0.1
+    deadband_velocity: [0.05, 0.0, 0.1]   # Filter sub-threshold commands before motor controller
+    velocity_timeout: 1.0
+_timeout: 1.0

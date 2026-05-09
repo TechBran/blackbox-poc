@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlackBox Overseer // System Monitor</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="overlay-grid"></div>
+    <div class="container">
+        <!-- Header -->
+        <header class="hud-header">
+            <div class="brand">
+                <div class="logo-box">BBX</div>
+                <div class="title-group">
+                    <h1>SYSTEM OVERSEER</h1>
+                    <span class="subtitle">AI BLACKBOX FLIGHT RECORDER // TELEMETRY</span>
+                </div>
+            </div>
+            <div class="status-group">
+                <div class="status-item">
+                    <span class="label">HOSTNAME</span>
+                    <span class="value" id="hostname">CONNECTING...</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">UPTIME</span>
+                    <span class="value" id="uptime">--:--:--</span>
+                </div>
+                <div class="status-item">
+                    <span class="label">STATUS</span>
+                    <span class="value status-good">ONLINE</span>
+                </div>
+                <div class="log-buttons">
+                    <button class="log-btn" id="btn-blackbox-logs" title="View BlackBox Service Logs">
+                        <span class="btn-icon">📋</span> BBX LOGS
+                    </button>
+                    <button class="log-btn secondary" id="btn-monitor-logs" title="View System Monitor Logs">
+                        <span class="btn-icon">📄</span> MONITOR
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Metrics Grid -->
+        <div class="metrics-grid">
+            <!-- CPU Card -->
+            <div class="hud-card">
+                <div class="card-header">
+                    <h3>CPU PROCESSOR</h3>
+                    <span class="card-icon">cpu</span>
+                </div>
+                <div class="card-body">
+                    <div class="gauge-wrapper">
+                        <div class="gauge-fill" id="cpu-bar"></div>
+                        <span class="gauge-text" id="cpu-text">0%</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>CORES</span>
+                        <span id="cpu-cores">--</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>FREQ</span>
+                        <span id="cpu-freq">-- GHz</span>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="cpuChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Memory Card -->
+            <div class="hud-card">
+                <div class="card-header">
+                    <h3>MEMORY MODULE</h3>
+                    <span class="card-icon">mem</span>
+                </div>
+                <div class="card-body">
+                    <div class="gauge-wrapper">
+                        <div class="gauge-fill" id="mem-bar"></div>
+                        <span class="gauge-text" id="mem-text">0%</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>USED</span>
+                        <span id="mem-used">-- GB</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>TOTAL</span>
+                        <span id="mem-total">-- GB</span>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="memChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Disk Card -->
+            <div class="hud-card">
+                <div class="card-header">
+                    <h3>STORAGE ARRAY</h3>
+                    <span class="card-icon">dsk</span>
+                </div>
+                <div class="card-body">
+                    <div class="gauge-wrapper">
+                        <div class="gauge-fill" id="disk-bar"></div>
+                        <span class="gauge-text" id="disk-text">0%</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>FREE</span>
+                        <span id="disk-free">-- GB</span>
+                    </div>
+                    <div class="detail-row">
+                        <span>ACTIVITY</span>
+                        <span id="disk-io">-- MB/s</span>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="diskChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Network Card -->
+            <div class="hud-card">
+                <div class="card-header">
+                    <h3>NETWORK LINK</h3>
+                    <span class="card-icon">net</span>
+                </div>
+                <div class="card-body">
+                    <div class="net-stats">
+                        <div class="net-row up">
+                            <span class="arrow">↑</span>
+                            <span class="value" id="net-up">0 KB/s</span>
+                        </div>
+                        <div class="net-row down">
+                            <span class="arrow">↓</span>
+                            <span class="value" id="net-down">0 KB/s</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="netChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Section -->
+        <div class="bottom-grid">
+            <!-- Process List -->
+            <div class="hud-card wide">
+                <div class="card-header">
+                    <h3>TOP PROCESSES</h3>
+                </div>
+                <div class="table-container">
+                    <table class="hud-table">
+                        <thead>
+                            <tr>
+                                <th>PID</th>
+                                <th>NAME</th>
+                                <th>CPU %</th>
+                                <th>MEM %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="proc-list">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- System Info / Sensors -->
+            <div class="hud-card">
+                <div class="card-header">
+                    <h3>SYSTEM SENSORS</h3>
+                </div>
+                <div class="sensor-grid" id="sensor-grid">
+                    <div class="sensor-item">
+                        <span class="label">OS PLATFORM</span>
+                        <span class="val" id="sys-os">--</span>
+                    </div>
+                    <div class="sensor-item">
+                        <span class="label">THERMAL</span>
+                        <span class="val" id="sys-temp">--°C</span>
+                    </div>
+                     <div class="sensor-item">
+                        <span class="label">BOOT TIME</span>
+                        <span class="val" id="sys-boot">--</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Viewer Modal -->
+    <div class="log-modal" id="log-modal">
+        <div class="log-modal-content">
+            <div class="log-modal-header">
+                <h2 id="log-modal-title">LOGS</h2>
+                <div class="log-modal-controls">
+                    <select id="log-lines-select">
+                        <option value="100">100 lines</option>
+                        <option value="200" selected>200 lines</option>
+                        <option value="500">500 lines</option>
+                        <option value="1000">1000 lines</option>
+                    </select>
+                    <button class="log-btn small" id="btn-refresh-logs">↻ REFRESH</button>
+                    <button class="log-btn small close" id="btn-close-logs">✕ CLOSE</button>
+                </div>
+            </div>
+            <div class="log-modal-body">
+                <pre id="log-content">Loading...</pre>
+            </div>
+            <div class="log-modal-footer">
+                <span id="log-status">Ready</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

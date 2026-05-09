@@ -1,0 +1,25 @@
+### Laser filter chain for LD19 -> /scan_filtered
+###
+### Pipeline: LD19 publishes /scan. scan_to_scan_filter_chain subscribes to
+### /scan, applies filter, publishes /scan_filtered. Both Nav2 costmaps
+### (local + global) consume /scan_filtered as their obstacle source.
+###
+### LiDAR physical position is base_footprint + (0.045, 0, 0.177). Chassis
+### rectangle extends 0.127m fwd/back and 0.102m laterally from base_footprint
+### center. From the lidar's x=0.045m forward offset, the farthest chassis
+### edge is the rear at ~0.17m. Drop returns < 0.20m to mask the full
+### chassis plus a small buffer for antennas/cables protruding beyond the
+### chassis outline. Replacing with .inf tells downstream filters to treat
+### those samples as valid absence of return, not zero-range obstacles.
+
+scan_to_scan_filter_chain:
+  ros__parameters:
+    filter1:
+      name: range_filter
+      type: laser_filters/LaserScanRangeFilter
+      params:
+        use_message_range_limits: false
+        lower_threshold: 0.20
+        upper_threshold: 20.0
+        lower_replacement_value: .inf
+        upper_replacement_value: .inf

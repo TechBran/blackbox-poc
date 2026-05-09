@@ -1,0 +1,38 @@
+[Unit]
+Description=UGV Beast Gemini Live Supervisor
+Requires=ugv-tools-api.service ugv-er.service docker.service
+After=ugv-tools-api.service ugv-er.service
+# StartLimit* belong in [Unit] on systemd 249+; previously in [Service]
+# where they were silently ignored (systemd logs "Unknown key name" at
+# load time). Without these, crash-loop protection was INACTIVE.
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+EnvironmentFile=/home/jetson/ugv_ws_waveshare/ugv_tools_api/deploy/supervisor.env
+ExecStart=/usr/bin/docker exec \
+  -e GOOGLE_API_KEY \
+  -e SUPERVISOR_MODEL -e SUPERVISOR_VOICE -e SUPERVISOR_LANG \
+  -e SUPERVISOR_MIC -e SUPERVISOR_SPK \
+  -e TOOLS_API_URL -e ER_URL \
+  -e SUPERVISOR_CAMERA_TOPIC -e SUPERVISOR_COSTMAP_TOPIC \
+  -e SUPERVISOR_HANDLE_STORE \
+  -e SUPERVISOR_HOST -e SUPERVISOR_PORT -e SUPERVISOR_LOG_LEVEL \
+  -e SUPERVISOR_AEC_MODE -e SUPERVISOR_AEC_DELAY_MS \
+  -e SUPERVISOR_BUDGET_WINDOW_TOKENS -e SUPERVISOR_BUDGET_THRESHOLD \
+  -e SUPERVISOR_IDLE_TIMEOUT_S -e MUTE_FLAG_PATH \
+  -e PULSE_SERVER \
+  -e PULSE_SOURCE -e PULSE_SINK \
+  -e PYTHONUNBUFFERED=1 \
+  ugv_waveshare /bin/bash /home/ws/ugv_ws/ugv_tools_api/deploy/start_supervisor.sh
+# systemctl restart only kills the wrapper; kill the inner python too
+ExecStopPost=-/usr/bin/docker exec ugv_waveshare pkill -9 -f "ugv_tools_api.supervisor"
+Restart=on-failure
+RestartSec=5
+# Task 9 lifespan gives supervisor 5s graceful shutdown; 10s matches
+# sibling services and prevents 90s hang on systemctl stop.
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

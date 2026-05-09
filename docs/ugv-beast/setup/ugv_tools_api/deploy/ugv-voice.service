@@ -1,0 +1,21 @@
+[Unit]
+Description=UGV Voice (TTS -> JBL speaker)
+Requires=ugv-tools-api.service
+After=ugv-tools-api.service
+# Keep retrying through early-boot transients (BlackBox/Tailscale may be slow).
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5
+EnvironmentFile=/home/jetson/ugv_ws_waveshare/ugv_tools_api/deploy/voice.env
+EnvironmentFile=/home/jetson/ugv_ws_waveshare/ugv_tools_api/deploy/er.env
+# /bin/bash so a missing +x does not fail the service.
+ExecStart=/usr/bin/docker exec -e UGV_ALSA_DEVICE -e UGV_VOICE_PORT -e UGV_VOICE -e UGV_TTS_MODEL -e MUTE_FLAG_PATH -e OPENAI_API_KEY -e OPENAI_TTS_MODEL -e OPENAI_TTS_VOICE ugv_waveshare /bin/bash /home/ws/ugv_ws/ugv_tools_api/deploy/start_voice.sh
+ExecStop=/usr/bin/docker exec ugv_waveshare pkill -f "ugv_tools_api.voice.speak_server"
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

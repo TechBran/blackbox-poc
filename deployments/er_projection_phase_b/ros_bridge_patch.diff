@@ -1,0 +1,42 @@
+--- /tmp/ros_bridge_original.py	2026-05-05 13:47:49.244162926 -0400
++++ /tmp/ros_bridge_modified.py	2026-05-05 13:48:18.824677964 -0400
+@@ -5,12 +5,14 @@
+ import time
+ from typing import Any, Callable, Optional
+ import rclpy
++import rclpy.duration
++import tf2_ros
+ from rclpy.executors import MultiThreadedExecutor, ExternalShutdownException
+ from rclpy.node import Node
+ from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
+ 
+ from nav_msgs.msg import Odometry, OccupancyGrid
+-from sensor_msgs.msg import LaserScan, CompressedImage, Image
++from sensor_msgs.msg import LaserScan, CompressedImage, Image, CameraInfo
+ from geometry_msgs.msg import PoseStamped, PointStamped, Twist, Point
+ 
+ 
+@@ -20,6 +22,9 @@
+         self._latest: dict[str, Any] = {}
+         self._lock = threading.Lock()
+         self._pub_cache: dict[str, Any] = {}
++        # tf2 buffer + listener so tools can lookup transforms (oak_rgb_camera_optical_frame -> map etc.)
++        self.tf_buffer = tf2_ros.Buffer(cache_time=rclpy.duration.Duration(seconds=10.0))
++        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer, self)
+ 
+     def cache_topic(self, topic: str, msg_type, qos: int = 10):
+         def cb(msg):
+@@ -138,6 +143,13 @@
+             qos_profile_sensor_data,
+         )
+ 
++        # OAK-D stereo camera_info (intrinsics fx, fy, cx, cy used by project_pixel_to_map).
++        node.create_subscription(
++            CameraInfo, "/oak/stereo/camera_info",
++            node._cache_cb("/oak/stereo/camera_info"),
++            qos_profile_sensor_data,
++        )
++
+         # Pre-create publishers used by tool handlers
+         node.publisher("/cmd_vel", Twist)
+         node.publisher("/gimbal/absolute", Point)

@@ -1,0 +1,20 @@
+[Unit]
+Description=UGV Beast Tool Schema API
+Requires=ugv-waveshare.service docker.service
+After=ugv-waveshare.service docker.service
+# Keep retrying through early-boot transients (ROS nodes may not be up yet).
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+Restart=on-failure
+RestartSec=5
+# Invoke via /bin/bash so a missing +x on the script does not fail the service
+# (belt-and-suspenders: sync script also enforces +x, but this is redundant).
+ExecStart=/usr/bin/docker exec ugv_waveshare /bin/bash /home/ws/ugv_ws/ugv_tools_api/deploy/start_tools_api.sh
+ExecStop=/usr/bin/docker exec ugv_waveshare pkill -f "python3 -m ugv_tools_api"
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

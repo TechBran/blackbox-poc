@@ -1,0 +1,38 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- App theme with action bar -->
+    <style name="Theme.AIBlackBox" parent="Theme.Material3.DayNight">
+        <item name="colorPrimary">@color/bbx_red</item>
+        <item name="colorSurface">@color/bbx_black</item>
+        <item name="android:statusBarColor">@color/bbx_black</item>
+        <item name="android:navigationBarColor">@color/bbx_black</item>
+        <item name="android:textColor">@color/bbx_text</item>
+    </style>
+
+    <!-- Fullscreen (no action bar) for activities like Pairing/Portal -->
+    <style name="Theme.AIBlackBox.NoBar" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/bbx_red</item>
+        <item name="colorSurface">@color/bbx_black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:textColor">@color/bbx_text</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="q">false</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="q">false</item>
+    </style>
+
+    <!-- Transparent floating theme for XR overlay panels -->
+    <style name="Theme.AIBlackBox.XrOverlay" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/bbx_red</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="q">false</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="q">false</item>
+    </style>
+
+</resources>

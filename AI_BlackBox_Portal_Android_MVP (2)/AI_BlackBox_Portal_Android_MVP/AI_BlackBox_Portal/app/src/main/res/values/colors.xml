@@ -1,0 +1,7 @@
+<resources>
+    <color name="bbx_red">#E10600</color>
+    <color name="bbx_black">#0E0E10</color>
+    <color name="bbx_dark">#17181B</color>
+    <color name="bbx_text">#FFFFFF</color>
+    <color name="bbx_dim">#B8B8B8</color>
+</resources>

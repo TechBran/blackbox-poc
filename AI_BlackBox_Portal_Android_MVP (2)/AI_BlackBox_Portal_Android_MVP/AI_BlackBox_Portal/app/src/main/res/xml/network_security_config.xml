@@ -1,0 +1,8 @@
+<network-security-config>
+    <!-- Allow HTTP access to your TailScale network -->
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

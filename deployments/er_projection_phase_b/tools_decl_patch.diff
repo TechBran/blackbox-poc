@@ -1,0 +1,11 @@
+--- /tmp/tools_decl_original.py	2026-05-05 13:47:49.564168416 -0400
++++ /tmp/tools_decl_modified.py	2026-05-05 13:48:30.571886699 -0400
+@@ -7,7 +7,7 @@
+ 
+ from ..registry import registry
+ from ..schema import ToolDescriptor
+-from ..tools import camera, explore, gimbal, lights, motion, nav, status, system  # noqa: F401  register handlers
++from ..tools import camera, explore, gimbal, lights, motion, nav, projection, status, system  # noqa: F401  register handlers
+ 
+ SYNTHETIC_NAMES: set[str] = {"mission_done", "mission_fail", "ask_user"}
+ 

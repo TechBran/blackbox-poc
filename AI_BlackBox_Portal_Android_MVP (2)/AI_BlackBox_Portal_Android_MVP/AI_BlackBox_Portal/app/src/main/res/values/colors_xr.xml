@@ -1,0 +1,14 @@
+<resources>
+    <!-- XR Glow Color Tokens -->
+    <color name="xr_glow_red">#FF4444</color>
+    <color name="xr_glow_red_dim">#66FF4444</color>
+    <color name="xr_glow_blue">#1E90FF</color>
+    <color name="xr_glow_blue_dim">#661E90FF</color>
+    <color name="xr_glow_cyan">#00D4FF</color>
+    <color name="xr_glow_cyan_dim">#6600D4FF</color>
+    <color name="xr_glow_purple">#8A2BE2</color>
+    <color name="xr_glow_purple_dim">#668A2BE2</color>
+    <color name="xr_panel_bg">#CC1A1A1A</color>
+    <color name="xr_surface_dark">#E6121212</color>
+    <color name="xr_orbiter_bg">#B3141414</color>
+</resources>

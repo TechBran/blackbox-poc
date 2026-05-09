@@ -1,0 +1,390 @@
+"""
+Cron Job Executor
+
+Thin wrapper that sends scheduled job prompts through the standard /chat
+endpoint.  The Orchestrator's existing pipeline handles everything:
+context retrieval, embeddings, tool use (phone, SMS, etc.), and auto-mint.
+
+The executor only:
+  1. Builds the prompt with delivery context baked in.
+  2. Sends ONE request to /chat.
+  3. Polls until the task completes.
+  4. Returns the result text.
+"""
+
+import aiohttp
+import asyncio
+import json
+import logging
+import time
+from typing import Any, Dict, Optional
+
+logger = logging.getLogger(__name__)
+
+BASE_URL = "http://localhost:9091"
+
+# ---------------------------------------------------------------------------
+# Polling configuration
+# ---------------------------------------------------------------------------
+_POLL_INTERVAL_SECS = 2          # seconds between status checks
+_POLL_TIMEOUT_SECS = 180         # total wall-clock budget for a single job
+_CHAT_REQUEST_TIMEOUT = 30       # timeout for the initial POST to /chat
+_TASK_STATUS_TIMEOUT = 10        # timeout for each GET /tasks/status/{id}
+
+# Computer-use streaming configuration
+_CU_STREAM_TIMEOUT = 600         # 10-minute budget for CU SSE stream
+_CU_CONNECT_TIMEOUT = 30         # Initial connection timeout
+
+# CU serialization lock — only one CU job at a time (shared Xvfb display)
+_CU_LOCK = None
+
+def _get_cu_lock():
+    global _CU_LOCK
+    if _CU_LOCK is None:
+        _CU_LOCK = asyncio.Lock()
+    return _CU_LOCK
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
+
+async def execute_cron_job(job: Dict[str, Any]) -> str:
+    """
+    Execute a cron job by sending its prompt through the /chat endpoint.
+
+    Delivery instructions (call, SMS, etc.) are embedded in the prompt so
+    the LLM handles delivery via its normal tool use.  The /chat pipeline
+    takes care of context retrieval, embeddings, and auto-mint.
+
+    Args:
+        job: Job dict from the scheduler database.
+
+    Returns:
+        The LLM reply text.
+
+    Raises:
+        RuntimeError: If the chat API is unreachable, the task fails, or
+            the polling timeout is exceeded.
+    """
+    start_time = time.monotonic()
+    prompt = job["prompt"]
+    model = job.get("model", "gemini")
+    operator = job["operator"]
+    job_name = job.get("name", "Unnamed Task")
+    delivery = job.get("delivery", "snapshot")
+    delivery_target = job.get("delivery_target", "") or ""
+
+    resolved_model = _resolve_model_name(model)
+    provider = _model_to_provider(model)
+
+    logger.info(
+        "Executing cron job '%s' (model=%s, provider=%s, delivery=%s, operator=%s)",
+        job_name, resolved_model, provider, delivery, operator,
+    )
+
+    # ------------------------------------------------------------------
+    # Build the message with delivery context
+    # ------------------------------------------------------------------
+    content = _build_prompt(job_name, prompt, delivery, delivery_target)
+
+    # CU is streaming-only — route through SSE consumer instead of /chat + polling
+    if provider == "computer-use":
+        return await _execute_cu_job(job_name, content, operator)
+
+    payload = {
+        "messages": [{"role": "user", "content": content}],
+        "provider": provider,
+        "model": resolved_model,
+        "operator": operator,
+    }
+
+    # ------------------------------------------------------------------
+    # Submit to /chat (single request — pipeline handles everything)
+    # ------------------------------------------------------------------
+    task_id: Optional[str] = None
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{BASE_URL}/chat",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=_CHAT_REQUEST_TIMEOUT),
+            ) as resp:
+                if resp.status != 200:
+                    error = await resp.text()
+                    raise RuntimeError(
+                        f"Chat API returned HTTP {resp.status}: {error[:300]}"
+                    )
+                data = await resp.json()
+                task_id = data.get("task_id")
+                if not task_id:
+                    raise RuntimeError(
+                        f"Chat API did not return a task_id: {data}"
+                    )
+    except aiohttp.ClientError as exc:
+        raise RuntimeError(f"Failed to connect to chat API: {exc}") from exc
+
+    logger.debug("Job '%s' queued as task %s", job_name, task_id)
+
+    # ------------------------------------------------------------------
+    # Poll for completion
+    # ------------------------------------------------------------------
+    result_text = await _poll_task_until_done(task_id, job_name)
+
+    duration = time.monotonic() - start_time
+    logger.info(
+        "Job '%s' completed: model=%s delivery=%s duration=%.1fs",
+        job_name, resolved_model, delivery, duration,
+    )
+
+    return result_text
+
+
+# ---------------------------------------------------------------------------
+# Computer-use SSE execution
+# ---------------------------------------------------------------------------
+
+async def _execute_cu_job(job_name: str, content: str, operator: str) -> str:
+    """Execute a CU cron job by consuming the /chat/stream SSE endpoint.
+
+    CU is streaming-only — it cannot go through /chat (which auto-routes
+    CU to plain Anthropic, losing desktop control).
+    Passes the original operator so the backend curates full context
+    (snapshots, preferences, history) for the CU agent.
+    """
+    payload = {
+        "messages": [{"role": "user", "content": content}],
+        "provider": "computer-use",
+        "model": "claude-opus-4-6",
+        "operator": operator,
+    }
+
+    logger.info("Executing CU cron job '%s' via /chat/stream (operator=%s)", job_name, operator)
+
+    result_text = ""
+    error_text = ""
+    event_type = None
+
+    cu_lock = _get_cu_lock()
+    async with cu_lock:
+        try:
+            timeout = aiohttp.ClientTimeout(
+                total=_CU_STREAM_TIMEOUT,
+                connect=_CU_CONNECT_TIMEOUT,
+            )
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{BASE_URL}/chat/stream",
+                    json=payload,
+                    timeout=timeout,
+                ) as resp:
+                    if resp.status != 200:
+                        error = await resp.text()
+                        raise RuntimeError(f"CU stream returned HTTP {resp.status}: {error[:300]}")
+
+                    async for raw_line in resp.content:
+                        line = raw_line.decode("utf-8", errors="replace").rstrip("\n\r")
+
+                        if line.startswith("event: "):
+                            event_type = line[7:]
+                        elif line.startswith("data: ") and event_type:
+                            data_str = line[6:]
+                            try:
+                                data = json.loads(data_str)
+                                if isinstance(data, str):
+                                    try:
+                                        data = json.loads(data)
+                                    except (json.JSONDecodeError, TypeError):
+                                        pass
+                            except json.JSONDecodeError:
+                                data = data_str
+
+                            if event_type == "done":
+                                if isinstance(data, dict):
+                                    result_text = data.get("content", "")
+                                else:
+                                    result_text = str(data)
+                                logger.info("[CU-CRON] Done event for '%s'", job_name)
+                                break
+
+                            elif event_type == "error":
+                                error_text = data if isinstance(data, str) else str(data)
+                                logger.error("[CU-CRON] Error for '%s': %s", job_name, error_text)
+                                break
+
+                            elif event_type == "cu_step":
+                                if isinstance(data, dict):
+                                    logger.debug("[CU-CRON] '%s' step %s/%s",
+                                        job_name, data.get("step", "?"), data.get("total", "?"))
+
+                            event_type = None
+
+        except aiohttp.ClientError as exc:
+            raise RuntimeError(f"Failed to connect to CU stream: {exc}") from exc
+        except asyncio.TimeoutError:
+            raise RuntimeError(f"CU job '{job_name}' timed out after {_CU_STREAM_TIMEOUT}s")
+
+    if error_text and not result_text:
+        raise RuntimeError(f"CU job '{job_name}' failed: {error_text}")
+
+    return result_text or "(CU job completed with no response text)"
+
+
+# ---------------------------------------------------------------------------
+# Prompt building — delivery context baked into the message
+# ---------------------------------------------------------------------------
+
+def _build_prompt(
+    job_name: str,
+    prompt: str,
+    delivery: str,
+    delivery_target: str,
+) -> str:
+    """
+    Build the full prompt with delivery instructions embedded.
+
+    For snapshot delivery, no extra instructions are needed — auto-mint
+    handles it.  For SMS/voice, we tell the LLM to use its tools.
+    """
+    header = f"[Scheduled Task: {job_name}]\n\n"
+
+    if delivery == "voice_call" and delivery_target:
+        return (
+            f"{header}{prompt}\n\n"
+            f"DELIVERY: After completing the task above, call {delivery_target} "
+            f"and deliver your response as a spoken summary."
+        )
+
+    if delivery == "sms" and delivery_target:
+        return (
+            f"{header}{prompt}\n\n"
+            f"DELIVERY: After completing the task above, send an SMS to "
+            f"{delivery_target} with a concise summary of your response."
+        )
+
+    # snapshot or notification — just the prompt, pipeline auto-mints
+    return f"{header}{prompt}"
+
+
+# ---------------------------------------------------------------------------
+# Task polling
+# ---------------------------------------------------------------------------
+
+async def _poll_task_until_done(task_id: str, job_name: str) -> str:
+    """
+    Poll /tasks/status/{task_id} until the task reaches a terminal state.
+    """
+    deadline = time.monotonic() + _POLL_TIMEOUT_SECS
+
+    async with aiohttp.ClientSession() as session:
+        while time.monotonic() < deadline:
+            await asyncio.sleep(_POLL_INTERVAL_SECS)
+
+            try:
+                async with session.get(
+                    f"{BASE_URL}/tasks/status/{task_id}",
+                    timeout=aiohttp.ClientTimeout(total=_TASK_STATUS_TIMEOUT),
+                ) as resp:
+                    if resp.status != 200:
+                        logger.warning(
+                            "Task status check returned HTTP %d for task %s",
+                            resp.status,
+                            task_id,
+                        )
+                        continue
+
+                    data = await resp.json()
+
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                logger.warning(
+                    "Task status poll failed for %s: %s", task_id, exc
+                )
+                continue
+
+            status = data.get("status", "")
+
+            if status == "completed":
+                return _extract_reply(data, job_name)
+
+            if status == "failed":
+                error_msg = data.get("error_message") or ""
+                result_data = data.get("result_data") or {}
+                detail = error_msg or result_data.get("error", "Unknown error")
+                raise RuntimeError(
+                    f"Chat task {task_id} failed for job '{job_name}': {detail}"
+                )
+
+            progress = data.get("progress", 0)
+            logger.debug(
+                "Task %s for job '%s': status=%s progress=%d%%",
+                task_id, job_name, status, progress,
+            )
+
+    raise RuntimeError(
+        f"Timed out after {_POLL_TIMEOUT_SECS}s waiting for task {task_id} "
+        f"(job '{job_name}')"
+    )
+
+
+def _extract_reply(task_data: Dict[str, Any], job_name: str) -> str:
+    """Extract the LLM reply text from a completed task."""
+    result_data = task_data.get("result_data")
+    if not result_data or not isinstance(result_data, dict):
+        raise RuntimeError(
+            f"Completed task for job '{job_name}' has no result_data"
+        )
+
+    for key in ("ui_reply", "reply", "text"):
+        value = result_data.get(key)
+        if value and isinstance(value, str) and value.strip():
+            return value.strip()
+
+    raise RuntimeError(
+        f"Completed task for job '{job_name}' has no reply text in result_data"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Provider / model mapping
+# ---------------------------------------------------------------------------
+
+def _model_to_provider(model: str) -> str:
+    """Map a model name to the provider string expected by /chat."""
+    m = model.lower()
+
+    if m in ("computer-use", "cu"):
+        return "computer-use"
+    if any(tok in m for tok in ("claude", "anthropic", "sonnet", "opus", "haiku")):
+        return "anthropic"
+    if any(tok in m for tok in ("gpt", "openai", "o1", "o3", "o4")):
+        return "openai"
+    if any(tok in m for tok in ("grok", "xai")):
+        return "xai"
+
+    return "google"
+
+
+def _resolve_model_name(model: str) -> str:
+    """Resolve shorthand aliases to full model IDs."""
+    from Orchestrator.config import (
+        GEMINI_MODEL_DEFAULT,
+        ANTHROPIC_MODEL_DEFAULT,
+        OPENAI_MODEL_DEFAULT,
+        XAI_MODEL_DEFAULT,
+    )
+
+    m = model.lower().strip()
+
+    if m in ("computer-use", "cu"):
+        return "claude-opus-4-6"
+    if m in ("gemini", "google"):
+        return GEMINI_MODEL_DEFAULT
+    if m in ("anthropic", "claude"):
+        return ANTHROPIC_MODEL_DEFAULT
+    if m in ("openai", "gpt"):
+        return OPENAI_MODEL_DEFAULT
+    if m in ("xai", "grok"):
+        return XAI_MODEL_DEFAULT
+
+    return model

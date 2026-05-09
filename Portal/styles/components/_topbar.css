@@ -1,0 +1,450 @@
+/* _topbar.css
+ * Extracted from: style.css
+ * Generated: 2026-01-04T14:27:28.661600
+ * Blocks: 24
+ */
+
+/* =====================================================================
+   FLOATING BUBBLE UI - No background bars, individual floating elements
+   ===================================================================== */
+/* Header - Single row with floating bubbles */
+.topbar{
+  display:flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  /* Completely transparent - no background */
+  background: transparent;
+  /* Fixed positioning */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  /* No border */
+  border: none;
+  pointer-events: none; /* Allow clicks to pass through empty space */
+}
+
+/* All clickable items in header need pointer-events restored */
+.topbar > * {
+  pointer-events: auto;
+}
+
+/* Hide the brand bubble in header - now shown on home screen */
+.topbar .brand {
+  display: none;
+}
+
+/* --- Floating Bubble Style (reusable) --- */
+.floating-bubble {
+  background: rgba(34, 34, 34, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-base);
+}
+
+.floating-bubble:hover {
+  background: rgba(40, 40, 40, 0.95);
+  border-color: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.5);
+}
+
+/* Brand area as floating bubble */
+.brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  /* Floating bubble style */
+  background: rgba(34, 34, 34, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-xl);
+  padding: 8px 14px;
+  box-shadow: var(--shadow-md);
+}
+
+.brand-dot{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background: var(--neutral-700);
+}
+
+.brand-title{
+  font-weight:700;
+  letter-spacing:.3px;
+  white-space: nowrap;
+}
+
+/* Brand text variants for responsive display */
+.brand-medium {
+  display: none; /* Hidden by default, shown on medium screens */
+}
+
+.brand-short {
+  display: inline; /* Always shown */
+}
+
+/* Actions container - row of floating bubbles below brand */
+.actions{
+  display:flex;
+  align-items:center;
+  justify-content: center;
+  gap:10px;
+  flex-wrap: wrap; /* Allow wrapping on very small screens */
+}
+
+/* --- Merged Operator + Menu Bubble (Two rows) --- */
+.operator-menu-bubble {
+  display: flex;
+  flex-direction: column;
+  /* Floating bubble style */
+  background: rgba(34, 34, 34, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-xl);
+  padding: 0;
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-base);
+  overflow: hidden;
+}
+
+/* Top row: Operator dropdown + menu */
+.operator-row-top {
+  display: flex;
+  align-items: center;
+}
+
+/* Bottom row: Stats */
+.operator-row-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 4px 12px 8px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+}
+
+.stat-sep {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 8px;
+}
+
+.operator-menu-bubble:hover {
+  background: rgba(40, 40, 40, 0.95);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Operator label */
+.operator-menu-bubble .operator-label {
+  color: var(--muted);
+  font-size: 12px;
+  padding-left: 16px;
+  white-space: nowrap;
+}
+
+/* Operator select inside merged bubble */
+.operator-menu-bubble #operatorSelect {
+  background: transparent;
+  color: var(--text);
+  border: none;
+  border-radius: 0;
+  padding: 14px 12px 14px 6px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  max-width: 120px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.operator-menu-bubble #operatorSelect:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.operator-menu-bubble #operatorSelect:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Divider between operator and menu */
+.bubble-divider {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Hamburger icon button inside merged bubble - LARGER for touch */
+.operator-menu-bubble .btn-icon {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 18px;
+  padding: 14px 20px 14px 16px;
+  cursor: pointer;
+  transition: background var(--transition-base);
+  line-height: 1;
+  min-width: 48px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.operator-menu-bubble .btn-icon:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* --- Stat Items (in operator bubble) --- */
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.stat-item span:last-child {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* Health indicator dot */
+.health-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--neutral-500);
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.health-dot.connected {
+  background: #34c759;
+  box-shadow: 0 0 4px rgba(52, 199, 89, 0.5);
+}
+
+.health-dot.lost {
+  background: #ff3b30;
+  box-shadow: 0 0 4px rgba(255, 59, 48, 0.5);
+}
+
+/* --- Timeline Button (top-right corner) --- */
+.timeline-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(34, 34, 34, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  padding: 8px 14px;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-md);
+  margin-left: 8px;
+}
+
+.timeline-btn:hover {
+  background: rgba(255, 74, 74, 0.15);
+  border-color: rgba(255, 74, 74, 0.3);
+}
+
+.timeline-btn-label {
+  font-weight: 500;
+}
+
+/* Legacy mode-toggle - hidden now */
+.mode-toggle {
+  display: none;
+}
+
+/* General button - floating bubble style */
+.topbar .btn {
+  background: rgba(34, 34, 34, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 10px 16px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-md);
+}
+
+.topbar .btn:hover {
+  background: rgba(40, 40, 40, 0.95);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+#operatorSelect,
+#providerSelect,
+#modelSelect{
+  background: var(--neutral-150);
+  color:var(--text);
+  border:none;
+  border-radius: var(--radius-md);
+  padding:6px 10px;
+  font-size:13px;
+  line-height:1.2;
+  transition: background var(--transition-slow);
+}
+
+#operatorSelect:hover,
+#providerSelect:hover,
+#modelSelect:hover{
+  background: var(--neutral-200);
+}
+
+#operatorSelect { font-size: 12px; }
+
+#operatorSelect:focus,
+#providerSelect:focus,
+#modelSelect:focus{ outline:2px solid var(--accent); outline-offset:2px; }
+
+/* --- Add Operator Modal --- */
+.operator-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.operator-body input[type="text"] {
+    padding: 10px 12px;
+    background: #000000;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+}
+
+.operator-body input[type="text"]:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-color: var(--accent);
+}
+
+.operator-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+/* =====================================================================
+   MOBILE RESPONSIVE - Top bar stays fixed at top
+   ===================================================================== */
+@media (max-width: 768px) {
+  .topbar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 8px 12px;
+    z-index: 100;
+  }
+
+  .operator-menu-bubble {
+    border-radius: 14px;
+  }
+
+  .operator-menu-bubble .operator-label {
+    font-size: 11px;
+    padding-left: 12px;
+  }
+
+  .operator-menu-bubble #operatorSelect {
+    max-width: 90px;
+    padding: 12px 8px 12px 4px;
+    font-size: 12px;
+  }
+
+  /* Keep menu button touch-friendly on mobile */
+  .operator-menu-bubble .btn-icon {
+    padding: 12px 18px 12px 14px;
+    font-size: 17px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .bubble-divider {
+    height: 22px;
+  }
+
+  /* Stats row on tablet */
+  .operator-row-stats {
+    font-size: 10px;
+    padding: 3px 10px 6px 10px;
+  }
+
+  /* Timeline button smaller */
+  .timeline-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+    border-radius: 10px;
+    margin-left: 6px;
+  }
+}
+
+@media (max-width: 480px) {
+  .topbar {
+    padding: 6px 10px;
+  }
+
+  .operator-menu-bubble .operator-label {
+    font-size: 10px;
+    padding-left: 10px;
+  }
+
+  .operator-menu-bubble #operatorSelect {
+    max-width: 70px;
+    padding: 10px 6px 10px 2px;
+    font-size: 11px;
+  }
+
+  /* Still keep 44px min touch target on small phones */
+  .operator-menu-bubble .btn-icon {
+    padding: 10px 16px 10px 12px;
+    font-size: 16px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .bubble-divider {
+    height: 20px;
+  }
+
+  /* Stats row compact on small screens */
+  .operator-row-stats {
+    font-size: 9px;
+    padding: 2px 8px 5px 8px;
+    gap: 6px;
+  }
+
+  /* Timeline button - icon only on small screens */
+  .timeline-btn {
+    padding: 6px 8px;
+    margin-left: 4px;
+  }
+
+  .timeline-btn-label {
+    display: none;
+  }
+}

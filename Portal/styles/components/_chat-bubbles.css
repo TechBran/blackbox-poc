@@ -1,0 +1,679 @@
+/* _chat-bubbles.css
+ * Extracted from: style.css
+ * Generated: 2026-01-04T14:27:28.661466
+ * Blocks: 65
+ */
+
+.bubble{
+  width: fit-content;
+  max-width: 100%; /* Overridden by specific classes */
+  padding: 12px 16px;
+  border-radius: var(--radius-xl); /* Fallback */
+  background: var(--bubble);
+  color: var(--text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* Increased gap for better spacing */
+  min-width: 0;
+  border: none;
+  box-shadow: var(--shadow-xs);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.bubble .bubble-text{ display:inline; }
+
+/* --- Bubble Controls Bar (Bottom Line) --- */
+.bubble-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px; /* Increased from 8px for better breathing room */
+    margin-top: 12px; /* Increased from 8px */
+    min-height: 40px; /* Increased from 32px for better touch targets */
+}
+
+.bubble .playbtn{
+  background: transparent;
+  border: none;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 18px; /* Increased from 14px */
+  cursor: pointer;
+  padding: 8px 12px; /* Increased from 0 2px for better touch target */
+  position: relative;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-base), transform 0.1s ease;
+  min-width: 44px; /* Minimum touch target size (Apple/Google guidelines) */
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bubble .playbtn:hover{
+  background: rgba(52, 152, 219, 0.1); /* Subtle hover effect */
+  transform: scale(1.05);
+}
+
+.bubble .playbtn:active{
+  transform: scale(0.95);
+}
+
+/* --- New Copy Button Style --- */
+.bubble .copybtn.btn {
+    background: transparent; /* Changed to match background */
+    border: none;
+    padding: 8px 12px; /* Increased from 0 2px for better touch target */
+    font-size: 18px; /* Increased from 15px */
+    line-height: 1;
+    font-weight: normal;
+    flex-shrink: 0;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition-base), transform 0.1s ease;
+    min-width: 44px; /* Minimum touch target size */
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: inherit; /* Use text color from parent */
+}
+
+.bubble .copybtn.btn:hover {
+    background: rgba(52, 152, 219, 0.1); /* Subtle hover effect */
+    transform: scale(1.05);
+}
+
+.bubble .copybtn.btn:active {
+    transform: scale(0.95);
+}
+
+/* --- End New Style --- */
+/* --- Custom Audio Player in Bubble --- */
+.bubble-audio-player {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 180px;
+    max-width: 300px;
+    padding: 8px 12px;
+    background: linear-gradient(135deg, rgba(77, 208, 225, 0.1) 0%, rgba(0, 172, 193, 0.05) 100%);
+    border: 1px solid rgba(77, 208, 225, 0.2);
+    border-radius: var(--radius-lg);
+}
+
+.bubble-audio-player audio {
+    display: none; /* Hide native audio element */
+}
+
+/* --- End Custom Audio Player Style --- */
+.bubble img, .bubble video, .bubble audio{
+  max-width:100%; height:auto; border-radius:10px;
+}
+
+.bubble audio {
+  height: 40px; /* Give audio player some height */
+  /* --- MODIFICATION --- */
+  background-color: var(--neutral-300); /* Darkish gray to match user bubble */
+  color-scheme: dark; /* Hint to browser to use dark controls */
+  /* --- END MODIFICATION --- */
+}
+
+/* --- TTS Pulse Animation --- */
+.bubble .playbtn.bubble--waiting::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border: 2px solid currentColor;
+    border-radius: 50%;
+    animation: tts-pulse 1.2s ease-in-out infinite;
+    opacity: .85;
+}
+
+/* --- Image Generation Placeholder (uses thinking animation) --- */
+.bubble.generating-image .generating-message {
+    color: var(--muted);
+    font-style: italic;
+}
+
+/* --- Video Generation Placeholder Bubble --- */
+.bubble.generating-video {
+    background: linear-gradient(135deg, rgba(74, 158, 255, 0.1), rgba(74, 158, 255, 0.05));
+    border: 1px solid rgba(74, 158, 255, 0.2);
+}
+
+.bubble.generating-video .generating-message {
+    color: #4a9eff;
+    font-style: normal;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.bubble.generating-video .video-gen-icon {
+    font-size: 18px;
+}
+
+.bubble.generating-video .video-gen-info {
+    font-size: 12px;
+    color: var(--muted);
+    padding: 0;
+    background: transparent;
+    border: none;
+}
+
+.bubble.generating-video .video-gen-estimate {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+}
+
+/* --- NEW: Image Download Button --- */
+.bubble .download-btn {
+    padding: 0 4px; /* Slightly more padding than copy/play */
+    font-size: 16px; /* Adjust emoji size */
+    line-height: 1.2;
+    font-weight: normal;
+    text-decoration: none; /* Remove underline from link */
+    margin-left: 4px; /* Add space between image and button */
+    vertical-align: middle; /* Align with image baseline */
+}
+
+.bubble .download-btn:hover {
+    text-decoration: none; /* No underline on hover either */
+    opacity: 0.8; /* Slight fade on hover like other buttons */
+}
+
+/* --- Message Timestamps --- */
+.bubble-timestamp {
+    font-size: 10px;
+    color: var(--neutral-600);
+    margin-left: 8px;
+    white-space: nowrap;
+}
+
+/* --- Markdown Code Blocks --- */
+.bubble pre {
+    position: relative;
+    background: var(--neutral-100);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.bubble code {
+    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.bubble p code {
+    background: #000000;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 13px;
+}
+
+/* --- Markdown Styling --- */
+.bubble h1, .bubble h2, .bubble h3 {
+    margin-top: 16px;
+    margin-bottom: 8px;
+    color: var(--highlight-header);
+    border-left: 4px solid var(--highlight-header);
+    padding-left: 12px;
+}
+
+.bubble h1 { font-size: 1.5em; }
+
+.bubble h2 { font-size: 1.3em; }
+
+.bubble h3 { font-size: 1.1em; }
+
+.bubble ul, .bubble ol {
+    padding-left: 24px;
+    margin: 8px 0;
+}
+
+.bubble li {
+    margin: 4px 0;
+}
+
+.bubble blockquote {
+    border-left: 3px solid var(--accent);
+    padding-left: 12px;
+    margin: 12px 0;
+    color: var(--muted);
+    font-style: italic;
+}
+
+.bubble a {
+    color: var(--highlight-link);
+    text-decoration: underline;
+}
+
+.bubble a:hover {
+    opacity: 0.8;
+}
+
+/* Syntax Highlighting for Special Text Patterns */
+/* Applied to .bubble-text (regular bubbles), .response-content (streaming), and .thinking-content */
+/* Snapshot IDs (e.g., SNAP-20251120-1212) */
+.bubble-text span[data-highlight="snapshot"],
+.response-content span[data-highlight="snapshot"],
+.thinking-content span[data-highlight="snapshot"] {
+    color: var(--highlight-snapshot);
+    font-weight: 600;
+}
+
+/* Citations [1], [2], etc. */
+.bubble-text span[data-highlight="citation"],
+.response-content span[data-highlight="citation"],
+.thinking-content span[data-highlight="citation"] {
+    color: var(--highlight-citation);
+    font-weight: 600;
+    background: rgba(77, 208, 225, 0.1);
+    padding: 0 4px;
+    border-radius: 3px;
+}
+
+/* Keywords and special terms */
+.bubble-text span[data-highlight="keyword"],
+.response-content span[data-highlight="keyword"],
+.thinking-content span[data-highlight="keyword"] {
+    color: var(--highlight-keyword);
+    font-weight: 600;
+}
+
+/* Numbers */
+.bubble-text span[data-highlight="number"],
+.response-content span[data-highlight="number"],
+.thinking-content span[data-highlight="number"] {
+    color: var(--highlight-number);
+    font-weight: 600;
+}
+
+/* Labels (text before : or ;) and numbered lists */
+.bubble-text span[data-highlight="label"],
+.response-content span[data-highlight="label"],
+.thinking-content span[data-highlight="label"] {
+    color: var(--highlight-label);
+    font-weight: 600;
+}
+
+/* Quotation marks */
+.bubble-text span[data-highlight="quote-mark"],
+.response-content span[data-highlight="quote-mark"],
+.thinking-content span[data-highlight="quote-mark"] {
+    color: var(--highlight-quote-mark);
+    font-weight: 700;
+}
+
+/* Text inside quotes */
+.bubble-text span[data-highlight="quoted-text"],
+.response-content span[data-highlight="quoted-text"],
+.thinking-content span[data-highlight="quoted-text"] {
+    color: var(--highlight-quoted-text);
+    font-weight: 500;
+}
+
+/* Square brackets [] */
+.bubble-text span[data-highlight="square-bracket"],
+.response-content span[data-highlight="square-bracket"],
+.thinking-content span[data-highlight="square-bracket"] {
+    color: var(--highlight-square-bracket);
+    font-weight: 700;
+}
+
+/* Round brackets/parentheses () */
+.bubble-text span[data-highlight="round-bracket"],
+.response-content span[data-highlight="round-bracket"],
+.thinking-content span[data-highlight="round-bracket"] {
+    color: var(--highlight-round-bracket);
+    font-weight: 700;
+}
+
+/* Text inside brackets (both square and round) */
+.bubble-text span[data-highlight="bracket-text"],
+.response-content span[data-highlight="bracket-text"],
+.thinking-content span[data-highlight="bracket-text"] {
+    color: var(--highlight-bracket-text);
+    font-weight: 500;
+}
+
+.bubble table {
+    border-collapse: collapse;
+    margin: 12px 0;
+    width: 100%;
+}
+
+.bubble th, .bubble td {
+    border: 1px solid var(--border);
+    padding: 8px;
+    text-align: left;
+}
+
+.bubble th {
+    background: #000000;
+    font-weight: 600;
+}
+
+/* --- Animated Thinking Bubble --- */
+.bubble.thinking {
+    position: relative;
+    background: linear-gradient(135deg, #000000 0%, #353535 100%);
+    border: 1px solid rgba(255,74,74,0.4);
+    animation: thinking-pulse 2s ease-in-out infinite;
+    overflow: visible;
+    min-width: 280px;
+    width: auto;
+    height: 48px;
+    min-height: 48px;
+    max-height: 48px;
+    padding: 14px 16px;
+    box-sizing: border-box;
+    contain: layout style;
+    will-change: opacity;
+}
+
+.bubble.thinking::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(
+        45deg,
+        transparent 30%,
+        rgba(255, 74, 74, 0.1) 50%,
+        transparent 70%
+    );
+    animation: thinking-shimmer 3s linear infinite;
+}
+
+.bubble.thinking .bubble-text {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Bubble Controls */
+.bubble-controls {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Polished bubble action buttons */
+.bubble-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    color: var(--muted);
+}
+
+.bubble-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.bubble-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--text);
+    transform: translateY(-1px);
+}
+
+.bubble-btn:active {
+    transform: translateY(0) scale(0.95);
+}
+
+/* Speak button states */
+.bubble-btn.speak-btn:hover {
+    color: var(--accent);
+    border-color: rgba(77, 208, 225, 0.3);
+}
+
+.bubble-btn.speak-btn.loading {
+    pointer-events: none;
+    color: var(--accent);
+    animation: bubble-btn-pulse 1.5s ease-in-out infinite;
+}
+
+.bubble-btn.speak-btn.playing {
+    background: rgba(77, 208, 225, 0.15);
+    color: var(--accent);
+    border-color: rgba(77, 208, 225, 0.4);
+}
+
+/* Copy button states */
+.bubble-btn.copy-btn:hover {
+    color: #66bb6a;
+    border-color: rgba(102, 187, 106, 0.3);
+}
+
+.bubble-btn.copy-btn.copied {
+    background: rgba(102, 187, 106, 0.15);
+    color: #66bb6a;
+    border-color: rgba(102, 187, 106, 0.4);
+}
+
+/* TTS button loading state - Red glow while generating */
+.bubble-btn.bubble-btn-loading {
+    background: rgba(255, 74, 74, 0.25);
+    border-color: rgba(255, 74, 74, 0.6);
+    color: #ff4a4a;
+    box-shadow: 0 0 12px rgba(255, 74, 74, 0.5), 0 0 24px rgba(255, 74, 74, 0.3);
+    animation: bubble-btn-pulse-red 1.5s ease-in-out infinite;
+}
+
+/* TTS button playing state - Green glow while playing */
+.bubble-btn.bubble-btn-playing {
+    background: rgba(102, 187, 106, 0.25);
+    border-color: rgba(102, 187, 106, 0.6);
+    color: #66bb6a;
+    box-shadow: 0 0 12px rgba(102, 187, 106, 0.5), 0 0 24px rgba(102, 187, 106, 0.3);
+    animation: bubble-btn-pulse-green 1.5s ease-in-out infinite;
+}
+
+/* Legacy button styles for backwards compat */
+.playbtn, .copybtn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-md) !important;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    color: var(--muted);
+    font-size: 16px;
+}
+
+.playbtn:hover, .copybtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text);
+}
+
+/* =============================================================================
+   Media Preview - Auto-rendered from URLs in model responses
+   When models output media URLs like /ui/uploads/image.png, they render inline
+   ============================================================================= */
+
+/* Inline media embeds in chat messages */
+.media-preview {
+    display: flex !important;
+    flex-direction: column !important;
+    margin: 16px 0;
+    padding: 0 0 8px 0;
+    background: transparent !important;
+    border: none !important;
+    border-radius: var(--radius-md) !important;
+    max-width: 100%;
+    overflow: visible;
+}
+
+.media-preview.media-image,
+.media-preview.media-video,
+.media-preview.media-audio {
+    background: transparent !important;
+    border: none !important;
+}
+
+/* Override any inline styles on older messages */
+.media-preview img,
+.media-preview img[style],
+.bubble img[style],
+.bubble .media-preview img,
+.bubble .media-preview.media-image img {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    max-height: 80vh !important;
+    border-radius: var(--radius-md) !important;
+    cursor: pointer;
+    transition: transform var(--transition-base), box-shadow var(--transition-base);
+    object-fit: contain !important;
+    margin-bottom: 8px;
+}
+
+.media-preview img:hover {
+    transform: scale(1.01);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+/* Ensure image container has room for content */
+.media-preview.media-image {
+    padding-bottom: 16px;
+    min-height: fit-content;
+}
+
+/* Force all images in chat to display properly */
+.bubble img {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 80vh !important;
+    object-fit: contain !important;
+}
+
+/* Override any inline styles on older messages - aggressive specificity */
+.media-preview video,
+.media-preview video[style],
+.bubble video[style],
+.bubble .media-preview video,
+.bubble .media-preview.media-video video,
+div.media-preview video,
+video[style*="max-height"] {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: 80vh !important;
+    border-radius: var(--radius-md) !important;
+    background: #000;
+    margin-bottom: 8px;
+    aspect-ratio: auto;
+    object-fit: contain !important;
+}
+
+/* Ensure video container has room for content */
+.media-preview.media-video {
+    padding-bottom: 16px;
+    min-height: fit-content;
+}
+
+/* Force all videos in chat to display properly */
+.bubble video {
+    width: 100% !important;
+    height: auto !important;
+    max-height: 80vh !important;
+    object-fit: contain !important;
+}
+
+.media-preview audio,
+.media-preview audio[style] {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 48px !important;
+    background: var(--neutral-150);
+    border-radius: var(--radius-md) !important;
+}
+
+/* Media controls row (download button, etc.) */
+.media-controls-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    order: 1;
+}
+
+/* Media download button */
+.media-download-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all var(--transition-base);
+}
+
+.media-download-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.media-download-btn:active {
+    transform: translateY(0) scale(0.98);
+}
+
+/* Caption/URL below the media */
+.media-caption {
+    display: block;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 8px;
+    padding: 6px 10px;
+    text-align: left;
+    font-family: 'Consolas', 'Monaco', monospace;
+    word-break: break-all;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-xs);
+    opacity: 0.8;
+    order: 2; /* Ensure caption comes after controls in flex layout */
+}
+
+.media-preview:hover .media-caption {
+    opacity: 1;
+}

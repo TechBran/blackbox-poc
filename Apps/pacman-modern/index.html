@@ -1,0 +1,1770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>PAC-MAN NEON 3D</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000005;
+            min-height: 100vh;
+            overflow: hidden;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            touch-action: none;
+        }
+
+        #gameCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* HUD - floating overlay */
+        .hud {
+            position: fixed;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 90%;
+            max-width: 600px;
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 15px;
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+        }
+
+        .hud-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .hud-label {
+            font-size: 0.7rem;
+            color: rgba(255, 255, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 2px;
+        }
+
+        .hud-value {
+            font-size: 1.2rem;
+            font-weight: 800;
+            color: #00ffff;
+            text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
+        }
+
+        .hud-value.score {
+            color: #ffff00;
+            text-shadow: 0 0 10px rgba(255, 255, 0, 0.8);
+        }
+
+        .lives {
+            display: flex;
+            gap: 8px;
+        }
+
+        .life {
+            width: 16px;
+            height: 16px;
+            background: radial-gradient(circle at 30% 30%, #ffff00, #cc9900);
+            border-radius: 50%;
+            box-shadow: 0 0 8px rgba(255, 255, 0, 0.6);
+        }
+
+        /* Menu overlay */
+        .menu-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 10, 0.9);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            backdrop-filter: blur(15px);
+        }
+
+        .menu-overlay.hidden {
+            display: none;
+        }
+
+        .menu-title {
+            font-size: 4rem;
+            font-weight: 900;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #ffff00, #ff00ff, #00ffff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 40px rgba(255, 255, 0, 0.3);
+            letter-spacing: -2px;
+        }
+
+        .menu-subtitle {
+            font-size: 1.2rem;
+            color: #00ffff;
+            margin-bottom: 40px;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+        }
+
+        .map-selection {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .map-card {
+            width: 140px;
+            padding: 20px;
+            background: rgba(20, 20, 50, 0.6);
+            border-radius: 16px;
+            border: 2px solid rgba(0, 255, 255, 0.2);
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-align: center;
+        }
+
+        .map-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(0, 255, 255, 0.8);
+            box-shadow: 0 10px 30px rgba(0, 255, 255, 0.2);
+            background: rgba(30, 30, 70, 0.8);
+        }
+
+        .map-card.selected {
+            border-color: #ffff00;
+            box-shadow: 0 0 30px rgba(255, 255, 0, 0.4);
+            background: rgba(40, 40, 80, 0.9);
+            transform: scale(1.05);
+        }
+
+        .map-name {
+            font-size: 1rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 5px;
+        }
+
+        .map-difficulty {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.5);
+            text-transform: uppercase;
+        }
+
+        .menu-btn {
+            padding: 18px 50px;
+            font-size: 1.2rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin: 10px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .menu-btn.primary {
+            background: linear-gradient(135deg, #ffff00, #ffaa00);
+            color: #000;
+            box-shadow: 0 0 30px rgba(255, 200, 0, 0.4);
+        }
+
+        .menu-btn.primary:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 50px rgba(255, 200, 0, 0.6);
+        }
+
+        .menu-btn.secondary {
+            background: transparent;
+            color: #00ffff;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+        }
+
+        .menu-btn.secondary:hover {
+            background: rgba(0, 255, 255, 0.1);
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.4);
+        }
+
+        /* Result overlay */
+        .result-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 10, 0.95);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+            backdrop-filter: blur(20px);
+        }
+
+        .result-overlay.hidden {
+            display: none;
+        }
+
+        .result-title {
+            font-size: 4rem;
+            font-weight: 900;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+        }
+
+        .result-title.win {
+            background: linear-gradient(90deg, #00ff00, #ffff00);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
+        }
+
+        .result-title.lose {
+            background: linear-gradient(90deg, #ff0000, #ff4400);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(255, 0, 0, 0.3);
+        }
+
+        .final-score {
+            font-size: 2rem;
+            color: #fff;
+            margin-bottom: 40px;
+            font-weight: 300;
+        }
+
+        .final-score strong {
+            color: #ffff00;
+            font-weight: 800;
+        }
+
+        /* Controls toggle */
+        .controls-toggle {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            width: 60px;
+            height: 60px;
+            background: rgba(0, 255, 255, 0.2);
+            border: 2px solid rgba(0, 255, 255, 0.5);
+            border-radius: 50%;
+            color: #00ffff;
+            font-size: 1.8rem;
+            cursor: pointer;
+            z-index: 150;
+            transition: all 0.3s;
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.2);
+            backdrop-filter: blur(5px);
+        }
+
+        .controls-toggle:active {
+            transform: scale(0.95);
+        }
+
+        .controls-toggle.active {
+            background: rgba(0, 255, 255, 0.4);
+            border-color: #00ffff;
+            box-shadow: 0 0 25px rgba(0, 255, 255, 0.4);
+        }
+
+        /* Mobile D-pad */
+        .mobile-controls {
+            display: none;
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            z-index: 150;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+
+        .mobile-controls.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 70px);
+            grid-template-rows: repeat(3, 70px);
+            gap: 8px;
+        }
+
+        .dpad-btn {
+            background: rgba(0, 255, 255, 0.15);
+            border: 1px solid rgba(0, 255, 255, 0.4);
+            border-radius: 15px;
+            color: #00ffff;
+            font-size: 2rem;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            transition: all 0.1s;
+        }
+
+        .dpad-btn:active {
+            background: rgba(0, 255, 255, 0.4);
+            transform: scale(0.95);
+        }
+
+        .dpad-btn.up { grid-column: 2; grid-row: 1; }
+        .dpad-btn.left { grid-column: 1; grid-row: 2; }
+        .dpad-btn.right { grid-column: 3; grid-row: 2; }
+        .dpad-btn.down { grid-column: 2; grid-row: 3; }
+
+        /* Power indicator */
+        .power-indicator {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            z-index: 90;
+        }
+
+        .power-indicator.active {
+            opacity: 1;
+        }
+
+        .power-bar {
+            width: 150px;
+            height: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 5px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .power-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ff00ff, #00ffff);
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.6);
+        }
+
+        .power-label {
+            text-align: right;
+            font-size: 0.8rem;
+            color: #ff00ff;
+            margin-bottom: 5px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        /* Combo display */
+        .combo-display {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4rem;
+            font-weight: 900;
+            color: #fff;
+            -webkit-text-stroke: 2px #ff00ff;
+            text-shadow: 0 0 40px rgba(255, 0, 255, 0.8);
+            opacity: 0;
+            pointer-events: none;
+            z-index: 100;
+            white-space: nowrap;
+        }
+
+        .combo-display.show {
+            animation: comboPopup 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes comboPopup {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5) rotate(-5deg); }
+            20% { opacity: 1; transform: translate(-50%, -50%) scale(1.2) rotate(5deg); }
+            100% { opacity: 0; transform: translate(-50%, -100%) scale(1) rotate(0deg); }
+        }
+
+        @media (max-width: 768px) {
+            .menu-title { font-size: 2.5rem; }
+            .menu-subtitle { font-size: 0.9rem; }
+            .map-card { width: 100px; padding: 15px; }
+            .menu-btn { padding: 15px 40px; font-size: 1rem; }
+            .controls-toggle { display: flex; align-items: center; justify-content: center; }
+            .mobile-controls { display: block; }
+            .hud { padding: 8px 15px; width: 95%; top: 5px; }
+            .hud-value { font-size: 1rem; }
+            .dpad { grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px); }
+            .dpad-btn { font-size: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+    <!-- Three.js Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- HUD -->
+    <div class="hud" id="hud" style="display: none;">
+        <div class="hud-item">
+            <div class="hud-label">Score</div>
+            <div class="hud-value score" id="scoreDisplay">0</div>
+        </div>
+        <div class="hud-item">
+            <div class="hud-label">Level</div>
+            <div class="hud-value" id="levelDisplay">1</div>
+        </div>
+        <div class="hud-item">
+            <div class="hud-label">Lives</div>
+            <div class="lives" id="livesDisplay">
+                <div class="life"></div>
+                <div class="life"></div>
+                <div class="life"></div>
+            </div>
+        </div>
+        <div class="hud-item">
+            <div class="hud-label">High Score</div>
+            <div class="hud-value score" id="highScoreDisplay">0</div>
+        </div>
+    </div>
+
+    <!-- Power Indicator -->
+    <div class="power-indicator" id="powerIndicator">
+        <div class="power-label">Power Up</div>
+        <div class="power-bar">
+            <div class="power-fill" id="powerFill" style="width: 100%;"></div>
+        </div>
+    </div>
+
+    <!-- Combo Display -->
+    <div class="combo-display" id="comboDisplay"></div>
+
+    <!-- Menu -->
+    <div class="menu-overlay" id="menuOverlay">
+        <div class="menu-title">PAC-MAN NEON 3D</div>
+        <div class="menu-subtitle">High Definition Remaster</div>
+        <div class="map-selection">
+            <div class="map-card selected" data-map="0">
+                <div class="map-name">CLASSIC</div>
+                <div class="map-difficulty">Easy</div>
+            </div>
+            <div class="map-card" data-map="1">
+                <div class="map-name">CYBER</div>
+                <div class="map-difficulty">Medium</div>
+            </div>
+            <div class="map-card" data-map="2">
+                <div class="map-name">NEON</div>
+                <div class="map-difficulty">Hard</div>
+            </div>
+        </div>
+        <button class="menu-btn primary" id="startBtn">START GAME</button>
+    </div>
+
+    <!-- Result Overlay -->
+    <div class="result-overlay hidden" id="resultOverlay">
+        <div class="result-title" id="resultTitle">GAME OVER</div>
+        <div class="final-score" id="finalScore">Final Score: <strong>0</strong></div>
+        <button class="menu-btn primary" id="restartBtn">PLAY AGAIN</button>
+        <button class="menu-btn secondary" id="menuBtn">MAIN MENU</button>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div class="mobile-controls" id="mobileControls">
+        <div class="dpad">
+            <button class="dpad-btn up" data-dir="up">▲</button>
+            <button class="dpad-btn left" data-dir="left">◀</button>
+            <button class="dpad-btn right" data-dir="right">▶</button>
+            <button class="dpad-btn down" data-dir="down">▼</button>
+        </div>
+    </div>
+    <button class="controls-toggle" id="controlsToggle">🎮</button>
+
+    <script>
+        // ==================== GAME CONSTANTS ====================
+        const CELL_SIZE = 1;
+        const COLS = 28;
+        const ROWS = 31;
+        const WALL_HEIGHT = 1.2; // Taller walls for more 3D depth
+
+        // Ghost colors
+        const GHOST_COLORS = [0xff0000, 0xffb8ff, 0x00ffff, 0xffb852];
+        const GHOST_NAMES = ['Blinky', 'Pinky', 'Inky', 'Clyde'];
+
+        // Power-up types
+        const POWERUP_TYPES = { SUPER: 0, SPEED: 1, FREEZE: 2, MAGNET: 3 };
+
+        // Maps
+        const MAPS = [
+            // Classic
+            [
+                "############################",
+                "#............##............#",
+                "#.####.#####.##.#####.####.#",
+                "#P####.#####.##.#####.####P#",
+                "#.####.#####.##.#####.####.#",
+                "#..........................#",
+                "#.####.##.########.##.####.#",
+                "#.####.##.########.##.####.#",
+                "#......##....##....##......#",
+                "######.##### ## #####.######",
+                "     #.##### ## #####.#     ",
+                "     #.##          ##.#     ",
+                "     #.## ###--### ##.#     ",
+                "######.## #      # ##.######",
+                "      .   #      #   .      ",
+                "######.## #      # ##.######",
+                "     #.## ######## ##.#     ",
+                "     #.##          ##.#     ",
+                "     #.## ######## ##.#     ",
+                "######.## ######## ##.######",
+                "#............##............#",
+                "#.####.#####.##.#####.####.#",
+                "#.####.#####.##.#####.####.#",
+                "#P..##.......  .......##..P#",
+                "###.##.##.########.##.##.###",
+                "###.##.##.########.##.##.###",
+                "#......##....##....##......#",
+                "#.##########.##.##########.#",
+                "#.##########.##.##########.#",
+                "#..........................#",
+                "############################"
+            ],
+            // Cyber Maze
+            [
+                "############################",
+                "#P........................P#",
+                "#.###.########.########.###.#",
+                "#.###.#......#.#......#.###.#",
+                "#.....#.####.#.#.####.#.....#",
+                "#####.#.#  #.#.#.#  #.#.#####",
+                "#.....#.####.#.#.####.#.....#",
+                "#.###.#......#.#......#.###.#",
+                "#.###.########.########.###.#",
+                "#..........................#",
+                "###.###.###.##.###.###.###.##",
+                "  #.# #.# #.##.# #.# #.# #.  ",
+                "  #.###.###.##.###.###.###.  ",
+                "###...........  ...........##",
+                "  #.###.###--##--###.###.  #",
+                "  #.# #.#      #.# #.# #.  #",
+                "###.###.#      #.###.###.###",
+                "#.......#      #.......#...#",
+                "#.#####.########.#####.###.#",
+                "#.#   #....##....#   #.....#",
+                "#.# # #.##.##.##.# # #.###.#",
+                "#.# ###.##.##.##.### #.###.#",
+                "#P......##....##.........P#",
+                "#.######.######.######.###.#",
+                "#.#....#........#....#.....#",
+                "#.#.##.#.######.#.##.#.###.#",
+                "#...##...#    #...##...# #.#",
+                "#.###### #    # ######.###.#",
+                "#........#    #........#...#",
+                "#.########    ########.###.#",
+                "############################"
+            ],
+            // Neon Grid (Hard)
+            [
+                "############################",
+                "#P..#......##......#.....P#",
+                "#.#.#.####.##.####.#.####.#",
+                "#.#...#..#.##.#..#...#..#.#",
+                "#.#####..#....#..#####..#.#",
+                "#.#...#..######..#...#..#.#",
+                "#.#.#.#..#....#..#.#.#..#.#",
+                "#...#....#.##.#....#....#.#",
+                "#####.####.##.####.####.###",
+                "#..........................#",
+                "#.###.###.####.###.###..#.#",
+                "#.# #.# #.#  #.# #.# #..#.#",
+                "#.###.###.#--#.###.###..#.#",
+                "#.........#  #..........#.#",
+                "####.####.#  #.####.####.##",
+                "   #....#.#  #.#....#.#    ",
+                "   #.##.#.####.#.##.#.#    ",
+                "####.##.#......#.##.#.#####",
+                "#....##.########.##........#",
+                "#.##.##..........##.######.#",
+                "#.##.#####.##.#####.#....#.#",
+                "#P...#.....##.....#.#.##.#P#",
+                "#.####.###.##.###.#.#.##.#.#",
+                "#.#....# #.##.# #.#.#....#.#",
+                "#.#.####.#.##.#.####.####.#",
+                "#.#.#....#....#....#.#....#",
+                "#.#.#.########.####.#.####.#",
+                "#...#..........#....#......#",
+                "#.#############.#########.##",
+                "#..........................#",
+                "############################"
+            ]
+        ];
+
+        // ==================== THREE.JS SETUP ====================
+        let scene, camera, renderer;
+        let pacmanMesh, pacmanGroup;
+        let ghostMeshes = [];
+        let wallMeshes = [];
+        let dotMeshes = [];
+        let powerDotMeshes = [];
+        let particles = [];
+        let mapGroup = new THREE.Group();
+
+        // ==================== GAME STATE ====================
+        let gameState = 'menu';
+        let selectedMap = 0;
+        let currentMap = [];
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('pacman3dHighScore') || '0');
+        let lives = 3;
+        let level = 1;
+        let dotsRemaining = 0;
+
+        // Pac-Man state
+        let pacman = {
+            x: 14, y: 23,
+            direction: 'right',
+            nextDirection: 'right',
+            mouthAngle: 0,
+            mouthOpen: true,
+            speed: 0.08,
+            powerTimer: 0,
+            speedBoost: false,
+            magnetActive: false
+        };
+
+        // Ghosts
+        let ghosts = [];
+
+        // Audio
+        let audioCtx = null;
+        let isMuted = false;
+
+        // ==================== INITIALIZATION ====================
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000005);
+            scene.fog = new THREE.FogExp2(0x000005, 0.02);
+            scene.add(mapGroup);
+
+            // Camera - Perspective for 3D depth
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            
+            // Initial positioning (will be updated by fitCamera)
+            camera.position.set(COLS/2, 25, ROWS/2 + 10);
+            camera.lookAt(COLS/2, 0, ROWS/2);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({
+                canvas: document.getElementById('gameCanvas'),
+                antialias: true,
+                powerPreference: "high-performance"
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+            renderer.toneMapping = THREE.ReinhardToneMapping;
+
+            // Lights
+            setupLights();
+
+            // Event listeners
+            setupEventListeners();
+
+            // Update high score display
+            document.getElementById('highScoreDisplay').textContent = highScore;
+
+            // Call fit camera initially
+            fitCameraToMap();
+
+            // Start render loop
+            animate();
+        }
+
+        function setupLights() {
+            // Ambient light - faint blue base
+            const ambient = new THREE.AmbientLight(0x111133, 0.4);
+            scene.add(ambient);
+
+            // Main directional light - dynamic shadows
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+            dirLight.position.set(COLS/2 - 10, 40, ROWS/2 - 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.bias = -0.0001;
+            
+            // Adjust shadow camera to cover map
+            const d = 30;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            
+            scene.add(dirLight);
+
+            // Colorful accent lights for "Neon" feel
+            const purpleLight = new THREE.PointLight(0xff00ff, 0.6, 50);
+            purpleLight.position.set(0, 5, 0);
+            scene.add(purpleLight);
+
+            const cyanLight = new THREE.PointLight(0x00ffff, 0.6, 50);
+            cyanLight.position.set(COLS, 5, ROWS);
+            scene.add(cyanLight);
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('resize', onWindowResize);
+            document.addEventListener('keydown', handleKeyDown);
+
+            // Map selection
+            document.querySelectorAll('.map-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    document.querySelectorAll('.map-card').forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    selectedMap = parseInt(card.dataset.map);
+                });
+            });
+
+            // Buttons
+            document.getElementById('startBtn').addEventListener('click', startGame);
+            document.getElementById('restartBtn').addEventListener('click', startGame);
+            document.getElementById('menuBtn').addEventListener('click', showMenu);
+
+            // Mobile controls
+            document.querySelectorAll('.dpad-btn').forEach(btn => {
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    pacman.nextDirection = btn.dataset.dir;
+                });
+                btn.addEventListener('click', () => {
+                    pacman.nextDirection = btn.dataset.dir;
+                });
+            });
+
+            // Controls toggle
+            const toggle = document.getElementById('controlsToggle');
+            const mobileControls = document.getElementById('mobileControls');
+            toggle.addEventListener('click', () => {
+                mobileControls.classList.toggle('visible');
+                toggle.classList.toggle('active');
+            });
+
+            // Swipe controls
+            setupSwipeControls();
+        }
+
+        function setupSwipeControls() {
+            let touchStartX = 0, touchStartY = 0;
+
+            document.addEventListener('touchstart', (e) => {
+                if (e.target.closest('button') || e.target.closest('.map-card')) return;
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+            }, { passive: true });
+
+            document.addEventListener('touchend', (e) => {
+                if (gameState !== 'playing') return;
+                const dx = e.changedTouches[0].clientX - touchStartX;
+                const dy = e.changedTouches[0].clientY - touchStartY;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+
+                if (dist > 30) {
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        pacman.nextDirection = dx > 0 ? 'right' : 'left';
+                    } else {
+                        pacman.nextDirection = dy > 0 ? 'down' : 'up';
+                    }
+                }
+            }, { passive: true });
+        }
+
+        function handleKeyDown(e) {
+            if (gameState !== 'playing') return;
+
+            switch(e.key) {
+                case 'ArrowUp': case 'w': case 'W':
+                    pacman.nextDirection = 'up'; e.preventDefault(); break;
+                case 'ArrowDown': case 's': case 'S':
+                    pacman.nextDirection = 'down'; e.preventDefault(); break;
+                case 'ArrowLeft': case 'a': case 'A':
+                    pacman.nextDirection = 'left'; e.preventDefault(); break;
+                case 'ArrowRight': case 'd': case 'D':
+                    pacman.nextDirection = 'right'; e.preventDefault(); break;
+                case 'p': case 'P':
+                    gameState = gameState === 'playing' ? 'paused' : 'playing'; break;
+                case 'm': case 'M':
+                    isMuted = !isMuted; break;
+            }
+        }
+
+        // DYNAMIC CAMERA FITTING LOGIC
+        function fitCameraToMap() {
+            // Calculate center of map
+            const centerX = COLS / 2;
+            const centerZ = ROWS / 2;
+
+            // Map dimensions with some padding
+            const mapWidth = COLS + 4;
+            const mapHeight = ROWS + 6; // Extra padding for tilt
+
+            // Screen aspect ratio
+            const aspect = window.innerWidth / window.innerHeight;
+
+            // Calculate FOV in radians
+            const fov = camera.fov * (Math.PI / 180);
+
+            // Calculate distance needed for height
+            let distanceHeight = mapHeight / (2 * Math.tan(fov / 2));
+
+            // Calculate distance needed for width
+            let distanceWidth = mapWidth / (2 * Math.tan(fov / 2) * aspect);
+
+            // Choose the larger distance to ensure full coverage
+            let distance = Math.max(distanceHeight, distanceWidth);
+
+            // Apply tilt and offset
+            // We want to look at the center, but from an angle
+            const tiltAngle = Math.PI / 6; // 30 degrees tilt
+
+            // Position camera
+            camera.position.set(centerX, distance * Math.cos(tiltAngle), centerZ + distance * Math.sin(tiltAngle));
+            camera.lookAt(centerX, 0, centerZ + 2); // Look slightly below center to center the board visually
+            camera.updateProjectionMatrix();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            fitCameraToMap();
+        }
+
+        // ==================== GAME CONTROL ====================
+        function startGame() {
+            initAudio();
+            gameState = 'playing';
+            score = 0;
+            lives = 3;
+            level = 1;
+
+            document.getElementById('menuOverlay').classList.add('hidden');
+            document.getElementById('resultOverlay').classList.add('hidden');
+            document.getElementById('hud').style.display = 'flex';
+
+            loadMap(selectedMap);
+            resetPositions();
+            updateHUD();
+            fitCameraToMap();
+        }
+
+        function showMenu() {
+            gameState = 'menu';
+            document.getElementById('menuOverlay').classList.remove('hidden');
+            document.getElementById('resultOverlay').classList.add('hidden');
+            document.getElementById('hud').style.display = 'none';
+
+            // Keep 3D scene but maybe rotate camera in future
+            // For now, clear to save resources
+            clearScene();
+        }
+
+        function clearScene() {
+            // Clear everything from mapGroup
+            while(mapGroup.children.length > 0){ 
+                mapGroup.remove(mapGroup.children[0]); 
+            }
+
+            wallMeshes = [];
+            dotMeshes = [];
+            powerDotMeshes = [];
+            ghostMeshes = [];
+            particles = [];
+            pacmanGroup = null;
+        }
+
+        function loadMap(mapIndex) {
+            clearScene();
+            currentMap = MAPS[mapIndex].map(row => row.split(''));
+            dotsRemaining = 0;
+
+            // 1. Create Floor with Grid Texture
+            const gridSize = COLS * ROWS;
+            const floorGeo = new THREE.PlaneGeometry(COLS + 4, ROWS + 4);
+            const floorMat = new THREE.MeshStandardMaterial({
+                color: 0x0a0a2a,
+                roughness: 0.1,
+                metalness: 0.5,
+            });
+            const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+            floorMesh.rotation.x = -Math.PI / 2;
+            floorMesh.position.set(COLS/2 - 0.5, -0.1, ROWS/2 - 0.5);
+            floorMesh.receiveShadow = true;
+            mapGroup.add(floorMesh);
+
+            // Add grid helper
+            const gridHelper = new THREE.GridHelper(Math.max(COLS, ROWS) * 1.5, Math.max(COLS, ROWS) * 1.5, 0x3333aa, 0x111133);
+            gridHelper.position.set(COLS/2 - 0.5, -0.05, ROWS/2 - 0.5);
+            mapGroup.add(gridHelper);
+
+            // 2. Build Map Elements
+            // Using InstancedMesh for walls could perform better but let's stick to simple meshes for clarity and neon effects
+            for (let y = 0; y < ROWS; y++) {
+                for (let x = 0; x < COLS; x++) {
+                    const cell = currentMap[y][x];
+
+                    if (cell === '#') {
+                        createWall(x, y);
+                    } else if (cell === '.') {
+                        createDot(x, y);
+                        dotsRemaining++;
+                    } else if (cell === 'P') {
+                        createPowerDot(x, y);
+                        dotsRemaining++;
+                    } else if (cell === '-') {
+                        createGhostDoor(x, y);
+                    }
+                }
+            }
+
+            // 3. Create Characters
+            createPacman();
+            createGhosts();
+        }
+
+        function createWall(x, y) {
+            // Enhanced Wall: Glossy, rounded, neon edges
+            const geo = new THREE.BoxGeometry(CELL_SIZE * 0.9, WALL_HEIGHT, CELL_SIZE * 0.9);
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0x1a3a6e,
+                emissive: 0x051a3a,
+                emissiveIntensity: 0.5,
+                metalness: 0.8,
+                roughness: 0.1
+            });
+
+            const wall = new THREE.Mesh(geo, mat);
+            wall.position.set(x, WALL_HEIGHT/2, y);
+            wall.castShadow = true;
+            wall.receiveShadow = true;
+            mapGroup.add(wall);
+            wallMeshes.push(wall);
+
+            // Neon Edge
+            const edgeGeo = new THREE.EdgesGeometry(geo);
+            const edgeMat = new THREE.LineBasicMaterial({ color: 0x00ffff, opacity: 0.5, transparent: true });
+            const edges = new THREE.LineSegments(edgeGeo, edgeMat);
+            edges.position.copy(wall.position);
+            mapGroup.add(edges);
+        }
+
+        function createGhostDoor(x, y) {
+            const geo = new THREE.BoxGeometry(CELL_SIZE, 0.2, CELL_SIZE * 0.2);
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0xff88ff,
+                emissive: 0xff00ff,
+                emissiveIntensity: 1
+            });
+            const door = new THREE.Mesh(geo, mat);
+            door.position.set(x, 0.1, y);
+            mapGroup.add(door);
+        }
+
+        function createDot(x, y) {
+            const geo = new THREE.SphereGeometry(0.12, 8, 8);
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0xffd700,
+                emissive: 0xffaa00,
+                emissiveIntensity: 0.5,
+                metalness: 0.9,
+                roughness: 0.1
+            });
+            const dot = new THREE.Mesh(geo, mat);
+            dot.position.set(x, 0.5, y); // Floating higher
+            dot.userData = { x, y, type: 'dot', originalY: 0.5 };
+            mapGroup.add(dot);
+            dotMeshes.push(dot);
+        }
+
+        function createPowerDot(x, y) {
+            const geo = new THREE.SphereGeometry(0.25, 16, 16);
+            const mat = new THREE.MeshStandardMaterial({
+                color: 0xff00ff,
+                emissive: 0xff00ff,
+                emissiveIntensity: 0.8,
+                metalness: 0.5,
+                roughness: 0.1
+            });
+            const dot = new THREE.Mesh(geo, mat);
+            dot.position.set(x, 0.5, y);
+            dot.userData = { x, y, type: 'power', originalY: 0.5 };
+            mapGroup.add(dot);
+            powerDotMeshes.push(dot);
+
+            // Glow
+            const light = new THREE.PointLight(0xff00ff, 1, 4);
+            light.position.copy(dot.position);
+            mapGroup.add(light);
+            dot.userData.light = light;
+        }
+
+        function createPacman() {
+            pacmanGroup = new THREE.Group();
+
+            // Container for rotation
+            const pacmanBody = new THREE.Group();
+            pacmanGroup.add(pacmanBody);
+            pacmanGroup.userData.body = pacmanBody;
+
+            const material = new THREE.MeshStandardMaterial({
+                color: 0xffff00,
+                emissive: 0xaa6600,
+                emissiveIntensity: 0.2,
+                metalness: 0.4,
+                roughness: 0.1,
+                side: THREE.DoubleSide
+            });
+
+            // Top Half
+            const topGeo = new THREE.SphereGeometry(0.4, 32, 16, 0, Math.PI * 2, 0, Math.PI/2);
+            const topHalf = new THREE.Mesh(topGeo, material);
+            pacmanBody.add(topHalf);
+            pacmanGroup.userData.topHalf = topHalf;
+
+            // Bottom Half
+            const botGeo = new THREE.SphereGeometry(0.4, 32, 16, 0, Math.PI * 2, Math.PI/2, Math.PI/2);
+            const botHalf = new THREE.Mesh(botGeo, material);
+            pacmanBody.add(botHalf);
+            pacmanGroup.userData.botHalf = botHalf;
+
+            // Eyes (attached to top half)
+            const eyeGeo = new THREE.SphereGeometry(0.08, 12, 12);
+            const eyeMat = new THREE.MeshBasicMaterial({ color: 0x000000 });
+            
+            const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+            leftEye.position.set(-0.2, 0.25, 0.25);
+            topHalf.add(leftEye);
+
+            const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+            rightEye.position.set(0.2, 0.25, 0.25);
+            topHalf.add(rightEye);
+
+            // Internal glow light
+            const light = new THREE.PointLight(0xffff00, 0.5, 5);
+            pacmanGroup.add(light);
+
+            pacmanGroup.position.set(pacman.x, 0.4, pacman.y);
+            mapGroup.add(pacmanGroup);
+        }
+
+        function createGhosts() {
+            ghosts = [];
+            ghostMeshes = [];
+
+            const startPositions = [
+                { x: 13, y: 14 },
+                { x: 14, y: 14 },
+                { x: 13, y: 13 },
+                { x: 14, y: 13 }
+            ];
+
+            for (let i = 0; i < 4; i++) {
+                const ghost = {
+                    x: startPositions[i].x,
+                    y: startPositions[i].y,
+                    color: i,
+                    direction: ['left', 'up', 'right', 'down'][i],
+                    mode: 'scatter',
+                    scared: false,
+                    frozen: false,
+                    speed: 0.06 - i * 0.005
+                };
+                ghosts.push(ghost);
+
+                // Ghost Group
+                const group = new THREE.Group();
+
+                // Classic Ghost Shape using merged geometries or primitive combo
+                // Body (Cylinder top-half)
+                const bodyGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.4, 16);
+                const bodyMat = new THREE.MeshStandardMaterial({
+                    color: GHOST_COLORS[i],
+                    emissive: GHOST_COLORS[i],
+                    emissiveIntensity: 0.4,
+                    transparent: true,
+                    opacity: 0.9
+                });
+                const body = new THREE.Mesh(bodyGeo, bodyMat);
+                body.position.y = 0.2;
+                group.add(body);
+
+                // Head (Sphere top-half)
+                const headGeo = new THREE.SphereGeometry(0.35, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+                const head = new THREE.Mesh(headGeo, bodyMat);
+                head.position.y = 0.4;
+                group.add(head);
+
+                // Skirt (Little cones or cylinders)
+                for(let j=0; j<3; j++) {
+                    const skirt = new THREE.Mesh(
+                        new THREE.ConeGeometry(0.12, 0.2, 8),
+                        bodyMat
+                    );
+                    skirt.position.set((j-1)*0.2, 0, 0);
+                    group.add(skirt);
+                }
+
+                // Eyes
+                const eyeGeo = new THREE.SphereGeometry(0.1, 16, 16);
+                const eyeMat = new THREE.MeshStandardMaterial({ color: 0xffffff });
+                const pupilMat = new THREE.MeshStandardMaterial({ color: 0x0000aa });
+
+                const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+                leftEye.position.set(-0.15, 0.45, -0.22);
+                group.add(leftEye);
+
+                const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+                rightEye.position.set(0.15, 0.45, -0.22);
+                group.add(rightEye);
+
+                const pupilGeo = new THREE.SphereGeometry(0.05, 8, 8);
+                const leftPupil = new THREE.Mesh(pupilGeo, pupilMat);
+                leftPupil.position.set(-0.15, 0.48, -0.3);
+                group.add(leftPupil);
+
+                const rightPupil = new THREE.Mesh(pupilGeo, pupilMat);
+                rightPupil.position.set(0.15, 0.48, -0.3);
+                group.add(rightPupil);
+
+                // Internal Light
+                const light = new THREE.PointLight(GHOST_COLORS[i], 0.8, 4);
+                light.position.y = 0.3;
+                group.add(light);
+
+                group.position.set(ghost.x, 0.2, ghost.y);
+                group.userData = { ghost, bodyMat, originalColor: GHOST_COLORS[i] };
+                
+                mapGroup.add(group);
+                ghostMeshes.push(group);
+            }
+        }
+
+        function resetPositions() {
+            pacman.x = 14;
+            pacman.y = 23;
+            pacman.direction = 'right';
+            pacman.nextDirection = 'right';
+            pacman.powerTimer = 0;
+            pacman.speedBoost = false;
+            pacman.magnetActive = false;
+
+            if (pacmanGroup) {
+                pacmanGroup.position.set(pacman.x, 0.4, pacman.y);
+                pacmanGroup.rotation.y = 0;
+            }
+
+            const startPositions = [
+                { x: 13, y: 14 },
+                { x: 14, y: 14 },
+                { x: 13, y: 13 },
+                { x: 14, y: 13 }
+            ];
+
+            ghosts.forEach((ghost, i) => {
+                ghost.x = startPositions[i].x;
+                ghost.y = startPositions[i].y;
+                ghost.scared = false;
+                ghost.frozen = false;
+
+                if (ghostMeshes[i]) {
+                    ghostMeshes[i].position.set(ghost.x, 0.2, ghost.y);
+                    const data = ghostMeshes[i].userData;
+                    if (data.bodyMat) {
+                        data.bodyMat.color.setHex(data.originalColor);
+                        data.bodyMat.emissive.setHex(data.originalColor);
+                    }
+                }
+            });
+        }
+
+        // ==================== PARTICLE SYSTEM ====================
+        function spawnParticles(x, y, color, count = 10) {
+            const geo = new THREE.BoxGeometry(0.1, 0.1, 0.1);
+            const mat = new THREE.MeshBasicMaterial({ color: color });
+
+            for (let i = 0; i < count; i++) {
+                const mesh = new THREE.Mesh(geo, mat);
+                mesh.position.set(x, 0.5, y);
+                
+                // Random velocity
+                const v = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.2,
+                    Math.random() * 0.2,
+                    (Math.random() - 0.5) * 0.2
+                );
+
+                mapGroup.add(mesh);
+                particles.push({ mesh, velocity: v, life: 1.0 });
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.life -= 0.02;
+
+                if (p.life <= 0) {
+                    mapGroup.remove(p.mesh);
+                    particles.splice(i, 1);
+                } else {
+                    p.mesh.position.add(p.velocity);
+                    p.velocity.y -= 0.01; // Gravity
+                    p.mesh.rotation.x += 0.1;
+                    p.mesh.rotation.z += 0.1;
+                    p.mesh.scale.setScalar(p.life);
+                }
+            }
+        }
+
+        // ==================== GAME LOGIC ====================
+        function update() {
+            if (gameState !== 'playing') return;
+
+            // Animate Pac-Man mouth
+            pacman.mouthAngle += 0.3;
+            const openAmount = (Math.sin(pacman.mouthAngle) + 1) * 0.4; // 0 to 0.8 radians
+            
+            if (pacmanGroup && pacmanGroup.userData.topHalf) {
+                // Rotate halves to open/close mouth
+                // We rotate around the X axis relative to the body
+                pacmanGroup.userData.topHalf.rotation.x = -openAmount;
+                pacmanGroup.userData.botHalf.rotation.x = openAmount;
+                
+                // Bobbing
+                pacmanGroup.position.y = 0.4 + Math.sin(pacman.mouthAngle * 0.5) * 0.03;
+            }
+
+            // Power timer
+            if (pacman.powerTimer > 0) {
+                pacman.powerTimer--;
+                document.getElementById('powerIndicator').classList.add('active');
+                document.getElementById('powerFill').style.width = (pacman.powerTimer / 300 * 100) + '%';
+
+                if (pacman.powerTimer === 0) {
+                    ghosts.forEach((g, i) => {
+                        g.scared = false;
+                        g.frozen = false;
+                        const data = ghostMeshes[i].userData;
+                        if (data.bodyMat) {
+                            data.bodyMat.color.setHex(data.originalColor);
+                            data.bodyMat.emissive.setHex(data.originalColor);
+                        }
+                    });
+                    pacman.speedBoost = false;
+                    pacman.magnetActive = false;
+                    document.getElementById('powerIndicator').classList.remove('active');
+                }
+            }
+
+            // Move Pac-Man
+            movePacman();
+
+            // Move ghosts
+            ghosts.forEach((ghost, i) => {
+                if (!ghost.frozen) {
+                    moveGhost(ghost, i);
+                }
+            });
+
+            // Check collisions
+            checkCollisions();
+
+            // Update 3D positions
+            updatePositions();
+
+            // Animate power dots & regular dots
+            const time = Date.now() * 0.002;
+            dotMeshes.forEach((dot, i) => {
+                dot.position.y = dot.userData.originalY + Math.sin(time + i * 0.5) * 0.1;
+            });
+
+            powerDotMeshes.forEach((dot, i) => {
+                if (dot.visible) {
+                    dot.rotation.y += 0.05;
+                    dot.rotation.x += 0.02;
+                    const pulse = Math.sin(time * 3) * 0.2 + 1;
+                    dot.scale.set(pulse, pulse, pulse);
+                }
+            });
+
+            // Update particles
+            updateParticles();
+        }
+
+        function movePacman() {
+            const speed = pacman.speedBoost ? pacman.speed * 1.5 : pacman.speed;
+
+            // Try to change direction
+            if (canMove(pacman.x, pacman.y, pacman.nextDirection)) {
+                pacman.direction = pacman.nextDirection;
+            }
+
+            // Move
+            if (canMove(pacman.x, pacman.y, pacman.direction)) {
+                switch(pacman.direction) {
+                    case 'up': pacman.y -= speed; break;
+                    case 'down': pacman.y += speed; break;
+                    case 'left': pacman.x -= speed; break;
+                    case 'right': pacman.x += speed; break;
+                }
+            }
+
+            // Tunnel wrap
+            if (pacman.x < 0) pacman.x = COLS - 1;
+            if (pacman.x >= COLS) pacman.x = 0;
+
+            // Collect dots
+            const cellX = Math.round(pacman.x);
+            const cellY = Math.round(pacman.y);
+            
+            // Basic proximity check for smoother eating
+            const dist = 0.4;
+
+            // Check current cell
+            checkEat(cellX, cellY);
+            
+            // Check neighbor if close
+            if (pacman.x - Math.floor(pacman.x) > 0.5) checkEat(cellX + 1, cellY);
+            if (pacman.y - Math.floor(pacman.y) > 0.5) checkEat(cellX, cellY + 1);
+
+            function checkEat(cx, cy) {
+                if (cx >= 0 && cx < COLS && cy >= 0 && cy < ROWS) {
+                    const cell = currentMap[cy][cx];
+                    // Distance check to ensure we are actually hitting the dot
+                    const dx = pacman.x - cx;
+                    const dy = pacman.y - cy;
+                    if (dx*dx + dy*dy < 0.25) { // 0.5 radius squared
+                        if (cell === '.') {
+                            currentMap[cy][cx] = ' ';
+                            score += 10;
+                            dotsRemaining--;
+                            playSound('eat');
+                            spawnParticles(cx, cy, 0xffd700, 5);
+                            removeDot(cx, cy);
+                            updateHUD();
+                        } else if (cell === 'P') {
+                            currentMap[cy][cx] = ' ';
+                            score += 50;
+                            dotsRemaining--;
+                            activatePowerUp(POWERUP_TYPES.SUPER);
+                            playSound('power');
+                            spawnParticles(cx, cy, 0xff00ff, 15);
+                            removePowerDot(cx, cy);
+                            updateHUD();
+                        }
+
+                        if (dotsRemaining === 0) {
+                            levelComplete();
+                        }
+                    }
+                }
+            }
+        }
+
+        function canMove(x, y, direction) {
+            let newX = x, newY = y;
+            const offset = 0.45; // slightly less than 0.5 to allow corner cutting
+
+            switch(direction) {
+                case 'up': newY -= offset; break;
+                case 'down': newY += offset; break;
+                case 'left': newX -= offset; break;
+                case 'right': newX += offset; break;
+            }
+
+            const cellX = Math.round(newX);
+            const cellY = Math.round(newY);
+
+            if (cellX < 0 || cellX >= COLS) return true;
+            if (cellY < 0 || cellY >= ROWS) return false;
+
+            const cell = currentMap[cellY][cellX];
+            return cell !== '#' && cell !== '-';
+        }
+
+        function moveGhost(ghost, index) {
+            const speed = ghost.scared ? 0.03 : ghost.speed;
+
+            // Simple AI
+            if (Math.random() < 0.02) {
+                ghost.mode = ghost.mode === 'chase' ? 'scatter' : 'chase';
+            }
+
+            // Determine target
+            let targetX, targetY;
+            if (ghost.scared) {
+                targetX = pacman.x < COLS/2 ? COLS : 0;
+                targetY = pacman.y < ROWS/2 ? ROWS : 0;
+            } else if (ghost.mode === 'chase') {
+                switch(ghost.color) {
+                    case 0: targetX = pacman.x; targetY = pacman.y; break;
+                    case 1:
+                        targetX = pacman.x + (pacman.direction === 'right' ? 4 : pacman.direction === 'left' ? -4 : 0);
+                        targetY = pacman.y + (pacman.direction === 'down' ? 4 : pacman.direction === 'up' ? -4 : 0);
+                        break;
+                    case 2:
+                        targetX = pacman.x * 2 - ghosts[0].x;
+                        targetY = pacman.y * 2 - ghosts[0].y;
+                        break;
+                    case 3:
+                        const dist = Math.hypot(ghost.x - pacman.x, ghost.y - pacman.y);
+                        if (dist < 8) { targetX = 0; targetY = ROWS; }
+                        else { targetX = pacman.x; targetY = pacman.y; }
+                        break;
+                }
+            } else {
+                const corners = [[0,0], [COLS,0], [COLS,ROWS], [0,ROWS]];
+                targetX = corners[ghost.color][0];
+                targetY = corners[ghost.color][1];
+            }
+
+            // Find best direction
+            const directions = ['up', 'down', 'left', 'right'];
+            const opposite = { up: 'down', down: 'up', left: 'right', right: 'left' };
+
+            let bestDir = ghost.direction;
+            let bestDist = Infinity;
+            let validMoves = [];
+
+            directions.forEach(dir => {
+                if (dir === opposite[ghost.direction]) return;
+
+                let testX = ghost.x, testY = ghost.y;
+                switch(dir) {
+                    case 'up': testY -= 1; break;
+                    case 'down': testY += 1; break;
+                    case 'left': testX -= 1; break;
+                    case 'right': testX += 1; break;
+                }
+
+                const cellX = Math.round(testX);
+                const cellY = Math.round(testY);
+
+                if (cellX >= 0 && cellX < COLS && cellY >= 0 && cellY < ROWS) {
+                    if (currentMap[cellY][cellX] !== '#') {
+                        const d = Math.hypot(testX - targetX, testY - targetY);
+                        validMoves.push({dir, dist: d});
+                    }
+                }
+            });
+
+            if (validMoves.length > 0) {
+                validMoves.sort((a, b) => a.dist - b.dist);
+                // 90% chance to take best route, 10% random for organic feel
+                bestDir = Math.random() < 0.9 ? validMoves[0].dir : validMoves[Math.floor(Math.random() * validMoves.length)].dir;
+            } else {
+                // Dead end, reverse
+                bestDir = opposite[ghost.direction];
+            }
+
+            ghost.direction = bestDir;
+
+            switch(ghost.direction) {
+                case 'up': ghost.y -= speed; break;
+                case 'down': ghost.y += speed; break;
+                case 'left': ghost.x -= speed; break;
+                case 'right': ghost.x += speed; break;
+            }
+
+            // Tunnel
+            if (ghost.x < 0) ghost.x = COLS - 1;
+            if (ghost.x >= COLS) ghost.x = 0;
+        }
+
+        function checkCollisions() {
+            ghosts.forEach((ghost, i) => {
+                const dist = Math.hypot(pacman.x - ghost.x, pacman.y - ghost.y);
+
+                if (dist < 0.8) {
+                    if (ghost.scared) {
+                        // Eat ghost
+                        ghost.x = 13 + Math.random();
+                        ghost.y = 14;
+                        ghost.scared = false;
+                        score += 200;
+                        playSound('ghost');
+                        showCombo('+200');
+                        spawnParticles(pacman.x, pacman.y, GHOST_COLORS[i], 20);
+                        updateHUD();
+
+                        const data = ghostMeshes[i].userData;
+                        if (data.bodyMat) {
+                            data.bodyMat.color.setHex(data.originalColor);
+                            data.bodyMat.emissive.setHex(data.originalColor);
+                        }
+                    } else if (!ghost.frozen) {
+                        // Pac-Man dies
+                        lives--;
+                        updateHUD();
+
+                        if (lives <= 0) {
+                            gameOver();
+                        } else {
+                            playSound('death');
+                            spawnParticles(pacman.x, pacman.y, 0xffff00, 30);
+                            resetPositions();
+                        }
+                    }
+                }
+            });
+        }
+
+        function updatePositions() {
+            // Update Pac-Man
+            if (pacmanGroup) {
+                // Position
+                pacmanGroup.position.x = pacman.x;
+                pacmanGroup.position.z = pacman.y;
+
+                // Rotation - rotate the inner body container, not the whole group
+                // This keeps the mouth axes aligned correctly
+                const targetRot = { right: Math.PI/2, down: Math.PI, left: -Math.PI/2, up: 0 }[pacman.direction];
+                
+                if (pacmanGroup.userData.body) {
+                    let rotDiff = targetRot - pacmanGroup.userData.body.rotation.y;
+                    while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
+                    while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
+                    pacmanGroup.userData.body.rotation.y += rotDiff * 0.25;
+                }
+            }
+
+            // Update ghosts
+            ghosts.forEach((ghost, i) => {
+                if (ghostMeshes[i]) {
+                    ghostMeshes[i].position.x = ghost.x;
+                    ghostMeshes[i].position.z = ghost.y;
+                    
+                    // Look at Pac-Man if chasing, else look forward
+                    if (ghost.mode === 'chase' && !ghost.scared) {
+                        ghostMeshes[i].lookAt(pacman.x, 0.2, pacman.y);
+                    } else {
+                         const targetRot = { right: Math.PI/2, down: Math.PI, left: -Math.PI/2, up: 0 }[ghost.direction];
+                         //ghostMeshes[i].rotation.y = targetRot;
+                    }
+
+                    // Float animation
+                    ghostMeshes[i].position.y = 0.2 + Math.sin(Date.now() * 0.003 + i * 2) * 0.05;
+                }
+            });
+        }
+
+        function removeDot(x, y) {
+            const dot = dotMeshes.find(d => d.userData.x === x && d.userData.y === y);
+            if (dot) {
+                mapGroup.remove(dot);
+                dotMeshes = dotMeshes.filter(d => d !== dot);
+            }
+        }
+
+        function removePowerDot(x, y) {
+            const dot = powerDotMeshes.find(d => d.userData.x === x && d.userData.y === y);
+            if (dot) {
+                if (dot.userData.light) mapGroup.remove(dot.userData.light);
+                mapGroup.remove(dot);
+                powerDotMeshes = powerDotMeshes.filter(d => d !== dot);
+            }
+        }
+
+        function activatePowerUp(type) {
+            pacman.powerTimer = 400;
+
+            switch(type) {
+                case POWERUP_TYPES.SUPER:
+                    ghosts.forEach((g, i) => {
+                        g.scared = true;
+                        const data = ghostMeshes[i].userData;
+                        if (data.bodyMat) {
+                            data.bodyMat.color.setHex(0x0000ff);
+                            data.bodyMat.emissive.setHex(0x0000ff);
+                        }
+                    });
+                    showCombo('POWER UP!');
+                    break;
+                case POWERUP_TYPES.SPEED:
+                    pacman.speedBoost = true;
+                    showCombo('SPEED!');
+                    break;
+                case POWERUP_TYPES.FREEZE:
+                    ghosts.forEach(g => g.frozen = true);
+                    showCombo('FREEZE!');
+                    break;
+                case POWERUP_TYPES.MAGNET:
+                    pacman.magnetActive = true;
+                    showCombo('MAGNET!');
+                    break;
+            }
+        }
+
+        function showCombo(text) {
+            const display = document.getElementById('comboDisplay');
+            display.textContent = text;
+            display.classList.remove('show');
+            void display.offsetWidth;
+            display.classList.add('show');
+        }
+
+        function levelComplete() {
+            playSound('win');
+            level++;
+
+            if (level > 3) {
+                gameState = 'win';
+                if (score > highScore) {
+                    highScore = score;
+                    localStorage.setItem('pacman3dHighScore', highScore);
+                }
+                document.getElementById('resultTitle').textContent = 'VICTORY!';
+                document.getElementById('resultTitle').className = 'result-title win';
+                document.getElementById('finalScore').innerHTML = `Final Score: <strong>${score}</strong>`;
+                document.getElementById('resultOverlay').classList.remove('hidden');
+            } else {
+                selectedMap = (selectedMap + 1) % MAPS.length;
+                loadMap(selectedMap);
+                resetPositions();
+                updateHUD();
+                fitCameraToMap();
+            }
+        }
+
+        function gameOver() {
+            gameState = 'gameover';
+            playSound('death');
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('pacman3dHighScore', highScore);
+            }
+
+            document.getElementById('resultTitle').textContent = 'GAME OVER';
+            document.getElementById('resultTitle').className = 'result-title lose';
+            document.getElementById('finalScore').innerHTML = `Score: <strong>${score}</strong>`;
+            document.getElementById('resultOverlay').classList.remove('hidden');
+        }
+
+        function updateHUD() {
+            document.getElementById('scoreDisplay').textContent = score;
+            document.getElementById('levelDisplay').textContent = level;
+            document.getElementById('highScoreDisplay').textContent = highScore;
+
+            const livesContainer = document.getElementById('livesDisplay');
+            livesContainer.innerHTML = '';
+            for (let i = 0; i < lives; i++) {
+                const life = document.createElement('div');
+                life.className = 'life';
+                livesContainer.appendChild(life);
+            }
+        }
+
+        // ==================== AUDIO ====================
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
+        function playSound(type) {
+            if (isMuted || !audioCtx) return;
+
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            const now = audioCtx.currentTime;
+
+            switch(type) {
+                case 'eat':
+                    // Short, crisp blip
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(800, now + 0.05);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
+                    osc.start(); osc.stop(now + 0.05);
+                    break;
+                case 'power':
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(200, now);
+                    osc.frequency.linearRampToValueAtTime(600, now + 0.3);
+                    osc.frequency.linearRampToValueAtTime(200, now + 0.6);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.linearRampToValueAtTime(0, now + 0.6);
+                    osc.start(); osc.stop(now + 0.6);
+                    break;
+                case 'ghost':
+                    // Eaten ghost
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(800, now);
+                    osc.frequency.exponentialRampToValueAtTime(200, now + 0.4);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+                    osc.start(); osc.stop(now + 0.4);
+                    break;
+                case 'death':
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(500, now);
+                    osc.frequency.exponentialRampToValueAtTime(50, now + 0.8);
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+                    osc.start(); osc.stop(now + 0.8);
+                    break;
+                case 'win':
+                    [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+                        const o = audioCtx.createOscillator();
+                        const g = audioCtx.createGain();
+                        o.connect(g); g.connect(audioCtx.destination);
+                        o.type = 'triangle';
+                        o.frequency.value = freq;
+                        g.gain.setValueAtTime(0.1, now + i * 0.1);
+                        g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.1 + 0.4);
+                        o.start(now + i * 0.1);
+                        o.stop(now + i * 0.1 + 0.4);
+                    });
+                    break;
+            }
+        }
+
+        // ==================== RENDER LOOP ====================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            update();
+
+            renderer.render(scene, camera);
+        }
+
+        // Start
+        window.onload = init;
+    </script>
+</body>
+</html>

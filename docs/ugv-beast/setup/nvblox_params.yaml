@@ -1,0 +1,29 @@
+nvblox_node:
+  ros__parameters:
+    voxel_size: 0.05
+    esdf_mode: "2d"
+    mapping_type: "static_tsdf"
+    use_depth: true
+    use_color: false
+    use_lidar: false
+    num_cameras: 1
+    integrate_depth_rate_hz: 15.0
+    integrate_color_rate_hz: 0.0
+    integrate_lidar_rate_hz: 0.0
+    update_esdf_rate_hz: 5.0
+    update_mesh_rate_hz: 0.0
+    publish_layer_rate_hz: 1.0
+    map_clearing_radius_m: 5.0
+    map_clearing_frame_id: "base_footprint"
+    projective_integrator_max_integration_distance_m: 4.0
+    projective_integrator_truncation_distance_vox: 4.0
+    max_back_projection_distance: 5.0
+    weighting_mode: "inverse_square"
+    slice_height: 0.15
+    min_height: 0.05
+    max_height: 1.5
+    global_frame: "odom"
+    pose_frame: "base_footprint"
+    use_tf_transforms: true
+    depth_qos: "SENSOR_DATA"
+    color_qos: "SENSOR_DATA"

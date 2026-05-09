@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""waypoints_bridge - vizanti Path topic to Nav2 FollowWaypoints action.
+
+Vizanti's waypoint widget publishes a nav_msgs/Path message to /waypoints
+(default topic; configurable in vizanti's widget settings). Nav2's
+waypoint_follower exposes only an action interface (/follow_waypoints), not
+a topic, so nothing in the stock Nav2 stack consumes vizanti's Path.
+
+This bridge subscribes to /waypoints and dispatches each Path as a
+FollowWaypoints action goal. Mid-mission re-publication cancels the prior
+goal and starts a fresh one, mirroring vizanti's expectation that clicking
+"send waypoints" replaces any in-flight set.
+"""
+from __future__ import annotations
+
+import math
+from typing import List
+
+import rclpy
+from rclpy.action import ActionClient
+from rclpy.node import Node
+from nav_msgs.msg import Path
+from geometry_msgs.msg import PoseStamped
+from nav2_msgs.action import FollowWaypoints
+
+
+class WaypointsBridge(Node):
+    def __init__(self) -> None:
+        super().__init__("waypoints_bridge")
+        self.declare_parameter("input_topic", "/waypoints")
+        self.declare_parameter("action_name", "follow_waypoints")
+        # Orientation rewriter (added 2026-05-04). Vizanti publishes Path with
+        # identity quaternion on every pose, which made Nav2 360-spin at every
+        # waypoint trying to reach yaw=0 in map frame. With orient_intermediate
+        # True, each intermediate pose's quaternion is rewritten to face the
+        # next pose via atan2 — robot drives smoothly through waypoints with
+        # heading already aligned to path direction. Reference plan doc
+        # 2026-05-04-waypoint-orientation-rewriter.md
+        self.declare_parameter("orient_intermediate", True)
+        # final_orient_mode: how to set the LAST waypoint's heading.
+        #   "face_last_segment" — extrapolate from second-to-last → last segment
+        #   "preserve_input"    — leave the published quaternion as-is
+        self.declare_parameter("final_orient_mode", "face_last_segment")
+        in_topic = self.get_parameter("input_topic").value
+        action_name = self.get_parameter("action_name").value
+        self._orient_intermediate = self.get_parameter("orient_intermediate").value
+        self._final_mode = self.get_parameter("final_orient_mode").value
+
+        self._client = ActionClient(self, FollowWaypoints, action_name)
+        self.create_subscription(Path, in_topic, self._on_path, 10)
+        self._active_handle = None
+        self.get_logger().info(
+            f"waypoints_bridge: {in_topic} (Path) -> /{action_name} (FollowWaypoints) "
+            f"orient_intermediate={self._orient_intermediate} "
+            f"final_orient_mode={self._final_mode}"
+        )
+
+    def _on_path(self, msg: Path) -> None:
+        if not msg.poses:
+            self.get_logger().warn("received empty waypoints Path; ignoring")
+            return
+
+        if not self._client.wait_for_server(timeout_sec=2.0):
+            self.get_logger().error(
+                "FollowWaypoints action server unavailable; "
+                "is /waypoint_follower lifecycle ACTIVE?"
+            )
+            return
+
+        # Cancel prior in-flight set (vizanti UX: new path replaces previous)
+        if self._active_handle is not None:
+            try:
+                self._active_handle.cancel_goal_async()
+            except Exception as exc:
+                self.get_logger().warn(f"cancel of previous goal failed: {exc}")
+            self._active_handle = None
+
+        poses = list(msg.poses)
+        if self._orient_intermediate and len(poses) >= 2:
+            poses = self._reorient_poses(poses)
+            yaws_deg = [math.degrees(_yaw_from_q(p.pose.orientation)) for p in poses]
+            yaws_str = ", ".join(f"{y:.0f}" for y in yaws_deg)
+            self.get_logger().info(f"reoriented waypoints; yaws (deg): [{yaws_str}]")
+
+        goal = FollowWaypoints.Goal()
+        goal.poses = poses
+        self.get_logger().info(
+            f"dispatching {len(goal.poses)} waypoint(s) (frame_id={msg.header.frame_id})"
+        )
+        send_future = self._client.send_goal_async(goal)
+        send_future.add_done_callback(self._on_goal_response)
+
+    def _reorient_poses(self, poses: List[PoseStamped]) -> List[PoseStamped]:
+        """Rewrite each pose's quaternion to face the next waypoint.
+
+        For 0 or 1 poses, returns input unchanged.
+        For 2+ poses, intermediate i (0 <= i < n-1) faces pose i+1.
+        Final pose: behavior depends on final_orient_mode parameter.
+        """
+        n = len(poses)
+        for i in range(n - 1):
+            cur = poses[i].pose.position
+            nxt = poses[i + 1].pose.position
+            yaw = math.atan2(nxt.y - cur.y, nxt.x - cur.x)
+            _set_yaw(poses[i], yaw)
+
+        if self._final_mode == "face_last_segment":
+            prv = poses[n - 2].pose.position
+            cur = poses[n - 1].pose.position
+            yaw = math.atan2(cur.y - prv.y, cur.x - prv.x)
+            _set_yaw(poses[n - 1], yaw)
+        # "preserve_input" — leave the last pose's quaternion alone
+
+        return poses
+
+    def _on_goal_response(self, future) -> None:
+        try:
+            handle = future.result()
+            if handle and handle.accepted:
+                self.get_logger().info("waypoints goal accepted by waypoint_follower")
+                self._active_handle = handle
+                # Track completion for diag log
+                handle.get_result_async().add_done_callback(self._on_goal_result)
+            else:
+                self.get_logger().warn("waypoints goal rejected by waypoint_follower")
+        except Exception as exc:
+            self.get_logger().error(f"goal-response handling error: {exc}")
+
+    def _on_goal_result(self, future) -> None:
+        try:
+            result = future.result()
+            status_map = {
+                4: "succeeded",
+                5: "canceled",
+                6: "aborted",
+            }
+            label = status_map.get(getattr(result, "status", -1), f"status={result.status}")
+            missed = list(getattr(result.result, "missed_waypoints", []))
+            if missed:
+                self.get_logger().warn(
+                    f"waypoints {label}; missed waypoints: {missed}"
+                )
+            else:
+                self.get_logger().info(f"waypoints {label}")
+        except Exception as exc:
+            self.get_logger().warn(f"result-handling error: {exc}")
+        finally:
+            self._active_handle = None
+
+
+def _set_yaw(pose: PoseStamped, yaw: float) -> None:
+    """In-place set the pose's quaternion to the given yaw (flat-ground)."""
+    pose.pose.orientation.x = 0.0
+    pose.pose.orientation.y = 0.0
+    pose.pose.orientation.z = math.sin(yaw / 2.0)
+    pose.pose.orientation.w = math.cos(yaw / 2.0)
+
+
+def _yaw_from_q(q) -> float:
+    """Extract yaw (Z-axis rotation) from a quaternion."""
+    return math.atan2(2.0 * (q.w * q.z + q.x * q.y),
+                      1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+
+
+def main(args=None) -> None:
+    rclpy.init(args=args)
+    node = WaypointsBridge()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
+        pass
+    finally:
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

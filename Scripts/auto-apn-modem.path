@@ -1,0 +1,12 @@
+[Unit]
+Description=Watch for modem device changes (SIM swap / replug)
+
+[Path]
+# ModemManager creates/removes this directory entry when modems appear/disappear
+PathExists=/sys/class/net/wwan0
+# Re-check periodically in case we missed the event
+PathChanged=/sys/class/net/wwan0
+Unit=auto-apn-modem.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,408 @@
+/* _telephony.css
+ * Telephony Gateway Manager UI styles
+ * Created: 2026-02-28
+ */
+
+/* ============================================================================
+   Manager Modal
+   ============================================================================ */
+
+.telephony-manager-card {
+    width: min(750px, 95vw);
+    max-height: 85vh;
+    max-height: 85dvh;
+    display: flex;
+    flex-direction: column;
+}
+
+.telephony-manager-body {
+    padding: 16px;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+}
+
+/* ============================================================================
+   Top Bar
+   ============================================================================ */
+
+.telephony-top-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+/* ============================================================================
+   Gateway Cards
+   ============================================================================ */
+
+.gateway-card {
+    background: var(--neutral-100);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: border-color var(--transition-fast);
+}
+
+.gateway-card:hover {
+    border-color: var(--neutral-300);
+}
+
+.gateway-card-discovered {
+    border-color: rgba(245, 158, 11, 0.3);
+    background: rgba(245, 158, 11, 0.04);
+}
+
+.gateway-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.gateway-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.gateway-name {
+    font-weight: 600;
+    font-size: 15px;
+    color: var(--neutral-950);
+    white-space: nowrap;
+}
+
+.gateway-ip {
+    color: var(--neutral-600);
+    font-size: 13px;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    white-space: nowrap;
+}
+
+.gateway-stats {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.gateway-stat {
+    font-size: 12px;
+    color: var(--neutral-700);
+    white-space: nowrap;
+}
+
+.gateway-status-label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+}
+
+.gateway-status-online {
+    color: #22c55e;
+    background: rgba(34, 197, 94, 0.1);
+}
+
+.gateway-status-warning {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+}
+
+.gateway-status-offline {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.gateway-discovered-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.12);
+    padding: 2px 10px;
+    border-radius: var(--radius-full);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.gateway-phone-numbers {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--neutral-600);
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+.gateway-no-sims {
+    color: var(--neutral-400);
+    font-style: italic;
+    font-family: inherit;
+}
+
+/* ============================================================================
+   Status Dots
+   ============================================================================ */
+
+.gateway-status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.gateway-status-dot.online {
+    background: #22c55e;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.4);
+}
+
+.gateway-status-dot.warning {
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.4);
+}
+
+.gateway-status-dot.offline {
+    background: #ef4444;
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.3);
+}
+
+/* ============================================================================
+   SIM Slots
+   ============================================================================ */
+
+.gateway-sim-slots {
+    display: flex;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.sim-slot {
+    background: var(--neutral-50);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.sim-slot-label {
+    font-weight: 600;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--neutral-800);
+}
+
+.sim-slot-label .gateway-status-dot {
+    width: 7px;
+    height: 7px;
+}
+
+.sim-slot-carrier {
+    color: var(--neutral-700);
+    margin-bottom: 2px;
+}
+
+.sim-slot-phone {
+    color: var(--neutral-600);
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 11px;
+    margin-bottom: 4px;
+}
+
+.sim-slot-signal {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.sim-signal-pct {
+    color: var(--neutral-600);
+    font-size: 11px;
+}
+
+/* ============================================================================
+   Signal Bars
+   ============================================================================ */
+
+.signal-bars {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 16px;
+}
+
+.signal-bar {
+    width: 4px;
+    background: var(--neutral-300);
+    border-radius: 1px;
+    transition: background var(--transition-fast);
+}
+
+.signal-bar-filled {
+    background: #22c55e;
+}
+
+/* ============================================================================
+   Gateway Actions
+   ============================================================================ */
+
+.gateway-actions {
+    display: flex;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.gateway-actions .btn,
+.gw-action-btn {
+    font-size: 12px;
+    padding: 4px 10px;
+}
+
+.gw-action-remove {
+    color: #ef4444 !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.gw-action-remove:hover {
+    background: rgba(239, 68, 68, 0.1) !important;
+}
+
+/* ============================================================================
+   Gateway Form (Add / Edit)
+   ============================================================================ */
+
+.gateway-form {
+    background: var(--neutral-50);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 12px;
+}
+
+.gateway-form-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--neutral-900);
+    margin: 0 0 12px 0;
+}
+
+.gateway-form label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--neutral-600);
+}
+
+.gateway-form input,
+.gateway-form select {
+    width: 100%;
+    padding: 8px 12px;
+    background: var(--neutral-100);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-sm);
+    color: var(--fg);
+    font-size: 13px;
+    margin-bottom: 10px;
+    outline: none;
+    transition: border-color var(--transition-fast);
+    box-sizing: border-box;
+}
+
+.gateway-form input:focus,
+.gateway-form select:focus {
+    border-color: var(--accent);
+}
+
+.gateway-form input::placeholder {
+    color: var(--neutral-400);
+}
+
+.gateway-form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+.gateway-form-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 8px;
+}
+
+/* ============================================================================
+   Discovery Spinner
+   ============================================================================ */
+
+.discover-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--neutral-300);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: telephony-spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 4px;
+}
+
+@keyframes telephony-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   Empty State
+   ============================================================================ */
+
+.telephony-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--neutral-500);
+}
+
+.telephony-empty p {
+    margin-bottom: 8px;
+}
+
+.telephony-empty strong {
+    color: var(--neutral-700);
+}
+
+/* ============================================================================
+   Responsive
+   ============================================================================ */
+
+@media (max-width: 540px) {
+    .telephony-top-bar {
+        flex-wrap: wrap;
+    }
+
+    .gateway-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+    }
+
+    .gateway-stats {
+        width: 100%;
+        justify-content: flex-start;
+    }
+
+    .gateway-sim-slots {
+        flex-direction: column;
+    }
+
+    .gateway-form-row {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+}

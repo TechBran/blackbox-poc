@@ -1,0 +1,62 @@
+# Nvblox config tuned for UGV Beast (11"×8" tracked robot, indoor missions).
+# Replicates the existing CPU obstacle_layer behavior so Nav2 sees no semantic
+# change in /local_costmap/costmap and /global_costmap/costmap.
+#
+# v3 corrections (2026-05-08, after live debug):
+#   - lidar_topic / depth_topic params are SILENTLY IGNORED. nvblox uses
+#     fixed subscriber names that must be remapped at launch time. See
+#     start_isaac.sh for the actual `-r pointcloud:=/...` remappings.
+#   - lidar_qos / depth_qos params replaced by `input_qos` / `input_qos_depth`
+#     in modern nvblox. SENSOR_DATA is the right value either way.
+#   - lidar_max_range_m / lidar_min_range_m → lidar_max_valid_range_m /
+#     lidar_min_valid_range_m (modern names).
+#   - use_depth: TRUE — OAK-D Lite stereo depth feeds nvblox alongside LiDAR
+#     to fill in free space (LiDAR alone produces a sparse ribbon).
+nvblox_node:
+  ros__parameters:
+    # ===== Voxel + map settings =====
+    voxel_size: 0.05            # match Nav2 costmap resolution
+    # mapping_type=static_occupancy avoids OOM by skipping TSDF/Color/Mesh
+    # integrators we don't need for static-obstacle replacement of obstacle_layer.
+    mapping_type: "static_occupancy"
+    map_clearing_radius_m: 5.0  # match local_costmap rolling window radius
+    map_clearing_frame_id: "base_footprint"
+
+    # ===== Sensor inputs =====
+    # LiDAR (LD19) — primary obstacle source.
+    # Topic name comes from launch-time remap, not this YAML.
+    use_lidar: true
+    lidar_max_valid_range_m: 3.0    # mirror obstacle_max_range from slam_nav.yaml
+    lidar_min_valid_range_m: 0.10
+
+    # Depth camera (OAK-D Lite) — frustum carves out free space cells that
+    # LiDAR-only mapping leaves as -1 (unknown). Topic names from remap.
+    use_depth: true
+
+    # NOTE on QoS: input_qos / input_qos_depth are INTEGER-typed in modern
+    # nvblox (NOT strings). Default behavior matches publisher QoS for our
+    # sensors (BEST_EFFORT/VOLATILE for /oak/stereo/depth and converted
+    # pointcloud), so we omit them entirely. If a future image enforces
+    # explicit settings, the int values are: 1=DEFAULT, 5=SENSOR_DATA.
+
+    # ===== TF =====
+    global_frame: "map"
+    pose_frame: "base_footprint"
+
+    # ===== Output cadence =====
+    map_publish_period_s: 0.2     # 5 Hz (match local_costmap update_frequency)
+    esdf: true
+    esdf_2d: true
+
+    # ===== Slice for 2D projection =====
+    # Robot is ~0.10m tall. Slice at ankle-to-shoulder height; under-table
+    # clearance is intentional.
+    esdf_slice_height: 0.10
+    esdf_slice_min_height: 0.05
+    esdf_slice_max_height: 0.50
+
+    # NOTE: nvblox publishes occupancy on its own topic names (e.g.
+    # /nvblox_node/static_map_slice). The relay node (Task 2.7) republishes on
+    # /nvblox_local_costmap and /nvblox_global_costmap. The Nav2 cutover (Task
+    # 2.10) then swaps Nav2's plugin list to consume those topics via
+    # static_layer in place of the CPU obstacle_layer.

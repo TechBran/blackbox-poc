@@ -1,0 +1,347 @@
+/* _thinking.css
+ * Extracted from: style.css
+ * Generated: 2026-01-04T14:27:28.661819
+ * Blocks: 55
+ */
+
+.thinking-message {
+    transition: opacity var(--transition-slow);
+    font-weight: 500;
+}
+
+.thinking-dots {
+    display: inline-flex;
+    gap: 4px;
+    margin-left: 4px;
+}
+
+.thinking-dots span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: thinking-dot-bounce 1.4s ease-in-out infinite;
+}
+
+.thinking-dots span:nth-child(1) {
+    animation-delay: 0s;
+}
+
+.thinking-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.thinking-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+.thinking-text {
+    color: #4a9eff;
+    font-size: 14px;
+    font-weight: 500;
+    animation: thinking-fade 2s infinite;
+}
+
+/* Thinking Header - Clean frosted style */
+.thinking-header {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 18px;
+    background: rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid rgba(77, 208, 225, 0.15);
+    transition: all var(--transition-base);
+}
+
+.thinking-header:hover {
+    background: rgba(0, 0, 0, 0.4);
+}
+
+/* Brain/Neural icon with glow */
+.thinking-icon {
+    font-size: 1.4em;
+    animation: neural-pulse 2s ease-in-out infinite;
+    filter: drop-shadow(0 0 6px rgba(77, 208, 225, 0.6));
+}
+
+.thinking-title {
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.thinking-status {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.85em;
+}
+
+.thinking-label {
+    color: #ffab40;
+    font-weight: 500;
+}
+
+/* Thinking dots animation - neural style */
+.thinking-dots {
+    display: inline-flex;
+    gap: 5px;
+}
+
+.thinking-dots span {
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: neural-dot 1.4s ease-in-out infinite;
+    box-shadow: 0 0 6px rgba(77, 208, 225, 0.5);
+}
+
+.thinking-dots span:nth-child(1) { animation-delay: 0s; }
+
+.thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
+
+.thinking-dots span:nth-child(3) { animation-delay: 0.3s; }
+
+/* Stats bar - word/depth counter */
+.thinking-stats {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 8px 18px;
+    background: rgba(0, 0, 0, 0.2);
+    border-bottom: 1px solid rgba(77, 208, 225, 0.1);
+    font-size: 0.75em;
+    color: rgba(255, 255, 255, 0.5);
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+}
+
+.thinking-stat {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.thinking-stat-icon {
+    font-size: 1.1em;
+    opacity: 0.7;
+}
+
+.thinking-stat-value {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.thinking-stat-label {
+    opacity: 0.7;
+}
+
+/* Depth indicator bar */
+.thinking-depth-bar {
+    flex: 1;
+    max-width: 120px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.thinking-depth-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent) 0%, #66bb6a 100%);
+    border-radius: 2px;
+    transition: width var(--transition-slow);
+    box-shadow: 0 0 8px rgba(77, 208, 225, 0.5);
+}
+
+.thinking-complete {
+    color: #66bb6a;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.thinking-complete::before {
+    content: '✓';
+    font-size: 0.9em;
+}
+
+.thinking-toggle {
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 0.85em;
+    transition: transform var(--transition-slow), color var(--transition-base);
+    padding: 4px;
+}
+
+.thinking-header:hover .thinking-toggle {
+    color: var(--accent);
+}
+
+/* Thinking Panel TTS Button */
+.thinking-speak-btn {
+    background: rgba(77, 208, 225, 0.15);
+    border: 1px solid rgba(77, 208, 225, 0.3);
+    border-radius: var(--radius-sm);
+    padding: 4px 8px;
+    cursor: pointer;
+    color: var(--accent);
+    transition: all var(--transition-base);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    margin-right: 8px;
+}
+
+.thinking-speak-btn:hover {
+    background: rgba(77, 208, 225, 0.25);
+    border-color: rgba(77, 208, 225, 0.5);
+    transform: scale(1.05);
+}
+
+.thinking-speak-btn:active {
+    transform: scale(0.95);
+}
+
+.thinking-speak-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* Red glow while generating audio */
+.thinking-speak-btn.thinking-btn-loading {
+    background: rgba(255, 74, 74, 0.25);
+    border-color: rgba(255, 74, 74, 0.6);
+    color: #ff4a4a;
+    box-shadow: 0 0 12px rgba(255, 74, 74, 0.5), 0 0 24px rgba(255, 74, 74, 0.3);
+    animation: pulse-red 1.5s ease-in-out infinite;
+}
+
+/* Green glow while playing */
+.thinking-speak-btn.thinking-btn-playing {
+    background: rgba(102, 187, 106, 0.25);
+    border-color: rgba(102, 187, 106, 0.6);
+    color: #66bb6a;
+    box-shadow: 0 0 12px rgba(102, 187, 106, 0.5), 0 0 24px rgba(102, 187, 106, 0.3);
+    animation: pulse-green 1.5s ease-in-out infinite;
+}
+
+/* Thinking audio player styling */
+.thinking-audio-player {
+    margin-top: 8px;
+    margin-bottom: 8px;
+    border: 1px solid rgba(77, 208, 225, 0.3);
+    background: rgba(77, 208, 225, 0.08);
+}
+
+.thinking-audio-player .audio-label-icon {
+    font-size: 14px;
+    margin-right: 4px;
+}
+
+/* Thinking Content Area - Clean typography */
+.thinking-content {
+    position: relative;
+    z-index: 1;
+    padding: 18px 20px;
+    max-height: 350px;
+    overflow-y: auto;
+    font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+    font-size: 0.82em;
+    line-height: 1.8;
+    color: rgba(255, 255, 255, 0.75);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    transition: max-height var(--transition-slow), padding var(--transition-slow), opacity var(--transition-slow);
+    opacity: 1;
+    background: transparent;
+    border-radius: 0 0 16px 16px;
+}
+
+/* Custom scrollbar for thinking content */
+.thinking-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.thinking-content::-webkit-scrollbar-track {
+    background: rgba(77, 208, 225, 0.05);
+    border-radius: var(--radius-xs);
+}
+
+.thinking-content::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, rgba(77, 208, 225, 0.3) 0%, rgba(102, 187, 106, 0.3) 100%);
+    border-radius: var(--radius-xs);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+.thinking-content::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, rgba(77, 208, 225, 0.5) 0%, rgba(102, 187, 106, 0.5) 100%);
+}
+
+/* Enhanced thinking content typography */
+.thinking-content p,
+.thinking-content li {
+    margin-bottom: 0.6em;
+}
+
+/* Key term highlights in thinking content */
+.thinking-content strong,
+.thinking-content b {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.thinking-content em,
+.thinking-content i {
+    color: #ffab40;
+    font-style: italic;
+}
+
+.thinking-content code {
+    background: rgba(77, 208, 225, 0.15);
+    color: var(--accent);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    font-size: 0.9em;
+}
+
+/* Bullet points and numbered lists in thinking */
+.thinking-content ul,
+.thinking-content ol {
+    margin-left: 1.5em;
+    margin-bottom: 0.8em;
+}
+
+.thinking-content li {
+    position: relative;
+    padding-left: 0.5em;
+}
+
+.thinking-content li::marker {
+    color: var(--accent);
+}
+
+/* Section headers in thinking */
+.thinking-content h1,
+.thinking-content h2,
+.thinking-content h3,
+.thinking-content h4 {
+    color: var(--accent);
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    font-weight: 600;
+    border-bottom: 1px solid rgba(77, 208, 225, 0.2);
+    padding-bottom: 0.3em;
+}

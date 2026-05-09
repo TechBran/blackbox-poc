@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  FastRTPS / Fast-DDS profile that disables shared-memory transport.
+
+  Why: when two containers run on the same host with --network host but
+  separate IPC namespaces (private /dev/shm), FastRTPS's default
+  shared-memory transport completes discovery handshakes but cannot deliver
+  payload data — the SHM segment one container creates is invisible to
+  the other. Symptom: `ros2 topic info` shows publishers on a topic, but
+  `ros2 topic hz` records zero messages.
+
+  Forcing UDPv4-only restores correct cross-container delivery via the
+  Linux loopback interface. The cost is microseconds per message (extra
+  kernel copy vs SHM) — invisible at our 10-15 Hz rates.
+-->
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+    <transport_descriptors>
+        <transport_descriptor>
+            <transport_id>udp_transport</transport_id>
+            <type>UDPv4</type>
+        </transport_descriptor>
+    </transport_descriptors>
+
+    <participant profile_name="participant_profile" is_default_profile="true">
+        <rtps>
+            <userTransports>
+                <transport_id>udp_transport</transport_id>
+            </userTransports>
+            <useBuiltinTransports>false</useBuiltinTransports>
+        </rtps>
+    </participant>
+</profiles>

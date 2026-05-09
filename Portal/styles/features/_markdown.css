@@ -1,0 +1,108 @@
+/* _markdown.css
+ * Extracted from: style.css
+ * Generated: 2026-01-04T14:27:28.661694
+ * Blocks: 10
+ */
+
+.code-block-wrapper {
+    position: relative;
+    margin: 8px 0;
+    overflow: visible;
+    border-radius: var(--radius-md, 8px);
+    background: var(--neutral-100, #1e1e2e);
+}
+
+/* Header bar above code block: language label + copy button */
+.code-block-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px 4px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius-md, 8px) var(--radius-md, 8px) 0 0;
+    min-height: 28px;
+}
+
+.code-block-lang {
+    font-size: 0.7rem;
+    color: rgba(171, 178, 191, 0.6);
+    text-transform: lowercase;
+    letter-spacing: 0.3px;
+    user-select: none;
+}
+
+/* When header exists, remove pre's top border-radius */
+.code-block-header + pre {
+    border-radius: 0 0 var(--radius-md, 8px) var(--radius-md, 8px);
+    margin-top: 0;
+}
+
+/* Diff Syntax Highlighting */
+.diff-add {
+    color: #50fa7b;
+    background: rgba(80, 250, 123, 0.1);
+    display: block;
+    padding: 2px 8px;
+    margin: 1px 0;
+}
+
+.diff-remove {
+    color: #ff5555;
+    background: rgba(255, 85, 85, 0.1);
+    display: block;
+    padding: 2px 8px;
+    margin: 1px 0;
+}
+
+.diff-hunk {
+    color: #8be9fd;
+    background: rgba(139, 233, 253, 0.1);
+    display: block;
+    padding: 2px 8px;
+    margin: 1px 0;
+    font-weight: bold;
+}
+
+.diff-file-old {
+    color: #ff79c6;
+    display: block;
+    padding: 2px 8px;
+    margin: 1px 0;
+}
+
+.diff-file-new {
+    color: #bd93f9;
+    display: block;
+    padding: 2px 8px;
+    margin: 1px 0;
+}
+
+/* Diff syntax highlighting for markdown code blocks */
+pre code.language-diff {
+    display: block;
+    background: rgba(30, 30, 46, 0.5);
+    padding: 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(74, 158, 255, 0.2);
+    overflow-x: auto;
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+/* Color diff lines within code blocks */
+pre code.language-diff .line {
+    display: block;
+}
+
+/* Apply diff colors to lines starting with +, -, @, ---, +++ */
+pre code.language-diff::before {
+    content: '';
+    display: none;
+}
+
+/* Use CSS to style diff content based on first character */
+pre code.language-diff {
+    color: #cdd6f4;
+}

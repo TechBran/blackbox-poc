@@ -1,0 +1,3 @@
+# Gold Master v7.0 — Appliance Lawbook (Sample)
+# Deterministic rules for Tail-Proof → Lock → Recall → Mint → Assert → Archive.
+# Orchestrator enforces; LLM only fills variable sections under schema.

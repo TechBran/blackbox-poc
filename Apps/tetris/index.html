@@ -1,0 +1,1400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Tetris - AI BlackBox</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #0a0a1f 0%, #1a0a2e 50%, #16213e 100%);
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Particle Background */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Background Title - Faded behind game */
+        .bg-title {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 2;
+            opacity: 0.1;
+            pointer-events: none;
+            white-space: nowrap;
+        }
+
+        .bg-title h1 {
+            font-size: 15vw;
+            color: #00f7ff;
+            text-shadow: 0 0 50px #00f7ff;
+        }
+
+        .game-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .game-area {
+            position: relative;
+            z-index: 20;
+            /* Border/Shadow optional now, focusing on canvas */
+            padding: 2px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #tetris-canvas {
+            border: 2px solid #00f7ff; /* Restore border for visibility */
+            box-shadow: 0 0 20px rgba(0, 247, 255, 0.4);
+            background: rgba(0, 0, 0, 0.8);
+            display: block;
+        }
+
+        /* HUD Styles */
+        .hud-left, .hud-right {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding: 10px;
+            z-index: 30;
+            pointer-events: none; /* Let clicks pass through if needed, but buttons need events */
+        }
+        
+        .hud-left { left: 20px; align-items: flex-start; }
+        .hud-right { right: 20px; align-items: flex-end; }
+        
+        /* Enable pointer events for buttons inside HUD */
+        .hud-right .button-row, .hud-right .controls-hint {
+            pointer-events: auto;
+        }
+
+        .hud-item {
+            background: rgba(10, 10, 31, 0.6);
+            border: 1px solid rgba(0, 247, 255, 0.3);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+
+        .hud-label {
+            color: #ff00ff;
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            letter-spacing: 1px;
+            text-shadow: 0 0 5px #ff00ff;
+        }
+
+        .hud-value {
+            color: #fff;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #00f7ff;
+        }
+
+        #next-canvas, #hold-canvas {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #ff00ff;
+            box-shadow: 0 0 5px rgba(255, 0, 255, 0.3);
+        }
+
+        .controls-hint {
+            font-size: 10px;
+            color: rgba(0, 247, 255, 0.7);
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: right;
+        }
+        
+        .key {
+            display: inline-block;
+            border: 1px solid rgba(0, 247, 255, 0.5);
+            padding: 1px 4px;
+            border-radius: 3px;
+            margin: 0 2px;
+            color: #fff;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .button {
+            background: linear-gradient(135deg, rgba(255, 0, 255, 0.8) 0%, rgba(0, 247, 255, 0.8) 100%);
+            border: none;
+            color: #fff;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            text-transform: uppercase;
+            box-shadow: 0 0 10px rgba(255, 0, 255, 0.5);
+            transition: all 0.2s;
+            pointer-events: auto;
+        }
+        
+        .button:hover { transform: scale(1.05); }
+
+        /* Game Over Modal */
+        .game-over {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 10, 31, 0.95);
+            border: 2px solid #ff00ff;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            z-index: 100;
+            box-shadow: 0 0 50px rgba(255, 0, 255, 0.5);
+            display: none;
+        }
+        .game-over.show { display: block; animation: slideIn 0.3s ease-out; }
+
+        .game-over h2 { color: #ff00ff; font-size: 32px; margin-bottom: 20px; }
+        .final-score { color: #00f7ff; font-size: 24px; margin-bottom: 30px; }
+
+        /* Animations */
+        @keyframes slideIn {
+            from { opacity: 0; transform: translate(-50%, -60%); }
+            to { opacity: 1; transform: translate(-50%, -50%); }
+        }
+        
+        @keyframes shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); }
+            10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); }
+            30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); }
+            50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); }
+            70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); }
+            90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .shake { animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both; }
+
+        /* Touch Controls */
+        .touch-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none; /* JS toggles this */
+            flex-direction: column;
+            gap: 10px;
+            z-index: 50;
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 20px;
+        }
+        .touch-controls.visible { display: flex; }
+        
+        .touch-row { display: flex; gap: 15px; justify-content: center; }
+        .touch-btn {
+            width: 60px; height: 60px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(0, 247, 255, 0.5);
+            color: #fff;
+            font-size: 24px;
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(5px);
+            cursor: pointer;
+            user-select: none;
+        }
+        .touch-btn:active { background: rgba(0, 247, 255, 0.3); transform: scale(0.95); }
+        .touch-btn.wide { width: 140px; border-radius: 30px; background: rgba(255, 0, 255, 0.2); border-color: #ff00ff; }
+
+        #toggle-controls {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: transparent;
+            border: 1px solid #00f7ff;
+            color: #00f7ff;
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            opacity: 0.5;
+            transition: opacity 0.3s;
+        }
+        #toggle-controls:hover { opacity: 1; background: rgba(0, 247, 255, 0.1); }
+
+        /* Responsive Adjustments */
+        @media (max-width: 900px) {
+            .hud-left, .hud-right {
+                top: auto;
+                bottom: auto;
+                transform: none;
+                flex-direction: row;
+                gap: 10px;
+                padding: 5px;
+            }
+            
+            .hud-left {
+                top: 10px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 100%;
+                justify-content: center;
+                pointer-events: none;
+            }
+            
+            .hud-right {
+                bottom: 10px; /* Put buttons at bottom? Or top as well? */
+                top: 50px; /* Below left hud */
+                right: auto;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 100%;
+                justify-content: center;
+                display: none; /* Hide standard HUD on mobile to reduce clutter? Or simplify */
+            }
+            
+            /* Mobile specific HUD layout */
+            .hud-left .hud-item {
+                padding: 5px 10px;
+            }
+            .hud-label { font-size: 10px; }
+            .hud-value { font-size: 16px; }
+            #hold-canvas { display: none; } /* Hide hold preview on small mobile to save space? */
+            
+            /* Show simplified HUD */
+            .hud-right { display: flex; top: auto; bottom: 20px; flex-wrap: wrap; }
+            .controls-hint { display: none; }
+            #next-canvas { width: 60px; height: 60px; }
+        }
+        
+        @media (max-width: 600px) {
+             /* Ultra compact mobile */
+             .hud-left { 
+                 justify-content: space-between; 
+                 padding: 5px 10px;
+                 top: 5px;
+             }
+             .hud-right {
+                 display: none; /* Rely on game over screen for restart? Or move buttons to menu */
+             }
+             
+             /* Bring back start button floating? */
+             .button-row {
+                 position: fixed;
+                 top: 50px; right: 10px;
+                 flex-direction: column;
+                 gap: 5px;
+             }
+             .button { padding: 5px 10px; font-size: 10px; }
+             
+             /* Next piece floating */
+             .hud-right .hud-item:first-child { /* Next piece */
+                 display: block;
+                 position: fixed;
+                 top: 50px; left: 10px;
+                 padding: 5px;
+             }
+        }
+    </style>
+</head>
+<body>
+    <canvas class="particles" id="particles"></canvas>
+    
+    <div class="bg-title">
+        <h1>TETRIS</h1>
+    </div>
+
+    <!-- Controls Toggle Button -->
+    <button id="toggle-controls" title="Toggle Touch Controls">🎮</button>
+
+    <div class="container">
+        <div class="game-wrapper">
+            <!-- Left HUD: Score & Stats -->
+            <div class="hud-left">
+                <div class="hud-item">
+                    <div class="hud-label">Hold (C)</div>
+                    <canvas id="hold-canvas" width="80" height="80"></canvas>
+                </div>
+                <div class="hud-item">
+                    <div class="hud-label">Score</div>
+                    <div class="hud-value" id="score">0</div>
+                </div>
+                <div class="hud-item">
+                    <div class="hud-label">Lines</div>
+                    <div class="hud-value" id="lines">0</div>
+                </div>
+            </div>
+
+            <!-- Game Area -->
+            <div class="game-area">
+                <canvas id="tetris-canvas"></canvas>
+            </div>
+
+            <!-- Right HUD: Next & Controls -->
+            <div class="hud-right">
+                <div class="hud-item">
+                    <div class="hud-label">Next</div>
+                    <canvas id="next-canvas" width="80" height="80"></canvas>
+                </div>
+                <div class="hud-item">
+                    <div class="hud-label">Level</div>
+                    <div class="hud-value" id="level">1</div>
+                </div>
+                
+                <div class="controls-hint">
+                    <div><span class="key">←</span><span class="key">→</span> Move</div>
+                    <div><span class="key">↑</span> Rotate</div>
+                    <div><span class="key">↓</span> Soft</div>
+                    <div><span class="key">SPC</span> Drop</div>
+                </div>
+
+                <div class="button-row">
+                    <button class="button" onclick="game.start()">New Game</button>
+                    <button class="button" onclick="game.pause()">Pause</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="game-over" id="game-over">
+            <h2>GAME OVER</h2>
+            <div class="final-score">Score: <span id="final-score">0</span></div>
+            <button class="button" onclick="game.restart()">Play Again</button>
+        </div>
+    </div>
+
+    <!-- Touch Controls Overlay -->
+    <div class="touch-controls" id="touch-panel">
+        <div class="touch-row">
+            <button class="touch-btn" id="touch-hold" style="font-size: 14px;">HOLD</button>
+            <button class="touch-btn" id="touch-rotate">↻</button>
+        </div>
+        <div class="touch-row">
+            <button class="touch-btn" id="touch-left">←</button>
+            <button class="touch-btn" id="touch-down">↓</button>
+            <button class="touch-btn" id="touch-right">→</button>
+        </div>
+        <div class="touch-row">
+            <button class="touch-btn wide" id="touch-drop">DROP ⬇</button>
+        </div>
+    </div>
+
+    <script>
+        // Particle background effect
+        const particleCanvas = document.getElementById('particles');
+        const particleCtx = particleCanvas.getContext('2d');
+        particleCanvas.width = window.innerWidth;
+        particleCanvas.height = window.innerHeight;
+
+        const particles = [];
+        for (let i = 0; i < 50; i++) {
+            particles.push({
+                x: Math.random() * particleCanvas.width,
+                y: Math.random() * particleCanvas.height,
+                radius: Math.random() * 2 + 1,
+                color: Math.random() > 0.5 ? '#00f7ff' : '#ff00ff',
+                vx: (Math.random() - 0.5) * 0.5,
+                vy: (Math.random() - 0.5) * 0.5
+            });
+        }
+
+        function animateParticles() {
+            particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
+            particles.forEach(p => {
+                particleCtx.beginPath();
+                particleCtx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                particleCtx.fillStyle = p.color;
+                particleCtx.shadowBlur = 10;
+                particleCtx.shadowColor = p.color;
+                particleCtx.fill();
+
+                p.x += p.vx;
+                p.y += p.vy;
+
+                if (p.x < 0 || p.x > particleCanvas.width) p.vx *= -1;
+                if (p.y < 0 || p.y > particleCanvas.height) p.vy *= -1;
+            });
+            requestAnimationFrame(animateParticles);
+        }
+        animateParticles();
+
+        window.addEventListener('resize', () => {
+            particleCanvas.width = window.innerWidth;
+            particleCanvas.height = window.innerHeight;
+        });
+
+        // Toggle Controls Logic
+        const toggleBtn = document.getElementById('toggle-controls');
+        const touchPanel = document.getElementById('touch-panel');
+        
+        toggleBtn.addEventListener('click', () => {
+            touchPanel.classList.toggle('visible');
+            // Adjust margin of game wrapper when controls are visible to prevent overlap
+            const gameWrapper = document.querySelector('.game-wrapper');
+            if (touchPanel.classList.contains('visible')) {
+                // Keep minimal space, panel is overlay
+                toggleBtn.style.opacity = '1';
+            } else {
+                toggleBtn.style.opacity = '0.7';
+            }
+        });
+
+        // Tetris Game with Dynamic Canvas Sizing
+        const canvas = document.getElementById('tetris-canvas');
+        const ctx = canvas.getContext('2d');
+        const nextCanvas = document.getElementById('next-canvas');
+        const nextCtx = nextCanvas.getContext('2d');
+        const holdCanvas = document.getElementById('hold-canvas');
+        const holdCtx = holdCanvas.getContext('2d');
+
+        // Dynamic canvas sizing
+        function resizeCanvas() {
+            // Available space with minimal padding
+            const paddingY = 20; 
+            const paddingX = 10;
+            
+            const availableHeight = window.innerHeight - paddingY;
+            const availableWidth = window.innerWidth - paddingX;
+            
+            // Standard Tetris ratio 1:2 (10 cols x 20 rows)
+            let height = availableHeight;
+            let width = height / 2;
+            
+            // If calculated width is too wide for screen, constrain by width
+            if (width > availableWidth) {
+                width = availableWidth;
+                height = width * 2;
+            }
+            
+            // Apply dimensions
+            canvas.width = width;
+            canvas.height = height;
+
+            // Recalculate block size based on canvas
+            if (typeof COLS !== 'undefined') {
+                BLOCK_SIZE = canvas.width / COLS;
+            }
+        }
+
+        let BLOCK_SIZE = 30;
+        const COLS = 10;
+        const ROWS = 20;
+
+        const SHAPES = [
+            [[1,1,1,1]], // I
+            [[1,1],[1,1]], // O
+            [[0,1,0],[1,1,1]], // T
+            [[1,0,0],[1,1,1]], // L
+            [[0,0,1],[1,1,1]], // J
+            [[0,1,1],[1,1,0]], // S
+            [[1,1,0],[0,1,1]]  // Z
+        ];
+
+        const COLORS = [
+            '#00f7ff', // Cyan
+            '#ffff00', // Yellow
+            '#ff00ff', // Magenta
+            '#ff8800', // Orange
+            '#0000ff', // Blue
+            '#00ff00', // Green
+            '#ff0000'  // Red
+        ];
+
+        // Trail ghost effect - fading after-images
+        class TrailGhost {
+            constructor(x, y, color, shape) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                this.shape = shape.map(row => [...row]); // Deep copy
+                this.alpha = 0.6;
+                this.decay = 0.025; // Fades over ~200-300ms at 60fps
+                this.createdAt = performance.now();
+            }
+
+            update() {
+                this.alpha -= this.decay;
+            }
+
+            draw(ctx) {
+                if (this.alpha <= 0) return;
+                ctx.save();
+                ctx.globalAlpha = this.alpha;
+                this.shape.forEach((row, y) => {
+                    row.forEach((value, x) => {
+                        if (value) {
+                            const px = (this.x + x) * BLOCK_SIZE;
+                            const py = (this.y + y) * BLOCK_SIZE;
+
+                            // Semi-transparent neon trail
+                            ctx.shadowBlur = 8;
+                            ctx.shadowColor = this.color;
+                            ctx.fillStyle = this.color;
+                            ctx.fillRect(px + 2, py + 2, BLOCK_SIZE - 6, BLOCK_SIZE - 6);
+                        }
+                    });
+                });
+                ctx.restore();
+            }
+        }
+
+        // Level transition animation
+        class LevelTransition {
+            constructor(level) {
+                this.level = level;
+                this.startTime = performance.now();
+                this.duration = 2000; // 2 seconds
+                this.active = true;
+                this.waves = [];
+
+                // Create multiple wave rings
+                for (let i = 0; i < 5; i++) {
+                    this.waves.push({
+                        delay: i * 100,
+                        radius: 0,
+                        maxRadius: Math.max(window.innerWidth, window.innerHeight),
+                        alpha: 1
+                    });
+                }
+            }
+
+            update() {
+                const elapsed = performance.now() - this.startTime;
+                if (elapsed > this.duration) {
+                    this.active = false;
+                    return;
+                }
+
+                const progress = elapsed / this.duration;
+
+                // Update waves
+                this.waves.forEach((wave, i) => {
+                    const waveElapsed = Math.max(0, elapsed - wave.delay);
+                    const waveProgress = Math.min(1, waveElapsed / (this.duration * 0.7));
+                    wave.radius = wave.maxRadius * this.easeOutCubic(waveProgress);
+                    wave.alpha = 1 - waveProgress;
+                });
+            }
+
+            easeOutCubic(t) {
+                return 1 - Math.pow(1 - t, 3);
+            }
+
+            easeOutElastic(t) {
+                const c4 = (2 * Math.PI) / 3;
+                return t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
+            }
+
+            draw(ctx, canvasWidth, canvasHeight) {
+                if (!this.active) return;
+
+                const elapsed = performance.now() - this.startTime;
+                const progress = elapsed / this.duration;
+
+                const centerX = canvasWidth / 2;
+                const centerY = canvasHeight / 2;
+
+                ctx.save();
+
+                // Draw radial wave bursts
+                this.waves.forEach((wave, i) => {
+                    if (wave.alpha > 0) {
+                        // Create gradient from cyan to magenta
+                        const gradient = ctx.createRadialGradient(
+                            centerX, centerY, 0,
+                            centerX, centerY, wave.radius
+                        );
+                        gradient.addColorStop(0, `rgba(0, 247, 255, 0)`);
+                        gradient.addColorStop(0.5, `rgba(0, 247, 255, ${wave.alpha * 0.3})`);
+                        gradient.addColorStop(0.8, `rgba(255, 0, 255, ${wave.alpha * 0.5})`);
+                        gradient.addColorStop(1, `rgba(255, 0, 255, 0)`);
+
+                        ctx.fillStyle = gradient;
+                        ctx.beginPath();
+                        ctx.arc(centerX, centerY, wave.radius, 0, Math.PI * 2);
+                        ctx.fill();
+                    }
+                });
+
+                // Draw level text with zoom effect
+                const textProgress = Math.min(1, elapsed / (this.duration * 0.5));
+                const textScale = this.easeOutElastic(textProgress);
+                const textAlpha = progress < 0.7 ? 1 : 1 - ((progress - 0.7) / 0.3);
+
+                if (textAlpha > 0) {
+                    ctx.globalAlpha = textAlpha;
+                    ctx.font = `bold ${Math.floor(48 * textScale)}px "Courier New", monospace`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+
+                    // Glow effect
+                    ctx.shadowBlur = 30;
+                    ctx.shadowColor = '#00f7ff';
+                    ctx.fillStyle = '#00f7ff';
+                    ctx.fillText(`LEVEL ${this.level}`, centerX, centerY);
+
+                    // Second layer for extra glow
+                    ctx.shadowColor = '#ff00ff';
+                    ctx.shadowBlur = 20;
+                    ctx.fillText(`LEVEL ${this.level}`, centerX, centerY);
+                }
+
+                ctx.restore();
+            }
+        }
+
+        class ExplosionParticle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.color = color;
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 5 + 2;
+                this.vx = Math.cos(angle) * speed;
+                this.vy = Math.sin(angle) * speed;
+                this.life = 1.0;
+                this.decay = Math.random() * 0.03 + 0.02;
+                this.size = Math.random() * 4 + 2;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= this.decay;
+                this.vy += 0.2; // gravity
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = this.life;
+                ctx.fillStyle = this.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        class Tetris {
+            constructor() {
+                this.board = this.createBoard();
+                this.currentPiece = null;
+                this.nextPiece = null;
+                this.holdPiece = null;
+                this.canHold = true;
+                this.score = 0;
+                this.lines = 0;
+                this.level = 1;
+                this.gameOver = false;
+                this.paused = false;
+                this.dropCounter = 0;
+                this.dropInterval = 1000;
+                this.lastTime = 0;
+                this.flashAlpha = 0;
+                this.effects = [];
+
+                // Trail effects
+                this.trailGhosts = [];
+                this.lastPiecePos = null;
+                this.trailFrameCounter = 0;
+
+                // Level transition
+                this.levelTransition = null;
+                this.borderGlowIntensity = 0;
+            }
+
+            createBoard() {
+                return Array(ROWS).fill().map(() => Array(COLS).fill(0));
+            }
+
+            createPiece() {
+                const type = Math.floor(Math.random() * SHAPES.length);
+                return {
+                    shape: SHAPES[type],
+                    color: COLORS[type],
+                    x: Math.floor(COLS / 2) - Math.floor(SHAPES[type][0].length / 2),
+                    y: 0,
+                    typeIndex: type // Store index for hold functionality
+                };
+            }
+            
+            recreatePiece(typeIndex) {
+                    return {
+                    shape: SHAPES[typeIndex],
+                    color: COLORS[typeIndex],
+                    x: Math.floor(COLS / 2) - Math.floor(SHAPES[typeIndex][0].length / 2),
+                    y: 0,
+                    typeIndex: typeIndex
+                };
+            }
+
+            drawBlock(ctx, x, y, color, size = BLOCK_SIZE, isGhost = false) {
+                // Neon glow effect
+                ctx.shadowBlur = isGhost ? 5 : 15;
+                ctx.shadowColor = color;
+
+                if (isGhost) {
+                        // Ghost block style (outline only)
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x * size + 1, y * size + 1, size - 2, size - 2);
+                    
+                    ctx.fillStyle = color.replace(')', ', 0.1)').replace('rgb', 'rgba'); // Very faint fill
+                    ctx.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+                } else {
+                    // Main block
+                    ctx.fillStyle = color;
+                    ctx.fillRect(x * size, y * size, size - 2, size - 2);
+
+                    // Inner glow
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.fillRect(x * size + 3, y * size + 3, size - 8, size - 8);
+
+                    // Border highlight
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(x * size + 1, y * size + 1, size - 4, size - 4);
+                }
+            }
+
+            // Add trail ghost at current piece position
+            addTrailGhost() {
+                if (!this.currentPiece) return;
+
+                // Only add trail if piece has moved
+                const currentPos = `${this.currentPiece.x},${this.currentPiece.y}`;
+                if (this.lastPiecePos !== currentPos) {
+                    this.trailGhosts.push(new TrailGhost(
+                        this.currentPiece.x,
+                        this.currentPiece.y,
+                        this.currentPiece.color,
+                        this.currentPiece.shape
+                    ));
+                    this.lastPiecePos = currentPos;
+
+                    // Limit trail length for performance
+                    if (this.trailGhosts.length > 8) {
+                        this.trailGhosts.shift();
+                    }
+                }
+            }
+
+            // Trigger level up animation
+            triggerLevelUp(newLevel) {
+                this.levelTransition = new LevelTransition(newLevel);
+                this.borderGlowIntensity = 1.0;
+
+                // Add border glow effect to game area
+                const gameArea = document.querySelector('.game-area');
+                gameArea.style.boxShadow = '0 0 40px rgba(0, 247, 255, 1), 0 0 60px rgba(255, 0, 255, 0.8), inset 0 0 30px rgba(0, 247, 255, 0.3)';
+                gameArea.style.borderColor = '#ff00ff';
+
+                // Reset border after animation
+                setTimeout(() => {
+                    gameArea.style.boxShadow = '0 0 20px rgba(0, 247, 255, 0.5), inset 0 0 20px rgba(0, 247, 255, 0.1)';
+                    gameArea.style.borderColor = '#00f7ff';
+                }, 2000);
+            }
+
+            drawBoard() {
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // Draw grid
+                ctx.strokeStyle = 'rgba(0, 247, 255, 0.1)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= COLS; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(i * BLOCK_SIZE, 0);
+                    ctx.lineTo(i * BLOCK_SIZE, canvas.height);
+                    ctx.stroke();
+                }
+                for (let i = 0; i <= ROWS; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, i * BLOCK_SIZE);
+                    ctx.lineTo(canvas.width, i * BLOCK_SIZE);
+                    ctx.stroke();
+                }
+
+                // Draw placed blocks
+                for (let y = 0; y < ROWS; y++) {
+                    for (let x = 0; x < COLS; x++) {
+                        if (this.board[y][x]) {
+                            this.drawBlock(ctx, x, y, this.board[y][x]);
+                        }
+                    }
+                }
+
+                // Draw trail ghosts (behind current piece)
+                this.trailGhosts.forEach(ghost => ghost.draw(ctx));
+
+                // Draw ghost piece (drop preview)
+                if (this.currentPiece) {
+                    const ghost = { ...this.currentPiece, x: this.currentPiece.x, y: this.currentPiece.y };
+                    while (!this.collide(ghost)) {
+                        ghost.y++;
+                    }
+                    ghost.y--; // Step back up
+
+                    // Only draw ghost if it's not in the same position as the current piece
+                    if (ghost.y !== this.currentPiece.y) {
+                            this.drawPiece(ctx, ghost, BLOCK_SIZE, true);
+                    }
+
+                    // Draw current piece
+                    this.drawPiece(ctx, this.currentPiece, BLOCK_SIZE);
+                }
+
+                // Draw flash effect
+                if (this.flashAlpha > 0) {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${this.flashAlpha})`;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    this.flashAlpha -= 0.05;
+                    if (this.flashAlpha < 0) this.flashAlpha = 0;
+                }
+
+                // Draw effects
+                this.effects.forEach(e => e.draw(ctx));
+
+                // Draw level transition animation
+                if (this.levelTransition && this.levelTransition.active) {
+                    this.levelTransition.draw(ctx, canvas.width, canvas.height);
+                }
+            }
+            
+            drawPiece(context, piece, size, isGhost = false) {
+                piece.shape.forEach((row, y) => {
+                    row.forEach((value, x) => {
+                        if (value) {
+                            this.drawBlock(context, piece.x + x, piece.y + y, piece.color, size, isGhost);
+                        }
+                    });
+                });
+            }
+
+            drawNextPiece() {
+                nextCtx.fillStyle = '#000';
+                nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+
+                if (this.nextPiece) {
+                    const offsetX = (4 - this.nextPiece.shape[0].length) / 2;
+                    const offsetY = (4 - this.nextPiece.shape.length) / 2;
+                    const tempPiece = {
+                        shape: this.nextPiece.shape,
+                        color: this.nextPiece.color,
+                        x: offsetX,
+                        y: offsetY
+                    };
+                    this.drawPiece(nextCtx, tempPiece, 18);
+                }
+            }
+            
+            drawHoldPiece() {
+                holdCtx.fillStyle = '#000';
+                holdCtx.fillRect(0, 0, holdCanvas.width, holdCanvas.height);
+
+                if (this.holdPiece) {
+                    // Use the original shape from SHAPES to avoid displaying rotated state
+                    const shape = SHAPES[this.holdPiece.typeIndex];
+                    const offsetX = (4 - shape[0].length) / 2;
+                    const offsetY = (4 - shape.length) / 2;
+                    
+                    const tempPiece = {
+                        shape: shape,
+                        color: this.holdPiece.color,
+                        x: offsetX,
+                        y: offsetY
+                    };
+                    
+                    // Grey out if can't hold
+                    if (!this.canHold) {
+                        holdCtx.globalAlpha = 0.5;
+                    }
+                    this.drawPiece(holdCtx, tempPiece, 18);
+                    holdCtx.globalAlpha = 1.0;
+                }
+            }
+
+            collide(piece = this.currentPiece) {
+                for (let y = 0; y < piece.shape.length; y++) {
+                    for (let x = 0; x < piece.shape[y].length; x++) {
+                        if (piece.shape[y][x]) {
+                            const newX = piece.x + x;
+                            const newY = piece.y + y;
+
+                            if (newX < 0 || newX >= COLS || newY >= ROWS) {
+                                return true;
+                            }
+                            if (newY >= 0 && this.board[newY][newX]) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            }
+
+            merge() {
+                this.currentPiece.shape.forEach((row, y) => {
+                    row.forEach((value, x) => {
+                        if (value) {
+                            const boardY = this.currentPiece.y + y;
+                            const boardX = this.currentPiece.x + x;
+                            if (boardY >= 0) {
+                                this.board[boardY][boardX] = this.currentPiece.color;
+                            }
+                        }
+                    });
+                });
+            }
+
+            rotate() {
+                // Add trail before rotation for motion blur effect
+                this.addTrailGhost();
+
+                const rotated = this.currentPiece.shape[0].map((_, i) =>
+                    this.currentPiece.shape.map(row => row[i]).reverse()
+                );
+                const previousShape = this.currentPiece.shape;
+                this.currentPiece.shape = rotated;
+
+                let rotationSuccessful = true;
+
+                if (this.collide()) {
+                    // Wall kick attempt 1: Move right
+                    this.currentPiece.x++;
+                    if (this.collide()) {
+                        // Wall kick attempt 2: Move left
+                        this.currentPiece.x -= 2; // -1 from original
+                        if (this.collide()) {
+                                // Wall kick attempt 3: Move up (sometimes useful for T-spins or floor)
+                                this.currentPiece.x++; // Back to original X
+                                this.currentPiece.y--;
+                                if (this.collide()) {
+                                    // All failed, revert
+                                    this.currentPiece.y++; // Back to original Y
+                                    this.currentPiece.shape = previousShape;
+                                    rotationSuccessful = false;
+                                }
+                        }
+                    }
+                }
+
+                // Add another trail after successful rotation
+                if (rotationSuccessful) {
+                    this.addTrailGhost();
+                }
+            }
+            
+            hold() {
+                if (!this.canHold || this.gameOver || this.paused) return;
+                
+                if (this.holdPiece === null) {
+                    this.holdPiece = this.currentPiece;
+                    this.currentPiece = this.nextPiece;
+                    this.nextPiece = this.createPiece();
+                } else {
+                    const temp = this.currentPiece;
+                    this.currentPiece = this.recreatePiece(this.holdPiece.typeIndex);
+                    this.holdPiece = temp;
+                }
+                
+                this.canHold = false;
+                this.drawHoldPiece();
+                this.drawNextPiece();
+            }
+
+            move(dir) {
+                const oldX = this.currentPiece.x;
+                this.currentPiece.x += dir;
+                if (this.collide()) {
+                    this.currentPiece.x -= dir;
+                } else {
+                    // Create trail on successful move
+                    this.addTrailGhost();
+                }
+            }
+
+            drop() {
+                this.currentPiece.y++;
+                if (this.collide()) {
+                    this.currentPiece.y--;
+                    this.merge();
+                    this.clearLines();
+                    this.currentPiece = this.nextPiece;
+                    this.nextPiece = this.createPiece();
+                    this.canHold = true; // Enable hold for new piece
+
+                    if (this.collide()) {
+                        this.endGame();
+                    }
+                }
+                this.dropCounter = 0;
+            }
+
+            hardDrop() {
+                // Create trail ghosts during hard drop for motion blur
+                const startY = this.currentPiece.y;
+                while (!this.collide()) {
+                    // Add trail every 2 rows during drop
+                    if ((this.currentPiece.y - startY) % 2 === 0) {
+                        this.trailGhosts.push(new TrailGhost(
+                            this.currentPiece.x,
+                            this.currentPiece.y,
+                            this.currentPiece.color,
+                            this.currentPiece.shape
+                        ));
+                    }
+                    this.currentPiece.y++;
+                }
+                this.currentPiece.y--;
+
+                // Shake effect
+                const gameArea = document.querySelector('.game-area');
+                gameArea.classList.remove('shake');
+                void gameArea.offsetWidth; // trigger reflow
+                gameArea.classList.add('shake');
+
+                this.merge();
+                this.clearLines();
+                this.currentPiece = this.nextPiece;
+                this.nextPiece = this.createPiece();
+                this.canHold = true; // Enable hold for new piece
+                this.lastPiecePos = null; // Reset trail tracking for new piece
+
+                if (this.collide()) {
+                    this.endGame();
+                }
+            }
+
+            // GRAVITY LOGIC
+            applyGravity() {
+                let moved = false;
+                // Scan column by column
+                for (let x = 0; x < COLS; x++) {
+                    // Start from the bottom-most row that could potentially be empty
+                    for (let y = ROWS - 1; y >= 0; y--) {
+                        if (this.board[y][x] === 0) {
+                            // This cell is empty. Look above it for a block.
+                            for (let searchY = y - 1; searchY >= 0; searchY--) {
+                                if (this.board[searchY][x] !== 0) {
+                                    // Found a block at searchY. Move it down to y.
+                                    this.board[y][x] = this.board[searchY][x];
+                                    this.board[searchY][x] = 0;
+                                    moved = true;
+                                    break; // Filled this y, move to next y (y-- in outer loop)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (moved) {
+                    // Check if new lines were formed by gravity
+                    this.clearLines(true);
+                }
+            }
+
+            clearLines(fromGravity = false) {
+                let linesCleared = 0;
+                const previousLevel = this.level;
+
+                for (let y = ROWS - 1; y >= 0; y--) {
+                    if (this.board[y].every(cell => cell !== 0)) {
+                        // Explosion effect
+                        for(let i=0; i<30; i++) {
+                            this.effects.push(new ExplosionParticle(
+                                (Math.random() * COLS) * BLOCK_SIZE,
+                                y * BLOCK_SIZE + BLOCK_SIZE/2,
+                                this.board[y][Math.floor(Math.random() * COLS)]
+                            ));
+                        }
+
+                        this.board.splice(y, 1);
+                        this.board.unshift(Array(COLS).fill(0));
+                        linesCleared++;
+                        y++; // Check same row again
+                    }
+                }
+
+                if (linesCleared > 0) {
+                    if (!fromGravity) { // Only score standard clears to avoid infinite score loops/exploits if desired, or keep generic
+                         this.lines += linesCleared;
+                         this.score += [40, 100, 300, 1200][linesCleared - 1] * this.level;
+                         this.level = Math.floor(this.lines / 10) + 1;
+                         this.dropInterval = Math.max(100, 1000 - (this.level - 1) * 100);
+                         this.updateScore();
+
+                         // Check for level up and trigger animation
+                         if (this.level > previousLevel) {
+                             this.triggerLevelUp(this.level);
+                         }
+                    } else {
+                        // Chain reaction bonus?
+                         this.score += [40, 100, 300, 1200][linesCleared - 1] * this.level * 2; // Double score for gravity cascades
+                         this.updateScore();
+                    }
+
+                    this.flashAlpha = 0.3 + (linesCleared * 0.1);
+
+                    // Trigger gravity to settle unsupported blocks
+                    this.applyGravity();
+                }
+            }
+            
+            updateScore() {
+                document.getElementById('score').textContent = this.score;
+                document.getElementById('lines').textContent = this.lines;
+                document.getElementById('level').textContent = this.level;
+            }
+
+            start() {
+                if (this.gameOver) return;
+
+                this.board = this.createBoard();
+                this.currentPiece = this.createPiece();
+                this.nextPiece = this.createPiece();
+                this.score = 0;
+                this.lines = 0;
+                this.level = 1;
+                this.dropInterval = 1000;
+                this.paused = false;
+                this.updateScore();
+                document.getElementById('game-over').classList.remove('show');
+
+                if (!this.animationId) {
+                    this.update();
+                }
+            }
+
+            pause() {
+                this.paused = !this.paused;
+            }
+
+            restart() {
+                this.gameOver = false;
+                this.start();
+            }
+
+            endGame() {
+                this.gameOver = true;
+                document.getElementById('final-score').textContent = this.score;
+                document.getElementById('game-over').classList.add('show');
+            }
+
+            update(time = 0) {
+                if (!this.paused && !this.gameOver) {
+                    this.effects.forEach(e => e.update());
+                    this.effects = this.effects.filter(e => e.life > 0);
+
+                    // Update trail ghosts
+                    this.trailGhosts.forEach(ghost => ghost.update());
+                    this.trailGhosts = this.trailGhosts.filter(ghost => ghost.alpha > 0);
+
+                    // Update level transition
+                    if (this.levelTransition && this.levelTransition.active) {
+                        this.levelTransition.update();
+                    }
+                }
+
+                if (!this.paused && !this.gameOver && this.currentPiece) {
+                    const deltaTime = time - this.lastTime;
+                    this.lastTime = time;
+                    this.dropCounter += deltaTime;
+
+                    // Add trail ghost every few frames for smooth trail effect
+                    this.trailFrameCounter++;
+                    if (this.trailFrameCounter >= 3) { // Every 3 frames (~50ms at 60fps)
+                        this.addTrailGhost();
+                        this.trailFrameCounter = 0;
+                    }
+
+                    if (this.dropCounter > this.dropInterval) {
+                        this.drop();
+                    }
+                }
+
+                this.drawBoard();
+                this.drawNextPiece();
+                this.animationId = requestAnimationFrame(this.update.bind(this));
+            }
+        }
+
+        // Initialize canvas size
+        resizeCanvas();
+        const game = new Tetris();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            resizeCanvas();
+            game.drawBoard();
+            game.drawNextPiece();
+            game.drawHoldPiece();
+        });
+
+        // Keyboard controls
+        document.addEventListener('keydown', e => {
+            if (game.gameOver || game.paused) return;
+
+            switch(e.key) {
+                case 'ArrowLeft':
+                    game.move(-1);
+                    break;
+                case 'ArrowRight':
+                    game.move(1);
+                    break;
+                case 'ArrowDown':
+                    game.drop();
+                    break;
+                case 'ArrowUp':
+                    game.rotate();
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    game.hardDrop();
+                    break;
+                case 'p':
+                case 'P':
+                    game.pause();
+                    break;
+                case 'c':
+                case 'C':
+                case 'Shift':
+                    game.hold();
+                    break;
+            }
+        });
+
+        // Touch controls
+        document.getElementById('touch-left').addEventListener('click', () => {
+            if (!game.gameOver && !game.paused && game.currentPiece) {
+                game.move(-1);
+            }
+        });
+
+        document.getElementById('touch-right').addEventListener('click', () => {
+            if (!game.gameOver && !game.paused && game.currentPiece) {
+                game.move(1);
+            }
+        });
+
+        document.getElementById('touch-down').addEventListener('click', () => {
+            if (!game.gameOver && !game.paused && game.currentPiece) {
+                game.drop();
+            }
+        });
+
+        document.getElementById('touch-rotate').addEventListener('click', () => {
+            if (!game.gameOver && !game.paused && game.currentPiece) {
+                game.rotate();
+            }
+        });
+
+        document.getElementById('touch-drop').addEventListener('click', () => {
+            if (!game.gameOver && !game.paused && game.currentPiece) {
+                game.hardDrop();
+            }
+        });
+
+        document.getElementById('touch-hold').addEventListener('click', () => {
+             if (!game.gameOver && !game.paused) {
+                game.hold();
+            }
+        });
+
+        // Swipe controls
+        let touchStartX = 0;
+        let touchStartY = 0;
+        
+        document.addEventListener('touchstart', e => {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+        }, {passive: false});
+
+        document.addEventListener('touchend', e => {
+            if (game.gameOver || game.paused) return;
+            
+            const touchEndX = e.changedTouches[0].screenX;
+            const touchEndY = e.changedTouches[0].screenY;
+            
+            const diffX = touchEndX - touchStartX;
+            const diffY = touchEndY - touchStartY;
+            
+            const minSwipeDistance = 30; // Threshold in pixels
+            
+            // Determine if horizontal or vertical swipe based on which distance is greater
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                // Horizontal swipe
+                if (Math.abs(diffX) > minSwipeDistance) {
+                    if (diffX > 0) {
+                        game.move(1); // Swipe Right
+                    } else {
+                        game.move(-1); // Swipe Left
+                    }
+                }
+            } else {
+                // Vertical swipe
+                if (Math.abs(diffY) > minSwipeDistance) {
+                    if (diffY > 0) {
+                        game.hardDrop(); // Swipe Down -> Slam (Hard Drop)
+                    } else {
+                        game.rotate(); // Swipe Up -> Rotate
+                    }
+                }
+            }
+        }, {passive: false});
+
+        // Auto-start
+        game.start();
+    </script>
+</body>
+</html>

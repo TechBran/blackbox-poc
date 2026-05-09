@@ -1,0 +1,969 @@
+/* _claude.css
+ * Extracted from: style.css
+ * Generated: 2026-01-04T14:27:28.661231
+ * Blocks: 37
+ */
+
+/* =====================================================================
+   Claude Code Agent Styles
+   ===================================================================== */
+/* Claude Code Banner - Floating bubble below header */
+.claude-code-banner {
+    /* Floating bubble style */
+    background: rgba(34, 34, 34, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(74, 158, 255, 0.3);
+    border-radius: var(--radius-xl);
+    padding: 12px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    box-shadow: 0 4px 25px rgba(74, 158, 255, 0.2);
+    /* Fixed positioning below the header, centered */
+    position: fixed;
+    top: 55px;  /* v225: Brought up slightly */
+    left: 50%;
+    transform: translateX(-50%);
+    width: auto;
+    max-width: calc(100% - 32px);
+    z-index: var(--z-banner);  /* Below header (100) but above content */
+    /* Ensure clickable on all browsers including Windows Chrome */
+    pointer-events: auto;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.claude-code-banner.hide {
+    display: none !important;
+}
+
+/* Banner working state - animated border glow */
+.claude-code-banner.working {
+    border-color: rgba(255, 159, 64, 0.6);
+    box-shadow: 0 4px 25px rgba(255, 159, 64, 0.3), 0 0 30px rgba(255, 159, 64, 0.15);
+    animation: banner-working-glow 2s ease-in-out infinite;
+}
+
+/* Banner ready state - green glow */
+.claude-code-banner.session-ready {
+    border-color: rgba(39, 217, 128, 0.5);
+    box-shadow: 0 4px 25px rgba(39, 217, 128, 0.25), 0 0 20px rgba(39, 217, 128, 0.1);
+}
+
+/* Collapsed State: Compact floating bubble */
+.claude-code-banner.collapsed {
+    padding: 0;
+}
+
+.claude-code-banner.collapsed .claude-banner-expanded {
+    display: none;
+}
+
+.claude-code-banner.collapsed .claude-banner-collapsed {
+    display: flex;
+}
+
+.claude-code-banner:not(.collapsed) .claude-banner-collapsed {
+    display: none;
+}
+
+.claude-code-banner:not(.collapsed) .claude-banner-expanded {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* Collapsed Banner: Single line compact floating bubble */
+.claude-banner-collapsed {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-xl);
+    cursor: pointer;
+    transition: all var(--transition-slow);
+    gap: 16px;
+    /* Ensure clickable on all browsers including Windows Chrome */
+    pointer-events: auto;
+    -webkit-tap-highlight-color: rgba(74, 158, 255, 0.2);
+    touch-action: manipulation;
+    user-select: none;
+    -webkit-user-select: none;
+    /* Minimum tap target size for accessibility */
+    min-height: 44px;
+}
+
+.claude-banner-collapsed:hover {
+    background: rgba(74, 158, 255, 0.1);
+}
+
+/* Active/pressed state for visual feedback */
+.claude-banner-collapsed:active {
+    background: rgba(74, 158, 255, 0.2);
+    transform: scale(0.98);
+}
+
+.claude-code-banner:not(.collapsed) .banner-toggle {
+    transform: rotate(180deg);
+}
+
+/* Banner Inline Metrics (shown in collapsed state) */
+.banner-metrics {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--neutral-700);
+    opacity: 0;
+    transition: opacity var(--transition-slow);
+}
+
+/* Show metrics when session is active */
+.claude-code-banner.session-ready .banner-metrics,
+.claude-code-banner.working .banner-metrics {
+    opacity: 1;
+}
+
+.metric-model {
+    color: #4a9eff;
+    font-weight: 600;
+    font-size: 10px;
+    padding: 2px 6px;
+    background: rgba(74, 158, 255, 0.15);
+    border-radius: var(--radius-xs);
+}
+
+.metric-sep {
+    color: var(--neutral-500);
+    font-size: 10px;
+}
+
+.metric-context {
+    color: #27d980;
+    font-weight: 500;
+}
+
+.metric-cost {
+    color: #ffb347;
+    font-weight: 500;
+}
+
+.metric-duration {
+    color: var(--neutral-800);
+}
+
+/* Hide metrics in expanded view (shown in status row instead) */
+.claude-code-banner:not(.collapsed) .banner-metrics {
+    display: none;
+}
+
+/* Mobile: Stack metrics or hide if too cramped */
+@media (max-width: 480px) {
+    .banner-metrics {
+        display: none;
+    }
+}
+
+@media (min-width: 481px) and (max-width: 600px) {
+    .banner-metrics {
+        font-size: 9px;
+        gap: 4px;
+    }
+    .metric-model {
+        font-size: 9px;
+        padding: 1px 4px;
+    }
+}
+
+/* Expanded Banner */
+.claude-banner-expanded {
+    padding: 12px 20px;
+}
+
+.claude-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Banner Row Layout */
+.claude-banner-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.claude-banner-title-row {
+    justify-content: flex-start;
+}
+
+.claude-banner-controls-row {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.claude-banner-status-row {
+    justify-content: flex-start;
+}
+
+.claude-banner-icon {
+    font-size: 24px;
+    animation: pulse-glow 2s infinite;
+}
+
+.claude-banner-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+}
+
+.claude-banner-status {
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: var(--radius-lg);
+    background: rgba(74, 158, 255, 0.2);
+    color: #4a9eff;
+    font-weight: 500;
+}
+
+/* Working/Streaming state - eye-catching animation */
+.claude-banner-status.streaming {
+    background: linear-gradient(90deg, rgba(255, 159, 64, 0.3), rgba(255, 107, 107, 0.3), rgba(255, 159, 64, 0.3));
+    background-size: 200% 100%;
+    color: #ffb347;
+    font-weight: 600;
+    animation: status-working 1.5s ease-in-out infinite, status-glow 2s ease-in-out infinite;
+    box-shadow: 0 0 12px rgba(255, 159, 64, 0.4);
+}
+
+/* Ready/Session Active state - green indicator */
+.claude-banner-status.ready {
+    background: rgba(39, 217, 128, 0.25);
+    color: #27d980;
+    font-weight: 600;
+    box-shadow: 0 0 8px rgba(39, 217, 128, 0.3);
+}
+
+.claude-banner-hint {
+    font-size: 12px;
+    color: var(--neutral-700);
+    margin-left: auto;
+}
+
+/* Model Selector */
+.claude-model-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.claude-model-selector label {
+    font-size: 12px;
+    color: var(--neutral-700);
+}
+
+.claude-model-selector select {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(74, 158, 255, 0.4);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: var(--radius-md);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.claude-model-selector select:hover {
+    border-color: #4a9eff;
+}
+
+.claude-model-selector select:focus {
+    outline: none;
+    border-color: #4a9eff;
+    box-shadow: 0 0 8px rgba(74, 158, 255, 0.3);
+}
+
+/* Banner Action Buttons */
+.claude-banner-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Claude Model Selector in Banner */
+.claude-model-selector {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 12px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: var(--radius-md);
+    border: 1px solid rgba(74, 158, 255, 0.3);
+}
+
+.claude-model-selector label {
+    font-size: 12px;
+    color: var(--neutral-700);
+    font-weight: 500;
+}
+
+.claude-model-selector select {
+    background: var(--neutral-150);
+    color: #fff;
+    border: 1px solid var(--neutral-300);
+    border-radius: var(--radius-sm);
+    padding: 6px 28px 6px 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='%234a9eff'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    transition: all var(--transition-base);
+}
+
+.claude-model-selector select:hover {
+    background-color: #252525;
+    border-color: #4a9eff;
+}
+
+.claude-model-selector select:focus {
+    outline: none;
+    border-color: #4a9eff;
+    box-shadow: 0 0 8px rgba(74, 158, 255, 0.3);
+}
+
+.claude-model-selector select option {
+    background: var(--neutral-150);
+    color: #fff;
+    padding: 8px;
+}
+
+/* =====================================================================
+   Todo Panel (Claude Code TodoWrite integration)
+   ===================================================================== */
+
+.todo-panel {
+    position: fixed;
+    /* Position just above composer (v223: status bar removed) */
+    bottom: 140px;
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 350px;
+    max-width: 600px;
+    width: auto;
+    background: rgba(30, 30, 30, 0.98);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(74, 158, 255, 0.3);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: all var(--transition-slow);
+    z-index: var(--z-todo);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+
+.todo-panel.hide {
+    display: none !important;
+}
+
+/* Mobile responsive - todo panel above composer */
+@media (max-width: 768px) {
+    .todo-panel {
+        bottom: calc(130px + env(safe-area-inset-bottom));
+        min-width: 300px;
+        max-width: 95%;
+    }
+}
+
+@media (max-width: 480px) {
+    .todo-panel {
+        bottom: calc(120px + env(safe-area-inset-bottom));
+        min-width: 280px;
+    }
+
+    .todo-header {
+        padding: 8px 12px;
+        gap: 8px;
+    }
+
+    .todo-title {
+        font-size: 12px;
+    }
+
+    .todo-current {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    .todo-item {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+}
+
+/* Todo Header */
+.todo-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: rgba(74, 158, 255, 0.1);
+    border-bottom: 1px solid rgba(74, 158, 255, 0.2);
+    cursor: pointer;
+    transition: background var(--transition-base);
+}
+
+.todo-header:hover {
+    background: rgba(74, 158, 255, 0.15);
+}
+
+.todo-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.todo-progress {
+    font-size: 12px;
+    color: #4a9eff;
+    font-weight: 500;
+}
+
+.todo-progress-bar {
+    flex: 1;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    max-width: 120px;
+}
+
+.todo-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4a9eff, #27d980);
+    border-radius: 2px;
+    transition: width var(--transition-slow);
+}
+
+.todo-collapse-btn,
+.todo-expand-btn {
+    color: var(--neutral-700);
+    font-size: 10px;
+    margin-left: auto;
+    transition: transform var(--transition-base);
+}
+
+/* Collapsed View */
+.todo-collapsed {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    cursor: pointer;
+    transition: background var(--transition-base);
+}
+
+.todo-collapsed:hover {
+    background: rgba(74, 158, 255, 0.1);
+}
+
+.todo-summary-icon {
+    font-size: 16px;
+}
+
+.todo-summary-text {
+    font-size: 13px;
+    color: #27d980;
+    font-weight: 500;
+}
+
+.todo-current-mini {
+    font-size: 12px;
+    color: var(--neutral-700);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+}
+
+/* Current Task (in_progress) */
+.todo-current {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: rgba(255, 159, 64, 0.1);
+    border-bottom: 1px solid rgba(255, 159, 64, 0.2);
+}
+
+.todo-active-form {
+    font-size: 13px;
+    color: #ffb347;
+    font-weight: 500;
+}
+
+/* Todo List */
+.todo-list {
+    padding: 8px 12px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.todo-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    transition: background var(--transition-base);
+}
+
+.todo-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.todo-check {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    border-radius: 50%;
+}
+
+.todo-item.completed .todo-check {
+    background: rgba(39, 217, 128, 0.2);
+    color: #27d980;
+}
+
+.todo-item.pending .todo-check {
+    color: var(--neutral-600);
+}
+
+.todo-item.in_progress .todo-check {
+    color: #ffb347;
+}
+
+.todo-content {
+    font-size: 13px;
+    color: var(--neutral-900);
+}
+
+.todo-item.completed .todo-content {
+    color: var(--neutral-700);
+    text-decoration: line-through;
+}
+
+.todo-item.in_progress .todo-content {
+    color: #ffb347;
+    font-weight: 500;
+}
+
+/* Todo Spinner */
+.todo-spinner,
+.todo-spinner-inline {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 159, 64, 0.3);
+    border-top-color: #ffb347;
+    border-radius: 50%;
+    animation: todo-spin 0.8s linear infinite;
+}
+
+.todo-spinner-inline {
+    width: 12px;
+    height: 12px;
+    display: inline-block;
+}
+
+@keyframes todo-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* =====================================================================
+   Agent Status Line (context/cost/duration tracking)
+   ===================================================================== */
+
+.agent-status-line {
+    /* HIDDEN - Metrics now displayed in banner inline */
+    /* Keeping styles for potential future use with expanded banner view */
+    display: none !important;
+    position: fixed;
+    bottom: 210px;
+    left: 50%;
+    transform: translateX(-50%);
+    height: 28px;
+    min-width: 400px;
+    max-width: 90%;
+    background: rgba(26, 26, 26, 0.98);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(74, 158, 255, 0.3);
+    border-radius: 14px;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 0 20px;
+    font-size: 11px;
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+    z-index: 102;
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+}
+
+.agent-status-line.hide {
+    display: none !important;
+}
+
+/* Mobile responsive - push status line higher on smaller screens */
+@media (max-width: 768px) {
+    .agent-status-line {
+        bottom: calc(200px + env(safe-area-inset-bottom));
+        min-width: 320px;
+        max-width: 95%;
+        font-size: 10px;
+        gap: 10px;
+        padding: 0 14px;
+        height: 26px;
+    }
+}
+
+@media (max-width: 480px) {
+    .agent-status-line {
+        bottom: calc(195px + env(safe-area-inset-bottom));
+        min-width: 280px;
+        font-size: 9px;
+        gap: 8px;
+        padding: 0 10px;
+        height: 24px;
+    }
+}
+
+.agent-status-line .status-model {
+    color: #4a9eff;
+    font-weight: 600;
+}
+
+.agent-status-line .status-separator {
+    color: var(--neutral-400);
+}
+
+.agent-status-line .status-context {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--neutral-700);
+}
+
+.agent-status-line .context-bar {
+    width: 60px;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.agent-status-line .context-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #27d980, #4a9eff);
+    border-radius: 2px;
+    transition: width var(--transition-slow);
+}
+
+/* Context warning colors */
+.agent-status-line .context-bar.warning .context-fill {
+    background: linear-gradient(90deg, #ffb347, #ff6b6b);
+}
+
+.agent-status-line .status-cost {
+    color: #27d980;
+}
+
+.agent-status-line .status-duration {
+    color: var(--neutral-700);
+}
+
+/* =====================================================================
+   Thinking Indicator (extended thinking budget tracking)
+   ===================================================================== */
+
+.thinking-indicator {
+    position: fixed;
+    /* Position above todo-panel when active */
+    bottom: 330px;
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 300px;
+    max-width: 500px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: rgba(147, 112, 219, 0.2);
+    border: 1px solid rgba(147, 112, 219, 0.4);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-slow);
+    z-index: var(--z-thinking);  /* Above todo-panel (103) */
+    box-shadow: 0 4px 20px rgba(147, 112, 219, 0.3);
+}
+
+.thinking-indicator.hide {
+    display: none !important;
+}
+
+/* Mobile responsive - push thinking indicator higher on smaller screens */
+@media (max-width: 768px) {
+    .thinking-indicator {
+        bottom: calc(290px + env(safe-area-inset-bottom));
+        min-width: 280px;
+        max-width: 95%;
+        padding: 8px 14px;
+        gap: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .thinking-indicator {
+        bottom: calc(280px + env(safe-area-inset-bottom));
+        min-width: 260px;
+        padding: 8px 12px;
+        gap: 8px;
+    }
+
+    .thinking-icon {
+        font-size: 16px;
+    }
+
+    .thinking-label {
+        font-size: 11px;
+    }
+
+    .thinking-budget-text {
+        font-size: 10px;
+    }
+}
+
+.thinking-icon {
+    font-size: 18px;
+    animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.95); }
+}
+
+.thinking-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #b19cd9;
+}
+
+.thinking-budget-bar {
+    flex: 1;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+    overflow: hidden;
+    max-width: 150px;
+}
+
+.thinking-budget-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #b19cd9, #9370db);
+    border-radius: 3px;
+    transition: width var(--transition-slow);
+}
+
+.thinking-budget-fill.warning {
+    background: linear-gradient(90deg, #ffb347, #ff6b6b);
+}
+
+.thinking-budget-text {
+    font-size: 11px;
+    color: var(--neutral-700);
+    font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+    min-width: 70px;
+}
+
+/* =====================================================================
+   Permission Mode Indicator
+   ===================================================================== */
+
+.permission-mode-wrapper {
+    margin-left: auto;
+    cursor: pointer;
+    user-select: none;
+}
+
+.permission-mode {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    transition: all var(--transition-base);
+}
+
+/* Normal mode - yellow/warning */
+.permission-mode.mode-normal {
+    background: rgba(255, 193, 7, 0.2);
+    color: #ffc107;
+    border: 1px solid rgba(255, 193, 7, 0.4);
+}
+
+/* Auto-accept mode - green */
+.permission-mode.mode-auto {
+    background: rgba(39, 217, 128, 0.2);
+    color: #27d980;
+    border: 1px solid rgba(39, 217, 128, 0.4);
+}
+
+/* Plan mode - blue */
+.permission-mode.mode-plan {
+    background: rgba(74, 158, 255, 0.2);
+    color: #4a9eff;
+    border: 1px solid rgba(74, 158, 255, 0.4);
+}
+
+.permission-mode:hover {
+    transform: scale(1.05);
+}
+
+.permission-mode:active {
+    transform: scale(0.95);
+}
+
+/* =====================================================================
+   Collapsible File/Edit/Tool Results
+   ===================================================================== */
+
+/* Base collapsible styling */
+details.file-result-collapsible,
+details.edit-diff-collapsible,
+details.tool-result-collapsible {
+    margin: 8px 0;
+    border: 1px solid rgba(74, 158, 255, 0.2);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    background: rgba(30, 30, 30, 0.6);
+}
+
+details.file-result-collapsible summary,
+details.edit-diff-collapsible summary,
+details.tool-result-collapsible summary {
+    padding: 10px 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--neutral-1000);
+    background: rgba(40, 40, 40, 0.8);
+    border-bottom: 1px solid transparent;
+    transition: all var(--transition-base);
+    user-select: none;
+    list-style: none;
+}
+
+details.file-result-collapsible summary::-webkit-details-marker,
+details.edit-diff-collapsible summary::-webkit-details-marker,
+details.tool-result-collapsible summary::-webkit-details-marker {
+    display: none;
+}
+
+/* Arrow indicator */
+details.file-result-collapsible summary::before,
+details.edit-diff-collapsible summary::before,
+details.tool-result-collapsible summary::before {
+    content: "▶";
+    font-size: 10px;
+    color: var(--neutral-700);
+    transition: transform var(--transition-base);
+    margin-right: 4px;
+}
+
+details[open].file-result-collapsible summary::before,
+details[open].edit-diff-collapsible summary::before,
+details[open].tool-result-collapsible summary::before {
+    transform: rotate(90deg);
+}
+
+/* Hover effect */
+details.file-result-collapsible summary:hover,
+details.edit-diff-collapsible summary:hover,
+details.tool-result-collapsible summary:hover {
+    background: rgba(74, 158, 255, 0.1);
+}
+
+/* Open state */
+details[open].file-result-collapsible summary,
+details[open].edit-diff-collapsible summary,
+details[open].tool-result-collapsible summary {
+    border-bottom-color: rgba(74, 158, 255, 0.2);
+}
+
+/* File result specific - blue accent */
+details.file-result-collapsible {
+    border-color: rgba(74, 158, 255, 0.25);
+}
+
+details.file-result-collapsible summary strong {
+    color: #4a9eff;
+}
+
+.file-line-range {
+    color: var(--neutral-700);
+    font-size: 11px;
+    margin-left: auto;
+}
+
+/* Edit diff specific - green accent */
+details.edit-diff-collapsible {
+    border-color: rgba(80, 250, 123, 0.25);
+}
+
+details.edit-diff-collapsible summary strong {
+    color: #50fa7b;
+}
+
+.edit-line-count {
+    color: var(--neutral-700);
+    font-size: 11px;
+    margin-left: auto;
+}
+
+/* Tool result specific - orange accent */
+details.tool-result-collapsible {
+    border-color: rgba(255, 184, 108, 0.25);
+}
+
+details.tool-result-collapsible summary {
+    color: #ffb86c;
+}
+
+/* Code block inside collapsibles */
+details.file-result-collapsible pre,
+details.edit-diff-collapsible pre,
+details.tool-result-collapsible pre {
+    margin: 0 !important;
+    border-radius: 0 !important;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+details.file-result-collapsible pre code,
+details.edit-diff-collapsible pre code,
+details.tool-result-collapsible pre code {
+    font-size: 12px !important;
+}
+

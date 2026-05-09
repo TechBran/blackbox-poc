@@ -1,0 +1,46 @@
+/* Portal/styles/main.css - CSS Module Entry Point
+ * Generated: 2026-01-04T14:27:28.662068
+ * Source: Portal/style.css (preserved)
+ * Rebuild: python3 build_manifest.py --extract
+ */
+
+
+/* === FOUNDATION === */
+@import url('./_variables.css');
+@import url('./_base.css');
+@import url('./_utilities.css?v=259');
+
+/* === COMPONENTS === */
+@import url('./components/_buttons.css');
+@import url('./components/_modals.css');
+@import url('./components/_topbar.css');
+@import url('./components/_composer.css');
+@import url('./components/_chat-bubbles.css?v=259');
+@import url('./components/_audio-player.css');
+
+/* === FEATURES === */
+@import url('./features/_markdown.css?v=259');
+@import url('./features/_file-upload.css');
+@import url('./features/_task-monitor.css');
+@import url('./features/_thinking.css');
+@import url('./features/_settings.css');
+@import url('./features/_cron.css');
+@import url('./features/_browser.css');
+@import url('./features/_device-manager.css');
+@import url('./features/_telephony.css');
+@import url('./features/_cellular.css');
+@import url('./features/_sms.css');
+@import url('./features/_contacts.css');
+
+/* === GENERATION === */
+@import url('./generation/_base.css');
+@import url('./generation/_image.css');
+@import url('./generation/_video.css');
+@import url('./generation/_audio.css');
+
+/* === AGENTS === */
+@import url('./agents/_base.css');
+@import url('./agents/_claude.css');
+@import url('./agents/_gemini.css');
+@import url('./agents/_realtime.css');
+@import url('./features/_timeline.css');

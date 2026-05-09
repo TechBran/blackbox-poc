@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Apparition - 3D AI Avatar</title>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Three.js from CDN, TalkingHead stored locally -->
+    <!-- TalkingHead library saved locally for long-term availability -->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+            "talkinghead": "./lib/talkinghead.mjs"
+        }
+    }
+    </script>
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading" class="loading-screen">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h2>Loading Apparition</h2>
+            <p id="loadingStatus">Initializing 3D engine...</p>
+        </div>
+    </div>
+
+    <!-- Main App Container -->
+    <div id="app" class="app-container" style="display: none;">
+        <!-- Header -->
+        <header class="header">
+            <button id="settingsBtn" class="icon-btn" title="Settings">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                </svg>
+            </button>
+            <h1>Apparition</h1>
+            <button id="fullscreenBtn" class="icon-btn" title="Fullscreen">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+                </svg>
+            </button>
+        </header>
+
+        <!-- 3D Avatar Container -->
+        <div id="avatarContainer" class="avatar-container">
+            <div id="avatar" class="avatar-canvas"></div>
+
+            <!-- Avatar Status Overlay -->
+            <div id="avatarStatus" class="avatar-status">
+                <span class="status-indicator"></span>
+                <span id="statusText">Ready</span>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <div class="input-wrapper">
+                <textarea
+                    id="textInput"
+                    placeholder="Type something for the avatar to say..."
+                    rows="2"
+                ></textarea>
+                <button id="speakBtn" class="speak-btn" title="Speak">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="voice-selector">
+                <label for="voiceSelect">Voice:</label>
+                <select id="voiceSelect">
+                    <option value="onyx">Onyx (Deep)</option>
+                    <option value="nova">Nova (Confident)</option>
+                    <option value="echo">Echo (Warm)</option>
+                    <option value="fable">Fable (Expressive)</option>
+                    <option value="shimmer">Shimmer (Soft)</option>
+                    <option value="alloy">Alloy (Neutral)</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settingsPanel" class="settings-panel">
+        <div class="settings-header">
+            <h2>Settings</h2>
+            <button id="closeSettings" class="icon-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+
+        <div class="settings-content">
+            <!-- Avatar Selection -->
+            <section class="settings-section">
+                <h3>Character</h3>
+                <p class="section-help">Create your own avatar at <a href="https://demo.readyplayer.me/avatar" target="_blank" rel="noopener">Ready Player Me</a></p>
+                <div id="avatarGrid" class="avatar-grid">
+                    <!-- Populated by JS -->
+                </div>
+                <div class="custom-avatar-section">
+                    <p class="custom-help">After creating, copy the .glb URL and paste below:</p>
+                    <div class="custom-avatar">
+                        <input type="text" id="customAvatarUrl" placeholder="https://models.readyplayer.me/xxx.glb">
+                        <select id="customBodyType" title="Body Type">
+                            <option value="M" selected>Male</option>
+                            <option value="F">Female</option>
+                        </select>
+                        <button id="loadCustomAvatar">Load</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Camera View -->
+            <section class="settings-section">
+                <h3>Camera View</h3>
+                <div class="button-group">
+                    <button class="view-btn" data-view="full">Full Body</button>
+                    <button class="view-btn active" data-view="upper">Upper Body</button>
+                    <button class="view-btn" data-view="head">Head Only</button>
+                </div>
+            </section>
+
+            <!-- Mood -->
+            <section class="settings-section">
+                <h3>Mood</h3>
+                <div class="button-group">
+                    <button class="mood-btn active" data-mood="neutral">Neutral</button>
+                    <button class="mood-btn" data-mood="happy">Happy</button>
+                    <button class="mood-btn" data-mood="sad">Thoughtful</button>
+                    <button class="mood-btn" data-mood="love">Friendly</button>
+                </div>
+            </section>
+
+            <!-- Background -->
+            <section class="settings-section">
+                <h3>Background</h3>
+                <div class="color-options">
+                    <button class="color-btn active" data-bg="#1a1a2e" style="background: #1a1a2e;"></button>
+                    <button class="color-btn" data-bg="#0f3460" style="background: #0f3460;"></button>
+                    <button class="color-btn" data-bg="#16213e" style="background: #16213e;"></button>
+                    <button class="color-btn" data-bg="#1a1a1a" style="background: #1a1a1a;"></button>
+                    <button class="color-btn" data-bg="#2d132c" style="background: #2d132c;"></button>
+                    <button class="color-btn" data-bg="#transparent" style="background: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%); background-size: 10px 10px;"></button>
+                </div>
+            </section>
+
+            <!-- Idle Animations -->
+            <section class="settings-section">
+                <h3>Idle Behavior</h3>
+                <div class="toggle-options">
+                    <label class="toggle">
+                        <input type="checkbox" id="toggleBreathing" checked>
+                        <span class="toggle-slider"></span>
+                        Breathing
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggleBlinking" checked>
+                        <span class="toggle-slider"></span>
+                        Blinking
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggleHeadMovement" checked>
+                        <span class="toggle-slider"></span>
+                        Head Movement
+                    </label>
+                    <label class="toggle">
+                        <input type="checkbox" id="toggleGestures" checked>
+                        <span class="toggle-slider"></span>
+                        Idle Gestures
+                    </label>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Overlay for settings -->
+    <div id="overlay" class="overlay"></div>
+
+    <!-- Main App Script -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,372 @@
+"""OAK-D Lite publisher: RGB (/oak/rgb/image_rect + /compressed) and stereo depth
+(/oak/stereo/depth + /oak/stereo/camera_info) for nvblox.
+
+The stereo pipeline aligns depth to the RGB camera optical center so the depth
+image shares the same frame and intrinsics as RGB — this is what nvblox's TSDF
+integrator wants (single frame, single K matrix). Both streams run on the
+OAK-D's VPU, so enabling depth adds zero Jetson CPU cost.
+"""
+import array
+import depthai as dai
+import cv2
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import Image, CompressedImage, CameraInfo, Imu
+
+RGB_FRAME_ID = "oak_rgb_camera_optical_frame"
+IMU_FRAME_ID = "oak_imu_frame"
+
+# BMI270 noise floor at 200 Hz bandwidth is dominated by thermal drift,
+# not per-sample noise; diagonals tuned for robot_localization consumption
+# (too-small values starve the filter; too-large under-weight a good sensor).
+_GYRO_COV_DIAG = 1e-4   # rad^2/s^2 per axis
+_ACC_COV_DIAG = 1e-3    # (m/s^2)^2 per axis
+
+
+def build_pipeline(rgb_width: int = 640, rgb_height: int = 480, rgb_fps: int = 15,
+                   depth_fps: int = 15, enable_depth: bool = True,
+                   enable_imu: bool = False, imu_rate_hz: int = 200,
+                   enable_rgb: bool = True) -> dai.Pipeline:
+    p = dai.Pipeline()
+
+    if enable_rgb:
+        # RGB preview at 640x480@15. Source set to 720p (smallest sensor resolution
+        # this depthai version exposes — 480p enums only exist in newer releases).
+        # The ISP downscales 720p -> 640x480 preview; over-the-wire bandwidth is
+        # governed by the preview size, so this gives ER a usable RGB stream
+        # without re-saturating the OAK-D Lite's USB 2.0 link.
+        cam = p.create(dai.node.ColorCamera)
+        cam.setResolution(dai.ColorCameraProperties.SensorResolution.THE_720_P)
+        cam.setPreviewSize(rgb_width, rgb_height)
+        cam.setInterleaved(False)
+        cam.setFps(rgb_fps)
+        cam.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
+        xrgb = p.create(dai.node.XLinkOut)
+        xrgb.setStreamName("rgb")
+        cam.preview.link(xrgb.input)
+
+    if enable_depth:
+        mono_l = p.create(dai.node.MonoCamera)
+        mono_r = p.create(dai.node.MonoCamera)
+        mono_l.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
+        mono_r.setResolution(dai.MonoCameraProperties.SensorResolution.THE_400_P)
+        mono_l.setCamera("left")
+        mono_r.setCamera("right")
+        mono_l.setFps(depth_fps)
+        mono_r.setFps(depth_fps)
+
+        stereo = p.create(dai.node.StereoDepth)
+        # DEFAULT supersedes HIGH_DENSITY in recent depthai; works on both.
+        try:
+            stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.DEFAULT)
+        except AttributeError:
+            stereo.setDefaultProfilePreset(dai.node.StereoDepth.PresetMode.HIGH_DENSITY)
+        stereo.initialConfig.setMedianFilter(dai.MedianFilter.KERNEL_7x7)
+        stereo.setLeftRightCheck(True)
+        stereo.setExtendedDisparity(False)
+        stereo.setSubpixel(False)
+        # Reproject depth onto the RGB optical plane → shared frame + intrinsics.
+        stereo.setDepthAlign(dai.CameraBoardSocket.CAM_A)
+        stereo.setOutputSize(rgb_width, rgb_height)
+        mono_l.out.link(stereo.left)
+        mono_r.out.link(stereo.right)
+
+        xdepth = p.create(dai.node.XLinkOut)
+        xdepth.setStreamName("depth")
+        stereo.depth.link(xdepth.input)
+
+    if enable_imu:
+        # BMI270 on the OAK-D Lite. ACCELEROMETER_RAW and GYROSCOPE_RAW bypass
+        # the SH-2 onboard fusion — we feed raw rates into robot_localization
+        # so there's only one Kalman filter in the chain, not two fighting.
+        imu = p.create(dai.node.IMU)
+        imu.enableIMUSensor(dai.IMUSensor.ACCELEROMETER_RAW, imu_rate_hz)
+        imu.enableIMUSensor(dai.IMUSensor.GYROSCOPE_RAW, imu_rate_hz)
+        imu.setBatchReportThreshold(1)
+        imu.setMaxBatchReports(10)
+        ximu = p.create(dai.node.XLinkOut)
+        ximu.setStreamName("imu")
+        imu.out.link(ximu.input)
+
+    return p
+
+
+def _camera_info_from_calib(device: dai.Device, width: int, height: int) -> CameraInfo:
+    calib = device.readCalibration2()
+    K = calib.getCameraIntrinsics(dai.CameraBoardSocket.CAM_A, width, height)
+    info = CameraInfo()
+    info.height = height
+    info.width = width
+    info.distortion_model = "plumb_bob"
+    fx = float(K[0][0]); fy = float(K[1][1])
+    cx = float(K[0][2]); cy = float(K[1][2])
+    info.k = [fx, 0.0, cx, 0.0, fy, cy, 0.0, 0.0, 1.0]
+    info.p = [fx, 0.0, cx, 0.0, 0.0, fy, cy, 0.0, 0.0, 0.0, 1.0, 0.0]
+    info.d = [0.0, 0.0, 0.0, 0.0, 0.0]
+    info.r = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+    return info
+
+
+class OakdCameraNode(Node):
+    def __init__(self, width: int = 640, height: int = 480, rgb_fps: int = 15,
+                 depth_fps: int = 15, enable_depth: bool = True,
+                 enable_imu: bool = False, imu_rate_hz: int = 200,
+                 enable_rgb: bool = True):
+        super().__init__("ugv_oakd_camera")
+        self.enable_imu = enable_imu
+        self.device = dai.Device(build_pipeline(
+            width, height, rgb_fps, depth_fps, enable_depth,
+            enable_imu=enable_imu, imu_rate_hz=imu_rate_hz,
+            enable_rgb=enable_rgb,
+        ))
+        if enable_rgb:
+            self.q_rgb = self.device.getOutputQueue(name="rgb", maxSize=4, blocking=False)
+        else:
+            self.q_rgb = None
+        self.q_depth = (
+            self.device.getOutputQueue(name="depth", maxSize=4, blocking=False)
+            if enable_depth else None
+        )
+        # IMU queue: 50 deep so a single 100 Hz drain tick can pull up to
+        # ~500 ms of backlog without drops. Blocking=False means USB stalls
+        # silently drop frames instead of back-pressuring the VPU.
+        self.q_imu = (
+            self.device.getOutputQueue(name="imu", maxSize=50, blocking=False)
+            if enable_imu else None
+        )
+
+        if enable_rgb:
+            self.pub_raw = self.create_publisher(
+                Image, "/oak/rgb/image_rect", qos_profile_sensor_data
+            )
+            self.pub_jpeg = self.create_publisher(
+                CompressedImage, "/oak/rgb/image_rect/compressed", qos_profile_sensor_data
+            )
+        else:
+            self.pub_raw = None
+            self.pub_jpeg = None
+        if enable_depth:
+            self.pub_depth = self.create_publisher(
+                Image, "/oak/stereo/depth", qos_profile_sensor_data
+            )
+            self.pub_camera_info = self.create_publisher(
+                CameraInfo, "/oak/stereo/camera_info", qos_profile_sensor_data
+            )
+            self._camera_info_template = _camera_info_from_calib(self.device, width, height)
+        else:
+            self.pub_depth = None
+            self.pub_camera_info = None
+            self._camera_info_template = None
+
+        if enable_rgb:
+            self.timer_rgb = self.create_timer(1.0 / rgb_fps, self._tick_rgb)
+        if enable_depth:
+            self.timer_depth = self.create_timer(1.0 / depth_fps, self._tick_depth)
+        if enable_imu:
+            self.pub_imu = self.create_publisher(Imu, "/oak/imu", qos_profile_sensor_data)
+            # Drain at 100 Hz — each tick pulls an IMUData packet that may
+            # contain multiple reports, so the effective output rate matches
+            # imu_rate_hz regardless of this timer value.
+            self.timer_imu = self.create_timer(1.0 / 100, self._tick_imu)
+            self._imu_fail = 0
+            # Gyro-bias calibration. BMI270 in GYROSCOPE_RAW mode has no on-chip
+            # bias compensation — at boot the yaw axis routinely shows 4 deg/s
+            # of zero-rate offset, which the EKF integrates as phantom rotation
+            # (looks like robot "spinning slowly counterclockwise" while parked).
+            # Collect the first ~2 seconds of stationary samples, compute mean
+            # per-axis bias, and subtract from every subsequent publish.
+            # Operator must keep the robot still during this window.
+            self._bias_target_samples = 200      # ~2s at 95-100 Hz
+            self._bias_buf = []                  # [(gx, gy, gz), ...]
+            self._gyro_bias = None               # (bx, by, bz) once calibrated
+            self.get_logger().info(
+                "OAK-D IMU: calibrating gyro bias — keep robot still for ~2 seconds"
+            )
+
+        self._rgb_fail = 0
+        self._depth_fail = 0
+        self.get_logger().info(
+            f"OAK-D: rgb={'on@' + str(rgb_fps) if enable_rgb else 'off'} "
+            f"depth={'on@' + str(depth_fps) if enable_depth else 'off'} "
+            f"imu={'on@' + str(imu_rate_hz) + 'Hz' if enable_imu else 'off'}"
+        )
+
+    def _tick_rgb(self):
+        if self.q_rgb is None:
+            return
+        try:
+            pkt = self.q_rgb.tryGet()
+            if pkt is None:
+                self._rgb_fail += 1
+                if self._rgb_fail % 30 == 1:
+                    self.get_logger().warn(f"OAK-D rgb queue empty {self._rgb_fail}x")
+                return
+            self._rgb_fail = 0
+            frame = pkt.getCvFrame()
+            h, w = frame.shape[:2]
+            stamp = self.get_clock().now().to_msg()
+
+            raw = Image()
+            raw.header.stamp = stamp
+            raw.header.frame_id = RGB_FRAME_ID
+            raw.height, raw.width = h, w
+            raw.encoding = "bgr8"
+            raw.is_bigendian = 0
+            raw.step = w * 3
+            # array.array('B', ...) hits rclpy's fast path (~1 ms per frame vs
+            # ~170 ms for raw bytes, which caps at ~5 Hz).
+            raw.data = array.array("B", frame.tobytes())
+            self.pub_raw.publish(raw)
+
+            ok, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+            if ok:
+                cimg = CompressedImage()
+                cimg.header = raw.header
+                cimg.format = "jpeg"
+                cimg.data = array.array("B", buf.tobytes())
+                self.pub_jpeg.publish(cimg)
+        except Exception as e:
+            self.get_logger().warn(f"_tick_rgb error: {e}", throttle_duration_sec=2.0)
+
+    def _tick_imu(self):
+        if self.q_imu is None:
+            return
+        try:
+            data = self.q_imu.tryGet()
+            if data is None:
+                self._imu_fail += 1
+                if self._imu_fail % 100 == 1:
+                    self.get_logger().warn(f"OAK-D imu queue empty {self._imu_fail}x")
+                return
+            self._imu_fail = 0
+            for packet in data.packets:
+                acc = packet.acceleroMeter
+                gyr = packet.gyroscope
+                # Bias-calibration phase: buffer raw samples, suppress publish.
+                # Once we have enough samples, compute mean bias and switch to
+                # publish mode. Variance check rejects a calibration where the
+                # robot was clearly moving (operator didn't follow the prompt).
+                if self._gyro_bias is None:
+                    self._bias_buf.append((float(gyr.x), float(gyr.y), float(gyr.z)))
+                    if len(self._bias_buf) >= self._bias_target_samples:
+                        n = len(self._bias_buf)
+                        mx = sum(s[0] for s in self._bias_buf) / n
+                        my = sum(s[1] for s in self._bias_buf) / n
+                        mz = sum(s[2] for s in self._bias_buf) / n
+                        # Stddev — if it's high (>0.05 rad/s ~3 deg/s) the robot
+                        # was moving; abort calibration and try again.
+                        sx = (sum((s[0] - mx) ** 2 for s in self._bias_buf) / n) ** 0.5
+                        sy = (sum((s[1] - my) ** 2 for s in self._bias_buf) / n) ** 0.5
+                        sz = (sum((s[2] - mz) ** 2 for s in self._bias_buf) / n) ** 0.5
+                        if max(sx, sy, sz) > 0.05:
+                            self.get_logger().warn(
+                                f"OAK-D IMU: bias calibration aborted (stddev too high: "
+                                f"sx={sx:.4f} sy={sy:.4f} sz={sz:.4f} rad/s) — "
+                                f"robot was moving, restarting calibration"
+                            )
+                            self._bias_buf = []
+                        else:
+                            self._gyro_bias = (mx, my, mz)
+                            self._bias_buf = None
+                            self.get_logger().info(
+                                f"OAK-D IMU gyro bias calibrated: "
+                                f"x={mx:+.5f} y={my:+.5f} z={mz:+.5f} rad/s "
+                                f"(yaw axis = +{my * 57.3:+.3f} deg/s)"
+                            )
+                    continue  # skip publishing this sample
+                bx, by, bz = self._gyro_bias
+                msg = Imu()
+                msg.header.stamp = self.get_clock().now().to_msg()
+                msg.header.frame_id = IMU_FRAME_ID
+                # No orientation on RAW streams — [0] = -1.0 tells subscribers
+                # (robot_localization, Madgwick, etc.) to skip the orientation field.
+                msg.orientation_covariance = [
+                    -1.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0,
+                ]
+                msg.angular_velocity.x = float(gyr.x) - bx
+                msg.angular_velocity.y = float(gyr.y) - by
+                msg.angular_velocity.z = float(gyr.z) - bz
+                msg.angular_velocity_covariance = [
+                    _GYRO_COV_DIAG, 0.0, 0.0,
+                    0.0, _GYRO_COV_DIAG, 0.0,
+                    0.0, 0.0, _GYRO_COV_DIAG,
+                ]
+                msg.linear_acceleration.x = float(acc.x)
+                msg.linear_acceleration.y = float(acc.y)
+                msg.linear_acceleration.z = float(acc.z)
+                msg.linear_acceleration_covariance = [
+                    _ACC_COV_DIAG, 0.0, 0.0,
+                    0.0, _ACC_COV_DIAG, 0.0,
+                    0.0, 0.0, _ACC_COV_DIAG,
+                ]
+                self.pub_imu.publish(msg)
+        except Exception as e:
+            self.get_logger().warn(f"_tick_imu error: {e}", throttle_duration_sec=2.0)
+
+    def _tick_depth(self):
+        if self.q_depth is None:
+            return
+        try:
+            pkt = self.q_depth.tryGet()
+            if pkt is None:
+                self._depth_fail += 1
+                if self._depth_fail % 30 == 1:
+                    self.get_logger().warn(f"OAK-D depth queue empty {self._depth_fail}x")
+                return
+            self._depth_fail = 0
+            frame = pkt.getCvFrame()  # uint16 depth in millimeters
+            h, w = frame.shape[:2]
+            stamp = self.get_clock().now().to_msg()
+
+            depth_msg = Image()
+            depth_msg.header.stamp = stamp
+            depth_msg.header.frame_id = RGB_FRAME_ID
+            depth_msg.height, depth_msg.width = h, w
+            depth_msg.encoding = "16UC1"
+            depth_msg.is_bigendian = 0
+            depth_msg.step = w * 2
+            depth_msg.data = array.array("B", frame.tobytes())
+            self.pub_depth.publish(depth_msg)
+
+            info = self._camera_info_template
+            info.header.stamp = stamp
+            info.header.frame_id = RGB_FRAME_ID
+            self.pub_camera_info.publish(info)
+        except Exception as e:
+            self.get_logger().warn(f"_tick_depth error: {e}", throttle_duration_sec=2.0)
+
+
+def main():
+    rclpy.init()
+    # RGB + depth + IMU mode. The ER 1.6 agent reasons natively in 3D and
+    # was trained on RGB+depth+spatial inputs together; without depth, its
+    # spatial reasoning gets uncertain and missions show up as "aimless
+    # plotting" (observed 2026-04-30 bench). Bandwidth budget on this
+    # OAK-D Lite USB 2.0 link:
+    #   RGB     720p sensor -> 640x480 preview @ 15 Hz, JPEG  ~5 Mbps
+    #   Depth   400p stereo @ 15 Hz, 16UC1                   ~50 Mbps
+    #   IMU     200 Hz raw                                    ~1 Mbps
+    #   Total                                                 ~56 Mbps
+    # Well under the OAK-D Lite practical USB 2.0 ceiling (~280 Mbps). The
+    # round 9-pin USB 3.0 cable installed 2026-04-28 keeps signal integrity
+    # clean at full triple-stream load.
+    node = OakdCameraNode(enable_rgb=True, enable_depth=True)
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, rclpy.executors.ExternalShutdownException):
+        pass
+    finally:
+        try:
+            node.device.close()
+        except Exception:
+            pass
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()

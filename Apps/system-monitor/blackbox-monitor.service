@@ -1,0 +1,15 @@
+[Unit]
+Description=BlackBox System Monitor Service
+After=network.target
+
+[Service]
+Type=simple
+User=ai-black-box-fc
+WorkingDirectory=/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Apps/system-monitor
+ExecStart=/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Apps/system-monitor/server.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

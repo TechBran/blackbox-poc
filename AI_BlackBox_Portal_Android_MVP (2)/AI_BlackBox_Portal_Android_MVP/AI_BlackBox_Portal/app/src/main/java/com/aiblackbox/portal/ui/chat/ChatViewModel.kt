@@ -1,0 +1,1376 @@
+package com.aiblackbox.portal.ui.chat
+
+import android.app.Application
+import android.util.Log
+import androidx.annotation.VisibleForTesting
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.aiblackbox.portal.data.api.BlackBoxApi
+import com.aiblackbox.portal.data.api.SSEEvent
+import com.aiblackbox.portal.data.model.ChatMessage
+import com.aiblackbox.portal.data.model.ChatProvider
+import com.aiblackbox.portal.data.model.Provenance
+import com.aiblackbox.portal.data.model.SaveRequest
+import com.aiblackbox.portal.data.model.TaskStatus
+import com.aiblackbox.portal.data.model.TokenCount
+import com.aiblackbox.portal.data.model.UiMessage
+import com.aiblackbox.portal.data.repository.ChatRepository
+import com.aiblackbox.portal.data.repository.TaskRepository
+import com.aiblackbox.portal.data.store.BlackBoxStore
+import com.aiblackbox.portal.data.store.ChatHistoryStore
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+
+// =============================================================================
+// ChatViewModel — aligned with Portal chat-send.js
+//
+// Portal event handling (30+ SSE event types):
+//   Stream lifecycle: stream_start, content_start, content, stream_end, done, error
+//   Thinking: thinking_start, thinking, thinking_end
+//   Media tasks: image_task, video_task, music_task
+//   Computer Use: cu_screenshot, cu_action, cu_bash_output, cu_file_edit, cu_step
+//   Metadata: usage, provenance, heartbeat
+//
+// Provider routing:
+//   agents/gemini-agents → WebSocket (AgentChatHandler)
+//   realtime/gemini-live/grok-live → Voice WebSocket
+//   everything else → SSE streaming
+// =============================================================================
+
+private const val TAG = "ChatVM"
+
+enum class ChatState { IDLE, STREAMING, THINKING, ERROR }
+
+private const val MAX_CHAT_MESSAGES = 100
+
+class ChatViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val appContext = application.applicationContext
+    private val store = BlackBoxStore(application)
+    private val historyStore = ChatHistoryStore(application)
+
+    private var api: BlackBoxApi? = null
+    private var repository: ChatRepository? = null
+    private var taskRepository: TaskRepository? = null
+    private var historyLoaded = false
+
+    // ── UI State ──
+    private val _messages = MutableStateFlow<List<UiMessage>>(emptyList())
+    val messages: StateFlow<List<UiMessage>> = _messages.asStateFlow()
+
+    private val _chatState = MutableStateFlow(ChatState.IDLE)
+    val chatState: StateFlow<ChatState> = _chatState.asStateFlow()
+
+    private val _inputText = MutableStateFlow(TextFieldValue())
+    val inputText: StateFlow<TextFieldValue> = _inputText.asStateFlow()
+
+    private val _snapshotCount = MutableStateFlow(0)
+    val snapshotCount: StateFlow<Int> = _snapshotCount.asStateFlow()
+
+    private val _isHealthy = MutableStateFlow(true)
+    val isHealthy: StateFlow<Boolean> = _isHealthy.asStateFlow()
+
+    private val _checkpointTurns = MutableStateFlow(0)
+    val checkpointTurns: StateFlow<Int> = _checkpointTurns.asStateFlow()
+
+    private val _operators = MutableStateFlow(listOf("Brandon"))
+    val operators: StateFlow<List<String>> = _operators.asStateFlow()
+
+    // Media task IDs for polling (image/video/music generation)
+    private val _pendingMediaTasks = MutableStateFlow<List<String>>(emptyList())
+    val pendingMediaTasks: StateFlow<List<String>> = _pendingMediaTasks.asStateFlow()
+
+    // Auto-TTS: emits text to speak when response completes and auto-TTS is on
+    private val _autoTtsEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val autoTtsEvent: SharedFlow<String> = _autoTtsEvent.asSharedFlow()
+    var autoTtsEnabled: Boolean = false
+
+    // Active tasks being polled (for TaskPanel display)
+    private val _activeTasks = MutableStateFlow<List<TaskStatus>>(emptyList())
+    val activeTasks: StateFlow<List<TaskStatus>> = _activeTasks.asStateFlow()
+
+    // Task completion events (for notifications)
+    private val _taskCompletedEvent = MutableSharedFlow<TaskStatus>(extraBufferCapacity = 5)
+    val taskCompletedEvent: SharedFlow<TaskStatus> = _taskCompletedEvent.asSharedFlow()
+
+    // ── Agent prompt forwarding ──
+    // When provider is an agent type, prompts are forwarded here instead of SSE
+    private val _agentPromptEvent = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val agentPromptEvent: SharedFlow<String> = _agentPromptEvent.asSharedFlow()
+
+    // ── Dynamic model list (fetched from /models/{provider}) ──
+    private val _liveModels = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    val liveModels: StateFlow<List<Pair<String, String>>> = _liveModels.asStateFlow()
+
+    // ── Computer Use state ──
+    // SSE-driven screenshot URL (from CU agent loop)
+    private val _cuScreenshotUrl = MutableStateFlow<String?>(null)
+    val cuScreenshotUrl: StateFlow<String?> = _cuScreenshotUrl.asStateFlow()
+
+    // CU session ID (persists across turns)
+    private val _cuSessionId = MutableStateFlow<String?>(null)
+    val cuSessionId: StateFlow<String?> = _cuSessionId.asStateFlow()
+
+    // CU device ID (selected target device)
+    private val _cuDeviceId = MutableStateFlow("blackbox")
+    val cuDeviceId: StateFlow<String> = _cuDeviceId.asStateFlow()
+
+    // Step progress
+    private val _cuStep = MutableStateFlow(0)
+    val cuStep: StateFlow<Int> = _cuStep.asStateFlow()
+
+    private val _cuStepTotal = MutableStateFlow(0)
+    val cuStepTotal: StateFlow<Int> = _cuStepTotal.asStateFlow()
+
+    // CU agent status: idle, running, stopped, complete
+    private val _cuStatus = MutableStateFlow("idle")
+    val cuStatus: StateFlow<String> = _cuStatus.asStateFlow()
+
+    // Latest CU action description (for activity display)
+    private val _cuActionLabel = MutableStateFlow("")
+    val cuActionLabel: StateFlow<String> = _cuActionLabel.asStateFlow()
+
+    // ── Robotics ER state ──
+    // Whether an ER mission is actively running (matches Portal window.__erMissionActive)
+    private val _erMissionActive = MutableStateFlow(false)
+    val erMissionActive: StateFlow<Boolean> = _erMissionActive.asStateFlow()
+
+    // Base64 camera frame from er_frame event
+    private val _erCameraFrame = MutableStateFlow<String?>(null)
+    val erCameraFrame: StateFlow<String?> = _erCameraFrame.asStateFlow()
+
+    // Which camera is active — OAK-D is primary (stationary, has depth + YOLO distances)
+    private val _erCamera = MutableStateFlow("yolo_oakd")
+    val erCamera: StateFlow<String> = _erCamera.asStateFlow()
+
+    // Robot status: offline, connecting, capturing, reasoning, connected
+    private val _erStatus = MutableStateFlow("offline")
+    val erStatus: StateFlow<String> = _erStatus.asStateFlow()
+
+    // ER reasoning text (accumulated from er_reasoning events)
+    private val _erReasoning = MutableStateFlow("")
+    val erReasoning: StateFlow<String> = _erReasoning.asStateFlow()
+
+    private var streamJob: Job? = null
+
+    // ── Cached values ──
+    private var currentOperator = "Brandon"
+    private var currentProvider = "gemini"
+    private var currentModel = ""
+
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+
+    init {
+        viewModelScope.launch {
+            launch {
+                store.operator.collect { op ->
+                    val oldOp = currentOperator
+                    currentOperator = op
+                    // Load history when operator changes (or on first launch)
+                    if (!historyLoaded || op != oldOp) {
+                        loadHistory(op)
+                    }
+                }
+            }
+            launch {
+                store.provider.collect {
+                    currentProvider = it
+                    fetchLiveModels(it)
+                }
+            }
+            launch { store.model.collect { currentModel = it } }
+        }
+    }
+
+    private fun loadHistory(operator: String) {
+        viewModelScope.launch {
+            val saved = historyStore.load(operator)
+            if (saved.isNotEmpty()) {
+                // Cap at MAX to keep UI responsive on load
+                // Clear ALL stale transient flags from persisted state:
+                // - ttsGenerating: no TTS generation active after restart
+                // - isStreaming: no stream active after restart (stuck true = buttons won't render)
+                // - isThinking: no thinking active after restart
+                val cleaned = saved.takeLast(MAX_CHAT_MESSAGES).map { msg ->
+                    if (msg.ttsGenerating || msg.isStreaming || msg.isThinking) {
+                        msg.copy(ttsGenerating = false, isStreaming = false, isThinking = false)
+                    } else msg
+                }
+                _messages.value = cleaned
+                Log.d(TAG, "Restored ${saved.size} messages for $operator (capped at $MAX_CHAT_MESSAGES)")
+            }
+            historyLoaded = true
+            // Resolve any unresolved media placeholders from prior sessions
+            resolveUnresolvedMediaTasks()
+        }
+    }
+
+    /** Track which tasks are being actively polled by the resolver (prevent duplicates) */
+    private val _resolverPolling = mutableSetOf<String>()
+
+    /**
+     * Scan all messages for unresolved mediaTasks and resolve them.
+     * Handles both prior session placeholders and current session tasks.
+     *
+     * For completed tasks: resolves immediately (replaces placeholder with media).
+     * For pending tasks: starts its OWN polling loop (3s interval, self-contained).
+     * For failed/missing tasks: removes the stale placeholder.
+     *
+     * This is the single source of truth for media task resolution — it does NOT
+     * delegate to startTaskPolling() which has a separate, unreliable code path.
+     */
+    private fun resolveUnresolvedMediaTasks() {
+        val repo = taskRepository ?: return
+        val messages = _messages.value
+        val unresolvedTasks = mutableListOf<Pair<String, String?>>() // (rawId, taskType)
+
+        for (msg in messages) {
+            for (entry in msg.mediaTasks) {
+                val colonIdx = entry.indexOf(':')
+                val taskType = if (colonIdx > 0) entry.substring(0, colonIdx) else null
+                val rawId = if (colonIdx > 0) entry.substring(colonIdx + 1) else entry
+                // Skip if already being polled by this resolver
+                if (rawId !in _resolverPolling) {
+                    unresolvedTasks.add(rawId to taskType)
+                }
+            }
+        }
+
+        if (unresolvedTasks.isEmpty()) return
+        Log.d(TAG, "Found ${unresolvedTasks.size} unresolved media tasks — resolving")
+
+        for ((taskId, taskType) in unresolvedTasks) {
+            _resolverPolling.add(taskId)
+
+            viewModelScope.launch {
+                try {
+                    // Poll until completed, failed, or not found (max ~25 min for videos)
+                    var attempts = 0
+                    val maxAttempts = 500  // 500 * 3s = 25 minutes max
+                    while (attempts < maxAttempts) {
+                        try {
+                            val status = repo.getTaskStatus(taskId)
+
+                            when {
+                                status.status.equals("completed", true) && status.resultUrl != null -> {
+                                    resolveMediaTaskInMessage(taskId, taskType, status.resultUrl!!)
+                                    Log.d(TAG, "Resolved media task $taskId → ${status.resultUrl}")
+                                    _resolverPolling.remove(taskId)
+                                    return@launch
+                                }
+                                status.status.equals("failed", true) -> {
+                                    removeMediaTaskFromMessage(taskId)
+                                    Log.w(TAG, "Media task $taskId failed — removed placeholder")
+                                    _resolverPolling.remove(taskId)
+                                    return@launch
+                                }
+                                else -> {
+                                    // Still pending/processing — wait and retry
+                                    if (attempts % 10 == 0) {
+                                        Log.d(TAG, "Media task $taskId: ${status.status} (attempt $attempts)")
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // Task not found on server — remove stale placeholder
+                            removeMediaTaskFromMessage(taskId)
+                            Log.w(TAG, "Media task $taskId not found — removed: ${e.message}")
+                            _resolverPolling.remove(taskId)
+                            return@launch
+                        }
+
+                        attempts++
+                        delay(3000)  // Poll every 3 seconds
+                    }
+
+                    // Timed out after max attempts
+                    Log.w(TAG, "Media task $taskId timed out after $maxAttempts attempts")
+                    _resolverPolling.remove(taskId)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Resolver failed for $taskId: ${e.message}")
+                    _resolverPolling.remove(taskId)
+                }
+            }
+        }
+    }
+
+    private fun persistHistory() {
+        viewModelScope.launch {
+            historyStore.save(currentOperator, _messages.value)
+        }
+    }
+
+    fun initialize(origin: String) {
+        if (origin.isNotBlank() && api == null) {
+            api = BlackBoxApi(origin)
+            repository = ChatRepository(api!!)
+            taskRepository = TaskRepository(api!!)
+            Log.d(TAG, "Initialized for $origin")
+            startHealthLoop()
+            startTaskDiscoveryLoop()
+        }
+    }
+
+    private fun startHealthLoop() {
+        viewModelScope.launch {
+            while (true) {
+                checkHealth()
+                delay(60_000)
+            }
+        }
+    }
+
+    /** Poll /tasks/list every 2s to discover and update tasks — matches Portal TaskManager. */
+    private fun startTaskDiscoveryLoop() {
+        viewModelScope.launch {
+            while (true) {
+                try {
+                    val response = api?.get("/tasks/list") ?: run { delay(2_000); continue }
+                    val obj = json.parseToJsonElement(response).jsonObject
+                    val tasksArr = obj["tasks"]?.jsonArray ?: run { delay(2_000); continue }
+                    val serverTasks = tasksArr.mapNotNull { el ->
+                        try {
+                            val t = el.jsonObject
+                            val status = t["status"]?.jsonPrimitive?.content ?: ""
+                            TaskStatus(
+                                taskId = t["task_id"]?.jsonPrimitive?.content ?: return@mapNotNull null,
+                                taskType = t["task_type"]?.jsonPrimitive?.content,
+                                status = status,
+                                progress = t["progress"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+                                operator = t["operator"]?.jsonPrimitive?.content,
+                                resultUrl = t["result_url"]?.jsonPrimitive?.content
+                            )
+                        } catch (_: Exception) { null }
+                    }
+
+                    val existingIds = _activeTasks.value.map { it.taskId }.toSet()
+
+                    // Update progress on existing active tasks
+                    val activeServerTasks = serverTasks.filter { it.status in listOf("pending", "processing") }
+                    if (_activeTasks.value.isNotEmpty()) {
+                        _activeTasks.value = _activeTasks.value.map { existing ->
+                            activeServerTasks.find { it.taskId == existing.taskId } ?: existing
+                        }
+                    }
+
+                    // Add newly discovered tasks
+                    val newTasks = activeServerTasks.filter { it.taskId !in existingIds }
+                    if (newTasks.isNotEmpty()) {
+                        _activeTasks.value = _activeTasks.value + newTasks
+                        newTasks.forEach { startTaskPolling(it.taskId, it.taskType) }
+                        Log.d(TAG, "Discovered ${newTasks.size} new active tasks")
+                    }
+
+                    // Remove completed/failed tasks that server no longer reports as active
+                    val serverActiveIds = activeServerTasks.map { it.taskId }.toSet()
+                    _activeTasks.value = _activeTasks.value.filter { task ->
+                        task.taskId in serverActiveIds ||
+                        task.status.equals("completed", true) ||
+                        task.status.equals("failed", true)
+                    }
+                } catch (_: Exception) {
+                    // Silent — task discovery is best-effort
+                }
+                delay(2_000)
+            }
+        }
+    }
+
+    fun onInputChange(value: TextFieldValue) {
+        _inputText.value = value
+    }
+
+    // =========================================================================
+    // Send Message — routes by provider type
+    // Matches Portal's three-path branching:
+    //   agents → WebSocket, voice → WebSocket, else → SSE
+    // =========================================================================
+    fun sendMessage(imageUrls: List<String> = emptyList()) {
+        val text = _inputText.value.text.trim()
+        if (text.isBlank()) return
+
+        val repo = repository ?: run {
+            Log.e(TAG, "Repository not initialized")
+            return
+        }
+
+        val provider = ChatProvider.fromId(currentProvider)
+
+        // Route by provider type (matches Portal sendChatMessage branching)
+        when {
+            provider.isAgent -> {
+                // Forward to AgentChatScreen via shared event
+                _agentPromptEvent.tryEmit(text)
+                _inputText.value = TextFieldValue()
+                return
+            }
+            provider.isVoice -> {
+                // Voice providers handled by VoiceScreen, not chat
+                Log.w(TAG, "Voice provider $currentProvider — use Voice screen")
+                return
+            }
+            // Robotics: if mission is running, inject prompt instead of starting new stream
+            // Matches Portal chat-send.js window.__erMissionActive check
+            provider.isRobotics && _erMissionActive.value -> {
+                injectErPrompt(text)
+                return
+            }
+            else -> {
+                // Block duplicate sends for non-robotics streaming (robotics handled above)
+                if (_chatState.value == ChatState.STREAMING) return
+                sendViaSSE(text, imageUrls, repo)
+            }
+        }
+    }
+
+    /**
+     * Inject a prompt into a running ER mission via POST /robotics/mission/prompt.
+     * Matches Portal chat-send.js lines 2281-2302.
+     */
+    private fun injectErPrompt(text: String) {
+        val apiClient = api ?: return
+
+        // Show the user message in chat immediately
+        val userMsg = UiMessage(
+            role = "user",
+            content = text,
+            provider = currentProvider,
+            model = currentModel
+        )
+        _messages.value = _messages.value + userMsg
+        _inputText.value = TextFieldValue()
+
+        viewModelScope.launch {
+            try {
+                val body = buildJsonObject {
+                    put("operator", currentOperator)
+                    put("text", text)
+                }.toString()
+                val response = apiClient.post("/robotics/mission/prompt", body)
+                val obj = json.parseToJsonElement(response).jsonObject
+                val queued = obj["queued"]?.jsonPrimitive?.content?.toBoolean() == true
+                val position = obj["position"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
+                if (queued) {
+                    Log.d(TAG, "ER prompt queued at position $position")
+                } else {
+                    val error = obj["error"]?.jsonPrimitive?.content ?: "No active mission"
+                    Log.w(TAG, "ER prompt not queued: $error")
+                    // Mission may have ended — clear flag and fall through to normal send
+                    _erMissionActive.value = false
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "ER prompt injection failed: ${e.message}")
+                _erMissionActive.value = false
+            }
+            persistHistory()
+        }
+    }
+
+    // =========================================================================
+    // SSE Streaming — handles all 30+ event types from Portal chat-send.js
+    // =========================================================================
+    private fun sendViaSSE(text: String, imageUrls: List<String>, repo: ChatRepository) {
+        // Append user message
+        val userMsg = UiMessage(
+            role = "user",
+            content = text,
+            images = imageUrls,
+            provider = currentProvider,
+            model = currentModel
+        )
+        _messages.value = _messages.value + userMsg
+        _inputText.value = TextFieldValue()
+
+        // Create placeholder assistant message
+        val assistantMsg = UiMessage(
+            role = "assistant",
+            content = "",
+            isStreaming = true,
+            provider = currentProvider,
+            model = currentModel
+        )
+        _messages.value = _messages.value + assistantMsg
+
+        // Trim oldest messages to keep UI responsive (matches Portal MAX_HISTORY_ITEMS=100)
+        if (_messages.value.size > MAX_CHAT_MESSAGES) {
+            _messages.value = _messages.value.takeLast(MAX_CHAT_MESSAGES)
+        }
+
+        _chatState.value = ChatState.STREAMING
+        startBackgroundService("Generating response...")
+
+        val history = buildApiHistory()
+
+        // CU: set status to running when sending a computer-use request
+        val isCuProvider = currentProvider == "computer-use"
+        if (isCuProvider) {
+            _cuStatus.value = "running"
+            _cuStep.value = 0
+            _cuStepTotal.value = 0
+            _cuActionLabel.value = ""
+        }
+
+        streamJob = viewModelScope.launch {
+            val content = StringBuilder()
+            val reasoning = StringBuilder()
+            var tokenCount: TokenCount? = null
+            var streamModel: String? = null
+            var provenance: Provenance? = null
+            val mediaTasks = mutableListOf<String>()
+
+            // CU params (only when provider is computer-use)
+            val cuSessionId = if (isCuProvider) _cuSessionId.value else null
+            val cuDeviceId = if (isCuProvider) _cuDeviceId.value else null
+
+            // Robotics ER camera (only when provider is robotics)
+            val erCamera = if (currentProvider == "robotics") _erCamera.value else null
+
+            try {
+                val flow = if (imageUrls.isEmpty()) {
+                    repo.sendStream(text, history, currentOperator, currentProvider, currentModel.ifBlank { null },
+                        sessionId = cuSessionId, deviceId = cuDeviceId, camera = erCamera)
+                } else {
+                    repo.sendStreamMultimodal(text, imageUrls, history, currentOperator, currentProvider, currentModel.ifBlank { null },
+                        sessionId = cuSessionId, deviceId = cuDeviceId, camera = erCamera)
+                }
+
+                flow.collect { event ->
+                    processSSEEvent(
+                        event, content, reasoning, mediaTasks
+                    ) { model, tokens, prov ->
+                        if (model != null) streamModel = model
+                        if (tokens != null) tokenCount = tokens
+                        if (prov != null) provenance = prov
+                    }
+
+                    // Update the streaming assistant message
+                    updateLastMessage(
+                        content = content.toString(),
+                        reasoning = reasoning.toString().ifBlank { null },
+                        isStreaming = true,
+                        isThinking = _chatState.value == ChatState.THINKING,
+                        model = streamModel,
+                        mediaTasks = mediaTasks.toList()
+                    )
+                }
+
+                // Stream complete — finalize
+                _chatState.value = ChatState.IDLE
+                stopBackgroundService()
+                if (isCuProvider && _cuStatus.value == "running") {
+                    _cuStatus.value = "complete"
+                }
+                updateLastMessage(
+                    content = content.toString(),
+                    reasoning = reasoning.toString().ifBlank { null },
+                    isStreaming = false,
+                    isThinking = false,
+                    model = streamModel,
+                    tokens = tokenCount,
+                    provenance = provenance,
+                    mediaTasks = mediaTasks.toList()
+                )
+
+                // Resolve media tasks — uses the robust resolver that handles
+                // completed, pending, and failed tasks in one sweep
+                resolveUnresolvedMediaTasks()
+
+                // Save conversation for snapshot (matches Portal /chat/save).
+                // provenance is forwarded so backend auto-mint records context lineage.
+                saveConversation(text, content.toString(), reasoning.toString(), streamModel, tokenCount, provenance)
+
+                // Persist to local storage
+                persistHistory()
+
+                // Auto-TTS: speak the response if enabled
+                // Matches Portal window.triggerAutoTTS() called after full response
+                if (autoTtsEnabled && content.isNotBlank()) {
+                    _autoTtsEvent.tryEmit(content.toString())
+                }
+
+            } catch (e: Exception) {
+                Log.e(TAG, "SSE error: ${e.message}", e)
+                _chatState.value = ChatState.ERROR
+                stopBackgroundService()
+                updateLastMessage(
+                    content = content.toString().ifBlank { "Error: ${e.message}" },
+                    isStreaming = false,
+                    isThinking = false
+                )
+            }
+        }
+    }
+
+    // =========================================================================
+    // Process SSE Event — aligned with Portal's 30+ event type handler
+    // =========================================================================
+    private fun processSSEEvent(
+        event: SSEEvent,
+        content: StringBuilder,
+        reasoning: StringBuilder,
+        mediaTasks: MutableList<String>,
+        onMeta: (model: String?, tokens: TokenCount?, provenance: Provenance?) -> Unit
+    ) {
+        when (event.event) {
+            // ── Stream lifecycle ──
+            "stream_start" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val model = obj["model"]?.jsonPrimitive?.content
+                    // Provenance is embedded in stream_start.data.provenance — backend
+                    // does NOT send a standalone "provenance" SSE event for /chat/stream
+                    // (the dead branch below is a defensive fallback for WS-bridged paths).
+                    val parsedProv = extractProvenanceFromStreamStart(event.data)
+                    onMeta(model, null, parsedProv)
+                    if (parsedProv != null) {
+                        Log.d(TAG, "stream_start provenance: " +
+                              "recent=${parsedProv.recent.size} " +
+                              "keyword=${parsedProv.keyword.size} " +
+                              "semantic=${parsedProv.semantic.size} " +
+                              "checkpoint=${parsedProv.checkpoint.size}")
+                    }
+                } catch (_: Exception) {}
+            }
+            "content_start" -> {
+                // Transition from thinking to content (Portal uses this as marker)
+                if (_chatState.value == ChatState.THINKING) {
+                    _chatState.value = ChatState.STREAMING
+                }
+            }
+            "content" -> {
+                content.append(event.data)
+                if (_chatState.value == ChatState.THINKING) {
+                    _chatState.value = ChatState.STREAMING
+                }
+            }
+            "stream_end" -> {
+                _chatState.value = ChatState.IDLE
+            }
+            "done" -> {
+                // "done" carries the full accumulated response as fallback.
+                // Gemini: {"thinking": "...", "content": "..."}
+                // Anthropic/OpenAI: {"reasoning": "...", "content": "..."}
+                // If streaming missed content, this ensures we have the full response.
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val doneContent = obj["content"]?.jsonPrimitive?.content
+                    val doneThinking = obj["thinking"]?.jsonPrimitive?.content
+                        ?: obj["reasoning"]?.jsonPrimitive?.content
+                    // Use done content if our streaming buffer is empty or shorter
+                    if (!doneContent.isNullOrBlank() && doneContent.length > content.length) {
+                        content.clear()
+                        content.append(doneContent)
+                    }
+                    if (!doneThinking.isNullOrBlank() && doneThinking.length > reasoning.length) {
+                        reasoning.clear()
+                        reasoning.append(doneThinking)
+                    }
+                } catch (_: Exception) {
+                    // done data might be a plain string — ignore parse failure
+                }
+                _chatState.value = ChatState.IDLE
+                // Clear ER mission state when stream completes
+                if (currentProvider == "robotics") {
+                    _erMissionActive.value = false
+                }
+            }
+
+            // ── Thinking/reasoning ──
+            "thinking_start" -> {
+                _chatState.value = ChatState.THINKING
+            }
+            "thinking" -> {
+                reasoning.append(event.data)
+                if (_chatState.value != ChatState.THINKING) {
+                    _chatState.value = ChatState.THINKING
+                }
+            }
+            "thinking_end" -> {
+                // Thinking phase complete — content will follow
+                // State transitions to STREAMING on next content event
+            }
+
+            // ── Usage & metadata ──
+            "usage" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val prompt = obj["prompt_tokens"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                    val completion = obj["completion_tokens"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                    onMeta(null, TokenCount(prompt, completion), null)
+                } catch (_: Exception) {}
+            }
+            "provenance" -> {
+                val parsed = parseProvenance(event.data)
+                if (parsed != null) {
+                    onMeta(null, null, parsed)
+                    Log.d(TAG, "provenance: recent=${parsed.recent.size} " +
+                          "keyword=${parsed.keyword.size} semantic=${parsed.semantic.size} " +
+                          "checkpoint=${parsed.checkpoint.size}")
+                } else {
+                    Log.w(TAG, "provenance event unparseable: ${event.data.take(200)}")
+                }
+            }
+
+            // ── Media generation tasks ──
+            "image_task", "video_task", "music_task" -> {
+                // Backend returns task_id for async generation
+                // Prefix with type so placeholder knows which animation to show
+                val typePrefix = when (event.event) {
+                    "image_task" -> "image:"
+                    "video_task" -> "video:"
+                    "music_task" -> "music:"
+                    else -> ""
+                }
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val taskId = obj["task_id"]?.jsonPrimitive?.content
+                    if (taskId != null) {
+                        mediaTasks.add("$typePrefix$taskId")
+                        Log.d(TAG, "${event.event}: $taskId")
+                    }
+                } catch (_: Exception) {
+                    // task_id might be sent as plain string
+                    if (event.data.isNotBlank()) {
+                        mediaTasks.add("$typePrefix${event.data.trim()}")
+                    }
+                }
+            }
+
+            // ── Computer Use events — matches Portal chat-send.js ──
+            "cu_screenshot" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val url = obj["url"]?.jsonPrimitive?.content
+                    if (url != null) {
+                        val baseUrl = api?.getBaseUrl() ?: ""
+                        val fullUrl = if (url.startsWith("http")) url else "$baseUrl$url"
+                        _cuScreenshotUrl.value = "$fullUrl?t=${System.currentTimeMillis()}"
+                    }
+                    val step = obj["step"]?.jsonPrimitive?.content?.toIntOrNull()
+                    if (step != null) _cuStep.value = step
+                } catch (_: Exception) {}
+                _cuStatus.value = "running"
+                Log.d(TAG, "CU screenshot update")
+            }
+            "cu_action" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val action = obj["action"]?.jsonPrimitive?.content ?: ""
+                    val step = obj["step"]?.jsonPrimitive?.content?.toIntOrNull()
+                    _cuActionLabel.value = action
+                    if (step != null) _cuStep.value = step
+                    // Append action summary to content for chat history
+                    content.append("\n`[$action]` ")
+                } catch (_: Exception) {}
+                _cuStatus.value = "running"
+            }
+            "cu_bash_output" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val cmd = obj["command"]?.jsonPrimitive?.content ?: ""
+                    val output = obj["output"]?.jsonPrimitive?.content ?: ""
+                    content.append("\n```\n$ $cmd\n$output\n```\n")
+                } catch (_: Exception) {}
+            }
+            "cu_file_edit" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val cmd = obj["command"]?.jsonPrimitive?.content ?: "edit"
+                    val path = obj["path"]?.jsonPrimitive?.content ?: ""
+                    content.append("\n`[$cmd $path]` ")
+                } catch (_: Exception) {}
+            }
+            "cu_step" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    _cuStep.value = obj["step"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                    _cuStepTotal.value = obj["total"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+                } catch (_: Exception) {}
+                _cuStatus.value = "running"
+            }
+            "cu_session" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val sessionId = obj["session_id"]?.jsonPrimitive?.content
+                    if (sessionId != null) _cuSessionId.value = sessionId
+                    val deviceId = obj["device_id"]?.jsonPrimitive?.content
+                    if (deviceId != null) _cuDeviceId.value = deviceId
+                } catch (_: Exception) {}
+            }
+            "cu_stopped", "cu_task_stopped" -> {
+                _cuStatus.value = "stopped"
+            }
+
+            // ── Robotics ER events — matches Portal chat-send.js ──
+            "er_frame" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val image = obj["image"]?.jsonPrimitive?.content
+                    val camera = obj["camera"]?.jsonPrimitive?.content
+                    if (image != null) _erCameraFrame.value = image
+                    if (camera != null) _erCamera.value = camera
+                } catch (_: Exception) {}
+                _erStatus.value = "connected"
+                Log.d(TAG, "ER camera frame received")
+            }
+            "er_reasoning" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val text = obj["text"]?.jsonPrimitive?.content ?: ""
+                    _erReasoning.value = text
+                    Log.d(TAG, "ER reasoning: ${text.take(80)}...")
+                } catch (_: Exception) {}
+                _erStatus.value = "connected"
+            }
+            "er_action" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val tool = obj["tool"]?.jsonPrimitive?.content ?: ""
+                    val args = obj["args"]?.toString() ?: ""
+                    val status = obj["status"]?.jsonPrimitive?.content ?: "executing"
+                    content.append("\n`[$tool]` $args → $status ")
+                } catch (_: Exception) {}
+                _erStatus.value = "connected"
+            }
+            "er_status" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val state = obj["state"]?.jsonPrimitive?.content ?: "idle"
+                    _erStatus.value = state
+                } catch (_: Exception) {}
+            }
+            "er_error" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val error = obj["error"]?.jsonPrimitive?.content ?: "Unknown robot error"
+                    content.append("\n\n**Robot Error:** $error")
+                    _erStatus.value = "offline"
+                } catch (_: Exception) {}
+            }
+            "er_mission_start" -> {
+                _erMissionActive.value = true
+                _erStatus.value = "mission_active"
+                Log.d(TAG, "ER mission started")
+            }
+            "er_stopped" -> {
+                _erMissionActive.value = false
+                _erStatus.value = "stopped"
+                Log.d(TAG, "ER mission stopped")
+            }
+            "er_timeout" -> {
+                _erMissionActive.value = false
+                _erStatus.value = "timeout"
+                Log.d(TAG, "ER mission timed out")
+            }
+            "er_queued" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val pos = obj["position"]?.jsonPrimitive?.content?.toIntOrNull() ?: 1
+                    Log.d(TAG, "ER prompt queued at position $pos")
+                } catch (_: Exception) {}
+            }
+            "er_prompt_injected" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val injText = obj["text"]?.jsonPrimitive?.content ?: ""
+                    Log.d(TAG, "ER prompt injected: ${injText.take(80)}")
+                } catch (_: Exception) {}
+            }
+            "er_nav_status" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val goalStatus = obj["goal_status"]?.jsonPrimitive?.content ?: ""
+                    Log.d(TAG, "ER nav: $goalStatus")
+                    _erStatus.value = "navigating"
+                } catch (_: Exception) {}
+            }
+            "er_session" -> {
+                try {
+                    val obj = json.parseToJsonElement(event.data).jsonObject
+                    val sessionId = obj["session_id"]?.jsonPrimitive?.content
+                    Log.d(TAG, "ER session: $sessionId")
+                } catch (_: Exception) {}
+            }
+
+            // ── Keep-alive ──
+            "heartbeat" -> {
+                // Ignore — just prevents connection timeout
+            }
+
+            // ── Error ──
+            "error" -> {
+                content.append("\n\n${event.data}")
+                _chatState.value = ChatState.ERROR
+            }
+
+            // ── Unknown events — log but don't crash ──
+            else -> {
+                Log.d(TAG, "Unhandled SSE event: ${event.event}")
+            }
+        }
+    }
+
+    // =========================================================================
+    // Update streaming message
+    // =========================================================================
+    private fun updateLastMessage(
+        content: String,
+        reasoning: String? = null,
+        isStreaming: Boolean = true,
+        isThinking: Boolean = false,
+        model: String? = null,
+        tokens: TokenCount? = null,
+        provenance: Provenance? = null,
+        mediaTasks: List<String> = emptyList()
+    ) {
+        val current = _messages.value.toMutableList()
+        if (current.isNotEmpty()) {
+            val last = current.last()
+            current[current.lastIndex] = last.copy(
+                content = content,
+                reasoning = reasoning ?: last.reasoning,
+                isStreaming = isStreaming,
+                isThinking = isThinking,
+                model = model ?: last.model,
+                tokens = tokens ?: last.tokens,
+                provenance = provenance ?: last.provenance,
+                mediaTasks = mediaTasks.ifEmpty { last.mediaTasks }
+            )
+            _messages.value = current
+        }
+    }
+
+    // =========================================================================
+    // Build API history
+    // =========================================================================
+    /**
+     * No chat history sent — the backend's build_streaming_context() provides all context
+     * via snapshot/fossil retrieval (recent, keyword, semantic, checkpoint).
+     * Sending history is redundant and causes issues (Anthropic empty-content errors, token waste).
+     */
+    private fun buildApiHistory(): List<ChatMessage> = emptyList()
+
+    // =========================================================================
+    // Save conversation for snapshot
+    // =========================================================================
+    private fun saveConversation(
+        userMessage: String,
+        assistantResponse: String,
+        reasoning: String,
+        model: String?,
+        tokens: TokenCount?,
+        provenance: Provenance? = null
+    ) {
+        val repo = repository ?: return
+        val request = buildSaveRequest(
+            operator = currentOperator,
+            userMessage = userMessage,
+            assistantResponse = assistantResponse,
+            reasoning = reasoning,
+            model = model ?: currentModel,
+            tokens = tokens,
+            provenance = provenance,
+        )
+        viewModelScope.launch {
+            try {
+                repo.saveConversation(request)
+            } catch (e: Exception) {
+                Log.w(TAG, "saveConversation failed (non-critical): ${e.message}")
+            }
+        }
+    }
+
+    // =========================================================================
+    // Public actions
+    // =========================================================================
+    fun clearHistory() {
+        streamJob?.cancel()
+        _messages.value = emptyList()
+        _chatState.value = ChatState.IDLE
+        viewModelScope.launch { historyStore.clear(currentOperator) }
+    }
+
+    fun cancelStream() {
+        streamJob?.cancel()
+        _chatState.value = ChatState.IDLE
+        updateLastMessage(
+            content = _messages.value.lastOrNull()?.content ?: "",
+            isStreaming = false,
+            isThinking = false
+        )
+    }
+
+    fun checkHealth() {
+        val currentApi = api ?: return
+        viewModelScope.launch {
+            try {
+                val response = currentApi.get("/health")
+                val obj = json.parseToJsonElement(response).jsonObject
+                _isHealthy.value = obj["status"]?.jsonPrimitive?.content == "ok"
+                _snapshotCount.value = obj["snapshot_count"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0
+
+                obj["operator_turns"]?.jsonObject?.get(currentOperator)?.jsonObject
+                    ?.get("turns_until_checkpoint")?.jsonPrimitive?.content?.toIntOrNull()?.let {
+                        _checkpointTurns.value = it
+                    }
+
+                obj["users"]?.jsonObject?.get("list")?.jsonArray?.let { arr ->
+                    val ops = arr.mapNotNull {
+                        try { it.jsonPrimitive.content } catch (_: Exception) { null }
+                    }
+                    if (ops.isNotEmpty()) _operators.value = ops
+                }
+            } catch (e: Exception) {
+                _isHealthy.value = false
+            }
+        }
+    }
+
+    /** Remove a completed media task from pending list */
+    fun completeMediaTask(taskId: String) {
+        _pendingMediaTasks.value = _pendingMediaTasks.value - taskId
+        _activeTasks.value = _activeTasks.value.filter { it.taskId != taskId }
+    }
+
+    /**
+     * Replace a media task placeholder with actual media content in the message.
+     * Finds the message containing this taskId, adds the result URL to images/content,
+     * and removes the task from mediaTasks so the placeholder disappears.
+     */
+    private fun resolveMediaTaskInMessage(taskId: String, taskType: String?, resultUrl: String) {
+        val current = _messages.value.toMutableList()
+        // The task entry in mediaTasks is prefixed with type: "image:taskId"
+        val prefixedEntries = listOf("image:$taskId", "video:$taskId", "music:$taskId", taskId)
+
+        for (i in current.indices) {
+            val msg = current[i]
+            val matchingEntry = msg.mediaTasks.firstOrNull { entry ->
+                prefixedEntries.any { prefix -> entry == prefix || entry.endsWith(taskId) }
+            }
+            if (matchingEntry != null) {
+                // Determine media type from the prefix or taskType
+                val isImage = matchingEntry.startsWith("image:") ||
+                    taskType?.contains("image", true) == true ||
+                    resultUrl.matches(Regex(".*\\.(png|jpg|jpeg|webp|gif)$", RegexOption.IGNORE_CASE))
+                val isAudio = matchingEntry.startsWith("music:") ||
+                    taskType?.contains("music", true) == true ||
+                    resultUrl.matches(Regex(".*\\.(wav|mp3|m4a|ogg|flac)$", RegexOption.IGNORE_CASE))
+
+                // Build full URL if relative
+                val fullUrl = if (resultUrl.startsWith("http")) resultUrl
+                    else "${api?.getBaseUrl() ?: ""}$resultUrl"
+
+                val updatedMsg = if (isImage) {
+                    // Add to images list — ChatBubble renders these with AsyncImage
+                    msg.copy(
+                        images = msg.images + fullUrl,
+                        mediaTasks = msg.mediaTasks.filter { it != matchingEntry }
+                    )
+                } else {
+                    // Video/audio — append URL to content so inline media extractor renders it
+                    val urlLine = "\n$fullUrl\n"
+                    msg.copy(
+                        content = msg.content + urlLine,
+                        mediaTasks = msg.mediaTasks.filter { it != matchingEntry }
+                    )
+                }
+                current[i] = updatedMsg
+                _messages.value = current
+                persistHistory()
+                Log.d(TAG, "Resolved media task $taskId → $fullUrl (${if (isImage) "image" else "media"})")
+                return
+            }
+        }
+        Log.w(TAG, "No message found for task $taskId — result URL: $resultUrl")
+    }
+
+    /** Remove a failed task's placeholder from the message. */
+    private fun removeMediaTaskFromMessage(taskId: String) {
+        val current = _messages.value.toMutableList()
+        for (i in current.indices) {
+            val msg = current[i]
+            val matchingEntry = msg.mediaTasks.firstOrNull { it.endsWith(taskId) || it == taskId }
+            if (matchingEntry != null) {
+                current[i] = msg.copy(
+                    mediaTasks = msg.mediaTasks.filter { it != matchingEntry }
+                )
+                _messages.value = current
+                return
+            }
+        }
+    }
+
+    /**
+     * Start polling a task. Called when media tasks arrive from SSE or generation screens.
+     * Matches Portal's TaskManager 3-second polling loop.
+     */
+    fun startTaskPolling(taskId: String, taskType: String? = null) {
+        val repo = taskRepository ?: return
+        // Skip if already tracking this task
+        if (_activeTasks.value.any { it.taskId == taskId }) return
+        // Add to pending
+        if (taskId !in _pendingMediaTasks.value) {
+            _pendingMediaTasks.value = _pendingMediaTasks.value + taskId
+        }
+        // Add initial status to active tasks
+        val initial = TaskStatus(
+            taskId = taskId,
+            taskType = taskType,
+            status = "pending"
+        )
+        _activeTasks.value = _activeTasks.value + initial
+
+        // Start polling flow
+        viewModelScope.launch {
+            try {
+                repo.pollTask(taskId, intervalMs = 1500).collect { status ->
+                    // Update active tasks list
+                    _activeTasks.value = _activeTasks.value.map {
+                        if (it.taskId == taskId) status else it
+                    }
+
+                    val isDone = status.status.equals("completed", true)
+                    val isFailed = status.status.equals("failed", true)
+                    if (isDone || isFailed) {
+                        // Emit completion event for notifications
+                        _taskCompletedEvent.tryEmit(status)
+
+                        // Replace placeholder with actual media in the message
+                        if (isDone && status.resultUrl != null) {
+                            resolveMediaTaskInMessage(taskId, taskType, status.resultUrl!!)
+                        } else {
+                            // Failed — just remove the placeholder
+                            removeMediaTaskFromMessage(taskId)
+                        }
+
+                        delay(2000)
+                        completeMediaTask(taskId)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Task polling failed for $taskId: ${e.message}")
+                completeMediaTask(taskId)
+            }
+        }
+    }
+
+    /** Set the TTS audio URL on a specific message by ID, triggering the inline player */
+    fun setMessageTtsAudioUrl(messageId: String, audioUrl: String) {
+        val current = _messages.value.toMutableList()
+        val idx = current.indexOfFirst { it.id == messageId }
+        if (idx >= 0) {
+            current[idx] = current[idx].copy(ttsAudioUrl = audioUrl, ttsGenerating = false)
+            _messages.value = current
+        }
+    }
+
+    fun setMessageTtsGenerating(messageId: String, generating: Boolean) {
+        val current = _messages.value.toMutableList()
+        val idx = current.indexOfFirst { it.id == messageId }
+        if (idx >= 0) {
+            current[idx] = current[idx].copy(ttsGenerating = generating)
+            _messages.value = current
+        }
+    }
+
+    fun getApi(): BlackBoxApi? = api
+
+    /** Start foreground service to keep tasks alive when app is backgrounded */
+    private fun startBackgroundService(label: String) {
+        try {
+            val intent = android.content.Intent(appContext, com.aiblackbox.portal.BackgroundTaskService::class.java).apply {
+                action = com.aiblackbox.portal.BackgroundTaskService.ACTION_START
+                putExtra(com.aiblackbox.portal.BackgroundTaskService.EXTRA_TASK_LABEL, label)
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                appContext.startForegroundService(intent)
+            } else {
+                appContext.startService(intent)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not start background service: ${e.message}")
+        }
+    }
+
+    private fun stopBackgroundService() {
+        try {
+            val intent = android.content.Intent(appContext, com.aiblackbox.portal.BackgroundTaskService::class.java).apply {
+                action = com.aiblackbox.portal.BackgroundTaskService.ACTION_STOP
+            }
+            appContext.startService(intent)
+        } catch (_: Exception) {}
+    }
+
+    fun getProviderLabel(): String {
+        val provider = ChatProvider.fromId(currentProvider)
+        return if (currentModel.isNotBlank()) {
+            "${provider.displayName} \u00B7 $currentModel"
+        } else {
+            provider.displayName
+        }
+    }
+
+    // =========================================================================
+    // Dynamic model fetching — matches Portal fetchAvailableModels()
+    // =========================================================================
+
+    /** Map provider IDs to the backend's expected provider key */
+    private fun mapProviderForApi(provider: String): String? = when (provider) {
+        "gemini" -> "google"
+        "anthropic" -> "anthropic"
+        "openai" -> "openai"
+        else -> null // Voice/agent/CU providers don't have model endpoints
+    }
+
+    private fun fetchLiveModels(provider: String) {
+        val currentApi = api ?: return
+        val apiProvider = mapProviderForApi(provider)
+        if (apiProvider == null) {
+            // No live models for this provider — clear so Constants fallback is used
+            _liveModels.value = emptyList()
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val response = currentApi.get("/models/$apiProvider")
+                val obj = json.parseToJsonElement(response).jsonObject
+                val modelsArr = obj["models"]?.jsonArray ?: return@launch
+                val models = modelsArr.mapNotNull { el ->
+                    try {
+                        val m = el.jsonObject
+                        val id = m["id"]?.jsonPrimitive?.content ?: return@mapNotNull null
+                        val name = m["name"]?.jsonPrimitive?.content ?: id
+                        id to name
+                    } catch (_: Exception) { null }
+                }
+                if (models.isNotEmpty()) {
+                    // Prepend "Auto" option
+                    _liveModels.value = listOf("" to "Auto - Latest") + models
+                    Log.d(TAG, "Fetched ${models.size} live models for $provider")
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "Model fetch failed for $provider, using defaults: ${e.message}")
+                // Keep whatever's in liveModels (could be from Constants fallback)
+            }
+        }
+    }
+
+    // =========================================================================
+    // Computer Use — public API
+    // =========================================================================
+
+    fun setCuDeviceId(deviceId: String) {
+        _cuDeviceId.value = deviceId
+    }
+
+    fun setCuSessionId(sessionId: String?) {
+        _cuSessionId.value = sessionId
+    }
+
+    /** Reset CU state for a new session */
+    fun resetCuSession() {
+        _cuSessionId.value = null
+        _cuStep.value = 0
+        _cuStepTotal.value = 0
+        _cuStatus.value = "idle"
+        _cuActionLabel.value = ""
+        _cuScreenshotUrl.value = null
+    }
+
+    // =========================================================================
+    // Robotics ER — public API
+    // =========================================================================
+
+    fun setErCamera(camera: String) { _erCamera.value = camera }
+
+    fun resetErState() {
+        _erCameraFrame.value = null
+        _erReasoning.value = ""
+        _erStatus.value = "offline"
+    }
+
+    /** Request e-stop on the current CU session */
+    fun stopCuTask() {
+        val sessionId = _cuSessionId.value ?: return
+        viewModelScope.launch {
+            try {
+                api?.post("/chat/cu-stop", buildCuStopBody(sessionId))
+                _cuStatus.value = "stopped"
+            } catch (e: Exception) {
+                Log.e(TAG, "CU stop failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun buildCuStopBody(sessionId: String): String {
+        return kotlinx.serialization.json.buildJsonObject {
+            put("session_id", sessionId)
+            put("model", currentModel)
+        }.toString()
+    }
+
+    companion object {
+        private val provJson = Json { ignoreUnknownKeys = true; isLenient = true }
+        fun parseProvenance(raw: String): Provenance? = try {
+            provJson.decodeFromString(Provenance.serializer(), raw.trim())
+        } catch (_: Exception) { null }
+
+        /**
+         * Extract the provenance object from inside an SSE stream_start event's
+         * data payload. Backend (chat_routes.py:5953/6035) emits provenance as a
+         * field of stream_start, NOT as a standalone "provenance" SSE event —
+         * matching Portal/modules/chat-send.js:1117-1122. Returns null if the
+         * stream_start has no provenance field or fails to parse.
+         */
+        fun extractProvenanceFromStreamStart(streamStartData: String): Provenance? = try {
+            val obj = provJson.parseToJsonElement(streamStartData).jsonObject
+            obj["provenance"]?.let {
+                provJson.decodeFromJsonElement(Provenance.serializer(), it)
+            }
+        } catch (_: Exception) { null }
+
+        /**
+         * Builds the SaveRequest sent to /chat/save. Extracted from
+         * saveConversation() so unit tests can verify provenance threads
+         * through without instantiating an AndroidViewModel.
+         *
+         * Behaviour preserved verbatim from the inline construction:
+         *   - reasoning is normalized to null when blank
+         *   - model passes through as-is (caller substitutes currentModel)
+         *   - provenance is passed through, may be null
+         */
+        @VisibleForTesting
+        internal fun buildSaveRequest(
+            operator: String,
+            userMessage: String,
+            assistantResponse: String,
+            reasoning: String,
+            model: String?,
+            tokens: TokenCount?,
+            provenance: Provenance?
+        ): SaveRequest = SaveRequest(
+            operator = operator,
+            userMessage = userMessage,
+            assistantResponse = assistantResponse,
+            reasoning = reasoning.ifBlank { null },
+            model = model,
+            tokens = tokens,
+            provenance = provenance,
+        )
+    }
+}

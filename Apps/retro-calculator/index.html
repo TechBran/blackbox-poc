@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Calculator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="calculator-container">
+        <div class="calculator">
+            <div class="brand">
+                <span class="brand-text">RETRO</span>
+                <span class="brand-model">RX-2077</span>
+            </div>
+
+            <div class="display-panel">
+                <div class="display-secondary" id="history">0</div>
+                <div class="display-main" id="display">0</div>
+                <div class="display-indicator">
+                    <span class="led"></span>
+                    <span class="led"></span>
+                    <span class="led"></span>
+                </div>
+            </div>
+
+            <div class="button-grid">
+                <button class="btn btn-function" data-action="clear">C</button>
+                <button class="btn btn-function" data-action="sign">±</button>
+                <button class="btn btn-function" data-action="percent">%</button>
+                <button class="btn btn-operator" data-operator="/">÷</button>
+
+                <button class="btn btn-number" data-number="7">7</button>
+                <button class="btn btn-number" data-number="8">8</button>
+                <button class="btn btn-number" data-number="9">9</button>
+                <button class="btn btn-operator" data-operator="*">×</button>
+
+                <button class="btn btn-number" data-number="4">4</button>
+                <button class="btn btn-number" data-number="5">5</button>
+                <button class="btn btn-number" data-number="6">6</button>
+                <button class="btn btn-operator" data-operator="-">−</button>
+
+                <button class="btn btn-number" data-number="1">1</button>
+                <button class="btn btn-number" data-number="2">2</button>
+                <button class="btn btn-number" data-number="3">3</button>
+                <button class="btn btn-operator" data-operator="+">+</button>
+
+                <button class="btn btn-number btn-wide" data-number="0">0</button>
+                <button class="btn btn-number" data-action="decimal">.</button>
+                <button class="btn btn-equals" data-action="equals">=</button>
+            </div>
+
+            <div class="serial">S/N: BX-42069-2077</div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

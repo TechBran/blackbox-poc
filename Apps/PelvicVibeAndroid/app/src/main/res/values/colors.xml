@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary Colors - Red accent -->
+    <color name="primary">#E53935</color>
+    <color name="primary_variant">#C62828</color>
+    <color name="primary_dark">#B71C1C</color>
+
+    <!-- Secondary Colors - Teal for rest -->
+    <color name="secondary">#26A69A</color>
+    <color name="secondary_variant">#00897B</color>
+
+    <!-- Background Colors - Dark theme -->
+    <color name="background">#0D0D0D</color>
+    <color name="surface">#1A1A1A</color>
+    <color name="surface_variant">#2A2A2A</color>
+
+    <!-- Text Colors -->
+    <color name="on_primary">#FFFFFF</color>
+    <color name="on_background">#FFFFFF</color>
+    <color name="on_surface">#E0E0E0</color>
+    <color name="on_surface_variant">#A0A0A0</color>
+
+    <!-- Phase Colors -->
+    <color name="work">#E53935</color>
+    <color name="work_glow">#40E53935</color>
+    <color name="rest">#26A69A</color>
+    <color name="rest_glow">#4026A69A</color>
+    <color name="complete">#69F0AE</color>
+    <color name="countdown">#FFD54F</color>
+
+    <!-- UI Colors -->
+    <color name="timer_track">#333333</color>
+    <color name="success">#69F0AE</color>
+    <color name="error">#FF5252</color>
+    <color name="warning">#FFD54F</color>
+
+    <!-- Movement Color -->
+    <color name="movement">#81C784</color>
+</resources>
