@@ -1,5 +1,8 @@
 # AI BlackBox Landing Page - Firebase Hosting Deployment Guide
 
+> **Note:** Replace `<BLACKBOX_ROOT>` with your repo install path
+> (e.g. `~/blackbox_poc` or wherever you cloned to).
+
 ## Prerequisites
 - Google Cloud account
 - Firebase CLI installed (already done: v15.3.1)
@@ -7,7 +10,7 @@
 ## Step 1: Login to Firebase
 
 ```bash
-cd /home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Apps/landing-page
+cd <BLACKBOX_ROOT>/Apps/landing-page
 firebase login
 ```
 

@@ -3,6 +3,12 @@
 **Auditor**: Claude Code
 **System Version**: 7.1.0
 
+> **Note on placeholders:** This doc uses `<TAILSCALE_HOSTNAME>` and
+> `<BLACKBOX_ROOT>` as substitution placeholders. Replace `<TAILSCALE_HOSTNAME>`
+> with your machine's Tailscale FQDN (find it with
+> `tailscale status --json | jq -r .Self.DNSName`) and `<BLACKBOX_ROOT>` with
+> your repo install path before copy-pasting commands.
+
 ---
 
 ## Executive Summary
@@ -147,7 +153,7 @@ python-dotenv==1.0.1  ✅ Latest stable
 
 🟡 **Hardcoded Tailscale URL**:
 ```ini
-default_origin = http://ai-black-box-fc-a620ai-wifi.tail401fb3.ts.net:9091/ui/
+default_origin = http://<TAILSCALE_HOSTNAME>:9091/ui/
 ```
 This is specific to current deployment. Consider making configurable per-customer.
 
@@ -181,7 +187,7 @@ This is specific to current deployment. Consider making configurable per-custome
 ```
 ✅ Connected to tailnet
 ✅ 6 devices visible (4 active, 2 offline)
-✅ Hostname: ai-black-box-fc-a620ai-wifi
+✅ Hostname: ai-black-box-fc-a620ai-wifi   (example hostname)
 ✅ Network: 100.74.17.54
 ```
 
@@ -326,7 +332,7 @@ Add to `/etc/systemd/system/blackbox.service`:
 [Service]
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc
+ReadWritePaths=<BLACKBOX_ROOT>
 PrivateDevices=true
 ProtectKernelTunables=true
 ProtectControlGroups=true
@@ -360,7 +366,7 @@ If you want to restrict which devices can access which services:
 
 ```bash
 # Create monitoring script
-cat > /home/ai-black-box-fc/blackbox-monitor.sh << 'EOF'
+cat > $HOME/blackbox-monitor.sh << 'EOF'
 #!/bin/bash
 VOLUME_SIZE=$(du -sm /path/to/Volumes/ | cut -f1)
 if [ $VOLUME_SIZE -gt 45 ]; then
@@ -371,10 +377,10 @@ fi
 curl -sf http://localhost:9091/health > /dev/null || echo "ERROR: Service unhealthy"
 EOF
 
-chmod +x /home/ai-black-box-fc/blackbox-monitor.sh
+chmod +x $HOME/blackbox-monitor.sh
 
 # Add to crontab (hourly check)
-echo "0 * * * * /home/ai-black-box-fc/blackbox-monitor.sh" | crontab -
+echo "0 * * * * $HOME/blackbox-monitor.sh" | crontab -
 ```
 
 #### 2. Backup Automation
@@ -382,7 +388,7 @@ echo "0 * * * * /home/ai-black-box-fc/blackbox-monitor.sh" | crontab -
 
 ```bash
 # Create backup script
-cat > /home/ai-black-box-fc/blackbox-backup.sh << 'EOF'
+cat > $HOME/blackbox-backup.sh << 'EOF'
 #!/bin/bash
 BACKUP_DIR="/media/backup"  # External drive or NAS
 DATE=$(date +%Y%m%d_%H%M%S)
@@ -391,10 +397,10 @@ tar -czf $BACKUP_DIR/blackbox_$DATE.tar.gz \
 echo "Backup created: blackbox_$DATE.tar.gz"
 EOF
 
-chmod +x /home/ai-black-box-fc/blackbox-backup.sh
+chmod +x $HOME/blackbox-backup.sh
 
 # Weekly backup (Sunday 3am)
-echo "0 3 * * 0 /home/ai-black-box-fc/blackbox-backup.sh" | crontab -
+echo "0 3 * * 0 $HOME/blackbox-backup.sh" | crontab -
 ```
 
 #### 3. Update Mechanism
@@ -402,7 +408,7 @@ echo "0 3 * * 0 /home/ai-black-box-fc/blackbox-backup.sh" | crontab -
 
 ```bash
 # Create update script (for future use)
-cat > /home/ai-black-box-fc/blackbox-update.sh << 'EOF'
+cat > $HOME/blackbox-update.sh << 'EOF'
 #!/bin/bash
 echo "Stopping service..."
 sudo systemctl stop blackbox.service
@@ -420,7 +426,7 @@ sudo systemctl start blackbox.service
 echo "Update complete. Check status with: sudo systemctl status blackbox.service"
 EOF
 
-chmod +x /home/ai-black-box-fc/blackbox-update.sh
+chmod +x $HOME/blackbox-update.sh
 ```
 
 #### 4. Port Configuration Cleanup
