@@ -808,9 +808,10 @@ function setupAllHandlers(getOperator, setOperator, clearAudioCache, addCustomOp
             const pairing = (await (await fetch("/health")).json()).pairing || {};
             const origin = pairing.default_origin || (window.location.origin + "/ui");
             const operator = pairing.default_operator || getOperator() || "";
+            // Display payload for reference; QR is rendered server-side from the same token
+            // so phone scans encode whatever URL the Portal was loaded from (Tailscale, LAN, localhost).
             const payload = { type: "pair", exp: j.exp, origin, operator, token: j.token };
-            const data = encodeURIComponent(JSON.stringify(payload));
-            if ($("pairQR")) $("pairQR").src = "https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=" + data;
+            if ($("pairQR")) $("pairQR").src = "/pair/qr/" + encodeURIComponent(j.token);
             if ($("pairJSON")) $("pairJSON").textContent = JSON.stringify(payload, null, 2);
             if (pairModal) pairModal.classList.remove("hide");
         } catch (e) {
