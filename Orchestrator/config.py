@@ -322,6 +322,9 @@ if not MANIFEST.exists():
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY","")
 GOOGLE_API_KEY    = os.getenv("GOOGLE_API_KEY","")
+# Gemini API key — historically read directly via os.getenv in gemini_agent_routes.
+# Falls back to GOOGLE_API_KEY (they are interchangeable for the Gemini SDK).
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", GOOGLE_API_KEY)
 XAI_API_KEY       = os.getenv("XAI_API_KEY", "")
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
 

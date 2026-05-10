@@ -71,7 +71,9 @@ def _get_openai_config():
         try:
             from config import OPENAI_API_KEY, OPENAI_TTS_URL
         except ImportError:
-            OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+            # Last-resort fallback if neither import path works (should never happen
+            # in production; central config import is the authoritative source).
+            OPENAI_API_KEY = ""
             OPENAI_TTS_URL = "https://api.openai.com/v1/audio/speech"
     return OPENAI_API_KEY, OPENAI_TTS_URL
 

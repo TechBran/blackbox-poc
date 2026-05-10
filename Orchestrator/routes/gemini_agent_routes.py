@@ -28,7 +28,7 @@ from Orchestrator.agent_context import (
     retrieve_for_agent,
 )
 from Orchestrator.checkpoint import app
-from Orchestrator.config import USERS_DEFAULT
+from Orchestrator.config import GEMINI_API_KEY, USERS_DEFAULT
 from Orchestrator.volume import now_utc_iso
 
 
@@ -156,8 +156,8 @@ def create_gemini_streaming(
         env["PATH"] = node_path + ":" + env.get("PATH", "")
         env["NVM_DIR"] = nvm_dir
 
-    # Add API key
-    env["GEMINI_API_KEY"] = os.environ.get("GEMINI_API_KEY", os.environ.get("GOOGLE_API_KEY", ""))
+    # Add API key (central config falls back from GEMINI_API_KEY to GOOGLE_API_KEY)
+    env["GEMINI_API_KEY"] = GEMINI_API_KEY
 
     process = subprocess.Popen(
         cmd,
@@ -702,7 +702,7 @@ async def gemini_agent_status():
         "available": gemini_exists,
         "gemini_path": gemini_path,
         "active_sessions": len(GEMINI_AGENT_SESSIONS),
-        "api_key_configured": bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY"))
+        "api_key_configured": bool(GEMINI_API_KEY)
     }
 
 

@@ -21,9 +21,9 @@ import google.generativeai as genai
 
 EXPECTED_DIMS = 3072  # gemini-embedding-001 output dimensions
 
-# Load environment
+# Load environment from .env (must happen before importing central config)
 load_dotenv()
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
+from Orchestrator.config import GOOGLE_API_KEY
 
 if not GOOGLE_API_KEY:
     print("[ERROR] GOOGLE_API_KEY not found in .env file!")
