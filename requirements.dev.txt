@@ -1,0 +1,9 @@
+# AI BlackBox Flight Recorder - Development-Only Dependencies
+# Install in addition to requirements.txt for local dev / CI:
+#   pip install -r requirements.txt -r requirements.dev.txt
+#
+# Production deployments should NOT install this file.
+
+# Test Framework
+pytest>=9.0.3
+pytest-asyncio>=1.3.0

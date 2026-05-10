@@ -1,39 +1,83 @@
-# AI BlackBox Flight Recorder - Python Dependencies
-# Pinned versions for reproducible deployments
+# AI BlackBox Flight Recorder - Direct Python Dependencies
+# Pinned versions for reproducible deployments. Transitive deps are
+# resolved from these by pip; the full closure is recorded in
+# requirements.lock.txt for reference.
+#
+# Categorization derived from requirements.lock.txt (T0.1.1) per
+# T0.1.2 of the onboarding plan.
+# Dev-only deps live in requirements.dev.txt.
 
-# Web Framework
+# Web Framework / ASGI
 fastapi==0.118.0
 uvicorn[standard]==0.30.0
+starlette==0.48.0
 python-multipart==0.0.9
 
 # Data Validation
 pydantic==2.9.0
 
-# HTTP Client
+# HTTP Clients
 requests==2.32.3
+httpx==0.28.1
+aiohttp>=3.9.0
+
+# WebSockets (Twilio Media Streams + AI backend)
+websockets>=13.0
 
 # Environment Variables
 python-dotenv==1.0.1
 
-# ASGI Server Dependencies (included with uvicorn[standard])
-# websockets==13.1
-# httptools==0.6.1
-# uvloop==0.21.0
-# watchfiles==0.24.0
-
-# Phone Integration (optional - for phone calling features)
-# greenswitch==0.2.0    # FreeSwitch ESL async client
-# scipy>=1.11.0         # High-quality audio resampling (optional enhancement)
-websockets>=13.0        # Twilio Media Streams and AI backend WebSockets
-aiohttp>=3.9.0          # Async HTTP client for STT/TTS APIs
-
 # CLI Agent (interactive Claude Code/Gemini/Codex via WebSocket+tmux)
-ptyprocess>=0.7.0       # PTY allocation for /ws/cli-agent route
+ptyprocess>=0.7.0
 
-# Note: No additional dependencies needed for:
-# - json, os, time, re, hashlib (Python stdlib)
-# - threading, configparser, math (Python stdlib)
-# - datetime, pathlib, typing (Python stdlib)
-# - collections, dataclasses, uuid (Python stdlib)
-# - base64, io, wave, sqlite3 (Python stdlib)
-# - signal, sys, enum (Python stdlib)
+# AI Provider SDKs
+anthropic>=0.96
+openai>=2.9
+google-genai>=1.64
+google-generativeai>=0.8.6
+google-api-python-client>=2.187.0
+
+# Task Scheduling
+apscheduler>=3.10.4
+
+# Numeric / Scientific (audio resampling, tensor ops)
+numpy>=2.4.0
+scipy>=1.17.0
+
+# Cryptography (auth tokens, pairing codes, secrets)
+cryptography>=46.0
+
+# HTML / XML Parsing
+beautifulsoup4>=4.14.0
+lxml>=6.0.0
+html2text>=2025.4.15
+
+# Imaging
+pillow>=12.0.0
+
+# Audio
+miniaudio>=1.61
+webrtcvad-wheels>=2.0.14
+
+# Hardware I/O
+pyserial>=3.5
+
+# Screen Capture (sovereign browser, screenshots)
+mss>=10.1.0
+
+# Document Generation
+reportlab>=4.4.5
+python-docx>=1.2.0
+
+# Search Providers
+duckduckgo_search>=8.1.1
+
+# System Introspection
+psutil>=7.1.3
+
+# Time Zones
+pytz>=2025.2
+tzlocal>=5.3.1
+
+# QR Codes (pairing routes — Phase 0.4)
+qrcode[pil]>=7.4.0
