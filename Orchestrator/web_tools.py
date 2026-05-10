@@ -28,8 +28,9 @@ except ImportError:
     try:
         from config import PERPLEXITY_API_KEY, PERPLEXITY_URL
     except ImportError:
-        import os
-        PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
+        # Last-resort fallback if neither import path works (should never happen
+        # in production; central config import is the authoritative source).
+        PERPLEXITY_API_KEY = ""
         PERPLEXITY_URL = "https://api.perplexity.ai/chat/completions"
 
 PERPLEXITY_AVAILABLE = bool(PERPLEXITY_API_KEY)
