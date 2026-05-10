@@ -6,6 +6,13 @@
 # Categorization derived from requirements.lock.txt (T0.1.1) per
 # T0.1.2 of the onboarding plan.
 # Dev-only deps live in requirements.dev.txt.
+#
+# Pinning convention:
+#   == — load-bearing ABI/API stability (web framework, ASGI, validators).
+#        Avoid drift across deployments because behavior changes break us.
+#   >= — provider SDKs, utilities, and runtime-loaded packages.
+#        Floor pinned to lock-file version; allow patch updates for security.
+# See requirements.lock.txt for the captured working snapshot (fully resolved).
 
 # Web Framework / ASGI
 fastapi==0.118.0
@@ -44,40 +51,33 @@ apscheduler>=3.10.4
 numpy>=2.4.0
 scipy>=1.17.0
 
-# Cryptography (auth tokens, pairing codes, secrets)
-cryptography>=46.0
-
 # HTML / XML Parsing
 beautifulsoup4>=4.14.0
-lxml>=6.0.0
-html2text>=2025.4.15
 
 # Imaging
 pillow>=12.0.0
-
-# Audio
-miniaudio>=1.61
-webrtcvad-wheels>=2.0.14
-
-# Hardware I/O
-pyserial>=3.5
-
-# Screen Capture (sovereign browser, screenshots)
-mss>=10.1.0
 
 # Document Generation
 reportlab>=4.4.5
 python-docx>=1.2.0
 
-# Search Providers
-duckduckgo_search>=8.1.1
-
 # System Introspection
 psutil>=7.1.3
 
-# Time Zones
-pytz>=2025.2
-tzlocal>=5.3.1
-
 # QR Codes (pairing routes — Phase 0.4)
 qrcode[pil]>=7.4.0
+
+# === Lazy / Runtime-Loaded ===
+# These packages have no top-level static imports in Orchestrator/ but are
+# loaded at runtime (inside route handlers, subprocess invocations, or by
+# upstream-dependency resolution). DO NOT remove without grepping for usage.
+lxml>=6.0.2              # bs4 parser backend (HTML parsing speedup)
+webrtcvad-wheels>=2.0.14 # VAD for voice routes (loaded lazily inside audio handlers; precompiled wheels — avoids Cython build)
+pyserial>=3.5            # cellular modem AT-command channel (Orchestrator/cellular)
+miniaudio>=1.61          # audio playback (loaded inside voice/TTS pipeline)
+mss>=10.1.0              # screen capture (Computer Use feature)
+cryptography>=46.0.5     # JWT/token signing primitives (loaded by auth flows)
+html2text>=2025.4.15     # HTML → markdown (web fetch tool, lazy)
+duckduckgo_search>=8.1.1 # web search tool (loaded lazily in tool dispatch)
+pytz>=2025.2             # timezone helpers (scheduler/APScheduler usage)
+tzlocal>=5.3.1           # timezone autodetection (apscheduler dependency we lock-floor explicitly)
