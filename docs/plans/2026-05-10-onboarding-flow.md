@@ -1,0 +1,2429 @@
+# AI BlackBox Onboarding Flow Implementation Plan
+
+> **For Claude:** This plan is large (6 tracks, ~6-8 weeks). REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` to execute (fresh subagent per task with two-stage review). `superpowers:executing-plans` is the alternative for parallel-session execution.
+
+**Goal:** Build a customer-facing first-run onboarding experience for AI BlackBox — a Tauri standalone app that wraps Portal `/onboarding` routes, walks the customer through Tailscale install, BYOK API keys, optional integrations, QR phone pairing, operator setup, and completion handoff. Ships as the first-boot experience on pre-installed mini-PC hardware.
+
+**Architecture:** Tauri (Rust) shell wraps a webview pointing at `http://localhost:9091/onboarding`. Portal's existing FastAPI server hosts the wizard UI as HTML/CSS/JS. Tauri shell provides full-screen branded chrome, taskbar icon, no browser address bar. After completion, app self-disables and Portal becomes the regular kiosk view. Six implementation tracks: Foundation Cleanup → Onboarding Backend → Portal Wizard UI → Tauri Shell → Install Scripts → Customer Docs.
+
+**Tech Stack:** FastAPI (existing), Python 3.12 (existing), HTML/CSS/JS (Portal modules pattern, existing), Tauri 2.x (Rust, new), Cargo (Rust toolchain, new), `qrcode` Python lib (new), `python-dotenv` (existing), systemd (existing), `.desktop` autostart files (new).
+
+---
+
+## Context
+
+After the mono-repo migration shipped to GitHub on 2026-05-09 (commit `e5c3cad`, captured in `SNAP-20260509-6533`) and the Android Portal MVP UX fixes on 2026-05-10 (commit `6d9c3ff`, captured in `SNAP-20260510-6552`), the next major build is the customer-facing onboarding flow. The discovery sweep on 2026-05-10 (`SNAP-20260510-6554`, doc at `docs/onboarding/discovery-notes.md` committed in `cedb9aa`) confirmed there is no existing first-run flow anywhere in the codebase. Greenfield UX with three blocker classes:
+
+1. **Secrets sprawl** — 17 secret env-vars across 16 files; 9 Python files re-read via `os.getenv` instead of importing from central config.
+2. **Path portability** — 194 hardcoded `/home/ai-black-box-fc/...` and Tailscale FQDN references in checked-in code (systemd units, `.mcp.json`, app HTML media URLs, docs).
+3. **Dependency reproducibility** — `requirements.txt` declares 11 packages; live venv has ~120 (transitive). Fresh `pip install -r requirements.txt` does NOT reproduce the working environment.
+
+These three classes must be addressed in Track 0 before the onboarding UI can be reliably built on top.
+
+---
+
+## Architectural Decisions Recap (LOCKED 2026-05-10)
+
+| Decision | Value |
+|---|---|
+| Target persona | Eventual customers / strangers buying a BlackBox |
+| Distribution | Hardware product first (pre-installed mini-PC); software-only as v2 |
+| UI architecture | Tauri shell wrapping Portal `/onboarding` routes |
+| Validation strictness | Each integration has "Skip for now" |
+| Secrets sweep scope | Lite — collapse 9 Python stragglers; leave Asterisk/FreeSWITCH alone |
+| API key model | Bring-your-own-keys (BYOK) |
+
+---
+
+## Defaults Selected for the 8 Deferred Open Questions
+
+These are reasonable defaults baked into this plan. **The audit session may override any of them**, in which case the affected tasks need editing.
+
+| # | Question | Default chosen here | Why |
+|---|---|---|---|
+| 1 | Platform support v1 | **Ubuntu 24.04 LTS only** | Matches shipped hardware; keeps Track 0 scope tight. v1.1 can add Debian-likes (Pop!_OS, Mint). |
+| 2 | Idempotency on re-run | **Detect-and-skip with override toggle** | If a step is already configured, show "Already configured ✓ — reconfigure?" toggle. Best UX. |
+| 3 | Migration vs fresh | **v1 = fresh install only** | Migration from existing install is a v1.5 feature. Most customers never migrate. |
+| 4 | Single vs multi-operator setup | **One operator at install (defaults to "Brandon"), "Add operator" deferred to System Menu** | Keeps wizard focused. Multi-operator workflows already exist in `SettingsSheet.kt` post-onboarding. |
+| 5 | Hardening at install time | **Auto-rotate weak default passwords** | Generate cryptographically-random replacements for Drachtio "cymru", FreeSWITCH "ClueCon", TG200 "password". Display once if user wants to record. |
+| 6 | Tier-1 integrations for v1 wizard | **OpenAI, Anthropic, Google, Tailscale, Gmail** | Top-5 most-used. Twilio / ElevenLabs / Asterisk / xAI / Perplexity → v1.1. Cellular + UGV → never in v1 wizard (FEATURE_OPTIONAL / HARDWARE_OPTIONAL). |
+| 7 | Hardware spec for shipped mini-PC | **TBD — Track 5 factory-image build is plan-skeletal** | Plan stays hardware-spec-agnostic for v1. When spec lands, fill in Track 5 image-build details. |
+| 8 | Tailscale customer flow | **Each customer owns their tailnet (own auth)** | Simpler architecture — no shared subdomain, no multi-tenancy on Brandon's account. Customer signs into their own Tailscale account during onboarding. |
+
+---
+
+## How to Read This Plan
+
+- **Six tracks**, executed roughly in order (Track 0 must come first; 4 + 5 can parallel later tracks; Track 6 is post-v1).
+- **Each track has phases**, each phase has **numbered tasks** (Task X.Y.Z format).
+- **Each task is bite-sized** (2-5 minutes of focused work) per the writing-plans skill convention.
+- **Every task includes:** Files (Create/Modify with absolute paths), Steps (with code where applicable), Test command (with expected output), Commit step.
+- **Commit cadence:** every 3-7 tasks typically; explicit Commit tasks are numbered.
+- **Tasks reference existing files to reuse** rather than inventing new patterns.
+- **Symbols:** `[skippable]` = task can be deferred without breaking later tasks; `[blocking]` = next task depends on this; `[parallel-safe]` = can be done concurrently with siblings.
+
+---
+
+# TRACK 0 — FOUNDATION CLEANUP
+
+**Goal:** Make the codebase ready for the onboarding UI to build on top. Three deliverables: (a) reproducible Python environment, (b) collapsed secrets re-reads, (c) portable file paths via `BLACKBOX_ROOT` + `paths.py` resolver utility, (d) cleanly-routed pairing endpoints.
+
+**Estimated effort:** 1-2 weeks
+**Dependencies:** None — must come first
+**Outcome:** Fresh `git clone + setup` reproduces a working BlackBox; one secret-config import pattern; no hardcoded `/home/ai-black-box-fc/` strings; pairing endpoints in proper file with claim flow.
+
+## Phase 0.1: Pin `requirements.txt` from working venv
+
+**Background:** `requirements.txt` declares 11 packages; live venv has ~120. Need to capture the actual working set.
+
+### Task 0.1.1: Snapshot current venv state
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Scripts/onboarding/freeze-venv.sh`
+
+**Step 1: Write the freeze script**
+
+```bash
+#!/usr/bin/env bash
+# Capture current working venv state for reproducibility
+set -euo pipefail
+
+VENV_DIR="${1:-Orchestrator/venv}"
+OUT="${2:-requirements.lock.txt}"
+
+if [[ ! -d "$VENV_DIR" ]]; then
+    echo "ERROR: venv not found at $VENV_DIR" >&2
+    exit 1
+fi
+
+"$VENV_DIR/bin/pip" freeze --all > "$OUT"
+echo "Wrote $(wc -l < "$OUT") packages to $OUT"
+```
+
+**Step 2: Run it**
+
+```bash
+chmod +x Scripts/onboarding/freeze-venv.sh
+./Scripts/onboarding/freeze-venv.sh
+```
+
+Expected: `Wrote 120ish packages to requirements.lock.txt`
+
+**Step 3: Commit**
+
+```bash
+git add Scripts/onboarding/freeze-venv.sh requirements.lock.txt
+git commit -m "chore(deps): freeze working venv to requirements.lock.txt"
+```
+
+### Task 0.1.2: Categorize lock file into Direct vs Transitive
+
+**Files:**
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/requirements.txt`
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/requirements.dev.txt`
+
+**Step 1: Read current requirements.txt** to see the 11 declared packages.
+
+**Step 2: Read requirements.lock.txt.** For each lock entry, decide:
+- **Direct dependency** (top-level import in our code) → keep in `requirements.txt` with version pin
+- **Transitive** (pulled in by a direct dep) → omit from `requirements.txt`; lock file is authoritative
+- **Dev-only** (`pytest`, `ruff`, `black`, `mypy`, etc.) → move to `requirements.dev.txt`
+
+**Step 3: Add the missing direct deps the discovery agent identified:**
+
+```
+anthropic>=0.96
+openai>=2.9
+google-genai>=1.64
+google-generativeai>=0.8.6
+google-api-python-client
+apscheduler
+numpy
+scipy
+cryptography
+lxml
+pillow
+miniaudio
+webrtcvad-wheels
+pyserial
+mss
+reportlab
+python-docx
+beautifulsoup4
+html2text
+duckduckgo_search
+psutil
+pytz
+tzlocal
+qrcode[pil]   # NEW — needed by pairing routes (Phase 0.5)
+```
+
+(Pin minimum versions from `requirements.lock.txt`; allow patch-level updates.)
+
+**Step 4: Verify install reproducibility in a throwaway venv**
+
+```bash
+python3.12 -m venv /tmp/onboarding-test-venv
+/tmp/onboarding-test-venv/bin/pip install -r requirements.txt
+/tmp/onboarding-test-venv/bin/python -c "from Orchestrator.app import app; print('OK')"
+```
+
+Expected: `OK` printed; no ImportError.
+
+**Step 5: Commit**
+
+```bash
+git add requirements.txt requirements.dev.txt
+git commit -m "chore(deps): pin direct dependencies; split dev-only into requirements.dev.txt"
+```
+
+### Task 0.1.3: Document system-package requirements
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Scripts/onboarding/system-packages.txt`
+
+**Step 1: Write the manifest**
+
+```
+# AI BlackBox System Package Requirements (Ubuntu 24.04)
+# Format: <package> # <bucket> # <reason>
+
+# === MUST_HAVE — system won't start without ===
+python3.12               # MUST_HAVE # Python runtime
+python3.12-venv          # MUST_HAVE # virtualenv creation
+python3-pip              # MUST_HAVE # pip
+build-essential          # MUST_HAVE # cffi/cryptography source builds
+git                      # MUST_HAVE # repo updates
+curl                     # MUST_HAVE # health checks, tailscale install
+ca-certificates          # MUST_HAVE # TLS
+tmux                     # MUST_HAVE # CLI Agent session manager hardcodes
+sudo                     # MUST_HAVE # privileged operations
+python3-dbus             # MUST_HAVE # XDG portal screenshot subprocess
+python3-gi               # MUST_HAVE # GObject introspection for portal
+
+# === SHOULD_HAVE — degraded but functional ===
+chromium-browser         # SHOULD_HAVE # Tauri webview backend, kiosk fallback
+xdotool                  # SHOULD_HAVE # Computer Use input injection
+scrot                    # SHOULD_HAVE # X11 screenshot
+openbox                  # SHOULD_HAVE # CU window management
+x11vnc                   # SHOULD_HAVE # remote desktop CU
+mpg123                   # SHOULD_HAVE # audio playback
+alsa-utils               # SHOULD_HAVE # audio devices
+pulseaudio-utils         # SHOULD_HAVE # PulseAudio control
+
+# === FEATURE_OPTIONAL ===
+docker.io                # FEATURE_OPTIONAL # phone integration (FreeSwitch/Drachtio)
+docker-compose           # FEATURE_OPTIONAL # phone integration
+adb                      # FEATURE_OPTIONAL # Android device pairing routes
+
+# === HARDWARE_OPTIONAL — only if hardware present ===
+modemmanager             # HARDWARE_OPTIONAL # cellular modem
+network-manager          # HARDWARE_OPTIONAL # cellular APN
+# (UGV-stack packages live in docs/ugv-beast/, not installed on mini-PC)
+
+# === DEV_ONLY — for development, not customer install ===
+# (See requirements.dev.txt for Python dev deps)
+```
+
+**Step 2: Commit**
+
+```bash
+git add Scripts/onboarding/system-packages.txt
+git commit -m "chore(install): document system package requirements with bucket classification"
+```
+
+## Phase 0.2: Lite secrets sweep — collapse 9 Python stragglers
+
+**Background:** 9 Python files re-read secrets via `os.getenv()` instead of importing from `Orchestrator.config`. We refactor them to the canonical pattern. Asterisk/FreeSWITCH config files are LEFT ALONE per the lite-sweep decision (consumed by external daemons).
+
+### Task 0.2.1: Add `GEMINI_API_KEY` to central config (the one outlier)
+
+**Files:**
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/config.py`
+
+**Step 1: Add after line 324** (`GOOGLE_API_KEY` definition):
+
+```python
+# Gemini API key — historically read directly via os.getenv in gemini_agent_routes.
+# Falls back to GOOGLE_API_KEY (they are interchangeable for the Gemini SDK).
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", GOOGLE_API_KEY)
+```
+
+**Step 2: Verify Python syntax**
+
+```bash
+Orchestrator/venv/bin/python -c "from Orchestrator.config import GEMINI_API_KEY; print('OK', bool(GEMINI_API_KEY))"
+```
+
+Expected: `OK True` (since `GOOGLE_API_KEY` is set)
+
+**Step 3: Don't commit yet** — bundle with Task 0.2.2.
+
+### Task 0.2.2: Refactor 9 stragglers to import from central config
+
+**Files (Modify):**
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/routes/tts_routes.py` (lines 119, 210, 324, 356)
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/routes/admin_routes.py` (lines 320, 321, 322)
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/asterisk/ivr_audio.py` (line 74)
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/backfill_embeddings.py` (line 26)
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/asterisk/config.py` (lines 19, 51)
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/routes/gemini_agent_routes.py` (lines 160, 705)
+
+**Step 1: For each file, replace pattern:**
+
+```python
+# OLD
+key = os.getenv("OPENAI_API_KEY")
+```
+
+```python
+# NEW (at top of file, with other imports)
+from Orchestrator.config import OPENAI_API_KEY
+# ...later in code...
+key = OPENAI_API_KEY
+```
+
+For `gemini_agent_routes.py:160,705`:
+
+```python
+# OLD
+api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+```
+
+```python
+# NEW
+from Orchestrator.config import GEMINI_API_KEY
+# ...later...
+api_key = GEMINI_API_KEY  # already falls back to GOOGLE_API_KEY in config.py
+```
+
+**Step 2: Run smoke test**
+
+```bash
+Orchestrator/venv/bin/python -c "
+from Orchestrator.routes import tts_routes, admin_routes, gemini_agent_routes
+from Orchestrator.asterisk import ivr_audio, config as ast_config
+print('OK — all imports succeed')
+"
+```
+
+Expected: `OK — all imports succeed`
+
+**Step 3: Restart blackbox.service and verify it starts cleanly**
+
+```bash
+sudo systemctl restart blackbox.service
+sleep 70  # wait for snapshot index rebuild
+sudo systemctl status blackbox.service --no-pager | head -15
+curl -s http://localhost:9091/health | python3 -m json.tool | head -20
+```
+
+Expected: service active; `/health` returns JSON with `"status":"ok"`.
+
+**Step 4: Commit**
+
+```bash
+git add Orchestrator/config.py \
+        Orchestrator/routes/tts_routes.py \
+        Orchestrator/routes/admin_routes.py \
+        Orchestrator/asterisk/ivr_audio.py \
+        Orchestrator/backfill_embeddings.py \
+        Orchestrator/asterisk/config.py \
+        Orchestrator/routes/gemini_agent_routes.py
+git commit -m "refactor(config): collapse 9 os.getenv stragglers to import from central config
+
+- Add GEMINI_API_KEY to Orchestrator/config.py with GOOGLE_API_KEY fallback
+- Refactor 9 Python files re-reading secrets via os.getenv to import from config
+- Closes the 'shadow read' channels identified in onboarding discovery sweep
+- Asterisk/FreeSWITCH config files intentionally left alone (lite-sweep scope)"
+```
+
+### Task 0.2.3: Audit and delete orphan Secrets/.env files
+
+**Files (potentially Delete):**
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Secrets/.env`
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/Secrets/.env`
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/credentials/gmail_oauth_client.json`
+
+**Step 1: Confirm nothing reads them**
+
+```bash
+grep -rn "Secrets/" --include="*.py" --include="*.sh" --include="*.service" \
+    Orchestrator/ Scripts/ deployments/ 2>/dev/null
+grep -rn "gmail_oauth_client.json" --include="*.py" Orchestrator/ 2>/dev/null
+```
+
+Expected: no Python references to either path.
+
+**Step 2: Move (don't rm) to a quarantine area first** in case some script you missed needs them:
+
+```bash
+mkdir -p Archive/orphan-secrets-quarantine-2026-05-10
+mv Secrets/.env Archive/orphan-secrets-quarantine-2026-05-10/Secrets-env
+mv Orchestrator/Secrets/.env Archive/orphan-secrets-quarantine-2026-05-10/Orchestrator-Secrets-env
+mv credentials/gmail_oauth_client.json Archive/orphan-secrets-quarantine-2026-05-10/
+rmdir Secrets Orchestrator/Secrets 2>/dev/null || true
+```
+
+(`Archive/` is gitignored per `.gitignore`, so quarantine doesn't get committed.)
+
+**Step 3: Restart and verify**
+
+```bash
+sudo systemctl restart blackbox.service && sleep 70
+curl -s http://localhost:9091/health | python3 -m json.tool | head -10
+```
+
+Expected: service still healthy; nothing broke.
+
+**Step 4: Commit the directory removal**
+
+```bash
+git add -u  # picks up the directory deletions
+git status --short  # verify expected files staged
+git commit -m "chore(secrets): quarantine 3 orphan secret files
+
+- Secrets/.env (duplicate OPENAI_API_KEY, no consumers)
+- Orchestrator/Secrets/.env (duplicate OPENAI_API_KEY, no consumers)
+- credentials/gmail_oauth_client.json (Gmail OAuth uses env vars, file unread)
+
+All moved to Archive/ (gitignored) for one-week safety hold before permanent rm.
+Service restart smoke test passes."
+```
+
+## Phase 0.3: BLACKBOX_ROOT + path resolver utility
+
+**Background:** 194 hardcoded `/home/ai-black-box-fc/...` references break on any other machine. Solution: one canonical `BLACKBOX_ROOT` env var + a `paths.py` utility every code path uses.
+
+### Task 0.3.1: Create the paths utility module
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/utils/__init__.py` (if missing)
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/utils/paths.py`
+
+**Step 1: Write `paths.py`:**
+
+```python
+"""Central path-resolver for AI BlackBox.
+
+All code that constructs a filesystem path INSIDE the BlackBox project tree
+should use these helpers rather than hardcoding paths or assuming CWD.
+
+The root is determined in this priority:
+  1. BLACKBOX_ROOT env var (set by systemd unit, .env, or installer)
+  2. Walk up from this file until we find a sentinel (CLAUDE.md + Orchestrator/)
+  3. Fall back to /home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc
+     (the legacy default; warns to log if reached)
+"""
+from __future__ import annotations
+
+import os
+import sys
+from pathlib import Path
+from functools import lru_cache
+
+LEGACY_DEFAULT = "/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc"
+
+
+@lru_cache(maxsize=1)
+def blackbox_root() -> Path:
+    """Return the absolute Path to the BlackBox project root."""
+    env = os.getenv("BLACKBOX_ROOT")
+    if env:
+        return Path(env).resolve()
+
+    # Walk up from this file looking for sentinels
+    here = Path(__file__).resolve()
+    for parent in [here, *here.parents]:
+        if (parent / "CLAUDE.md").exists() and (parent / "Orchestrator").is_dir():
+            return parent
+
+    # Fallback — warn loudly so we can grep for any caller hitting this
+    print(
+        f"[paths.py] WARNING: BLACKBOX_ROOT not set and sentinels not found; "
+        f"falling back to legacy default {LEGACY_DEFAULT}",
+        file=sys.stderr,
+    )
+    return Path(LEGACY_DEFAULT)
+
+
+def resolve(*parts: str) -> Path:
+    """Resolve a path under the BlackBox root.
+
+    >>> resolve("Portal", "uploads")
+    PosixPath('.../blackbox_poc/Portal/uploads')
+    """
+    return blackbox_root().joinpath(*parts)
+
+
+def portal_dir() -> Path:
+    return resolve("Portal")
+
+
+def uploads_dir() -> Path:
+    return resolve("Portal", "uploads")
+
+
+def credentials_dir() -> Path:
+    return resolve("credentials")
+
+
+def manifest_dir() -> Path:
+    return resolve("Manifest")
+
+
+def volume_dir() -> Path:
+    return resolve("Volume")
+
+
+def fossils_dir() -> Path:
+    return resolve("Fossils")
+
+
+def apps_dir() -> Path:
+    return resolve("Apps")
+```
+
+**Step 2: Verify**
+
+```bash
+Orchestrator/venv/bin/python -c "
+from Orchestrator.utils.paths import blackbox_root, resolve, uploads_dir
+print('root:', blackbox_root())
+print('uploads:', uploads_dir())
+print('resolve test:', resolve('docs', 'plans'))
+"
+```
+
+Expected: 3 absolute paths printed, all under the project root.
+
+**Step 3: Commit**
+
+```bash
+git add Orchestrator/utils/__init__.py Orchestrator/utils/paths.py
+git commit -m "feat(paths): add BLACKBOX_ROOT-aware path resolver utility
+
+Single canonical place to compute paths under the BlackBox project tree.
+Resolution priority: BLACKBOX_ROOT env var > sentinel walk-up > legacy default.
+Helpers: blackbox_root(), resolve(*parts), portal_dir(), uploads_dir(),
+credentials_dir(), manifest_dir(), volume_dir(), fossils_dir(), apps_dir()."
+```
+
+### Task 0.3.2: Add BLACKBOX_ROOT to .env.template
+
+**Files:**
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/.env.template`
+
+**Step 1: Prepend (above existing keys):**
+
+```bash
+# === Project Root ===
+# Absolute path to the BlackBox project root.
+# Auto-detected if unset (walks up from Orchestrator/ looking for CLAUDE.md sentinel).
+# Set explicitly in production for reliability.
+# BLACKBOX_ROOT=/path/to/your/blackbox_poc
+```
+
+**Step 2: Commit**
+
+```bash
+git add .env.template
+git commit -m "docs(env): add BLACKBOX_ROOT example to .env.template"
+```
+
+### Task 0.3.3: Audit the 194 hardcoded paths into buckets
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/docs/onboarding/path-sweep-audit.md`
+
+**Step 1: Generate the full hit list**
+
+```bash
+grep -rnE "ai-black-box-fc|/home/ai-black-box-fc" \
+  --include="*.py" --include="*.kt" --include="*.js" --include="*.html" \
+  --include="*.sh" --include="*.service" --include="*.json" --include="*.md" \
+  --include="*.toml" --include="*.yaml" --include="*.yml" --include="*.conf" \
+  2>/dev/null | grep -v -E "venv/|node_modules/|/build/|\.gradle/|/Volume|/Manifest|/Fossils|/Archive|tasks\.db" \
+  > /tmp/path-hits-raw.txt
+
+wc -l /tmp/path-hits-raw.txt   # confirm ~194
+```
+
+**Step 2: Categorize each hit into one of these buckets:**
+
+- **B1 — systemd unit files** (`*.service`): rewrite via template substitution at install time
+- **B2 — Config files** (`.mcp.json`, `*.toml`): `${BLACKBOX_ROOT}` substitution at install time
+- **B3 — Python/JS code**: replace with `from Orchestrator.utils.paths import …` (Python) or `window.BBX_ROOT` (JS)
+- **B4 — App media URLs in HTML** (`Apps/*/index.html`): replace absolute Tailscale URL with relative `/ui/uploads/...` or origin-aware `<base href>`
+- **B5 — Documentation** (`*.md`): replace with `<your-tailnet-hostname>` / `<BLACKBOX_ROOT>` placeholders + brief note on substitution
+- **B6 — Already-correct** (intentional examples in CLAUDE.md, comments referencing actual hostname): leave alone, document why
+
+Write the audit doc as a table:
+
+```markdown
+# Path Sweep Audit (194 hits)
+
+| File | Line | Pattern | Bucket | Action |
+|---|---|---|---|---|
+| Apps/system-monitor/blackbox-monitor.service | 7 | User=ai-black-box-fc | B1 | Rewrite via install-time template |
+| Apps/system-monitor/blackbox-monitor.service | 8 | WorkingDirectory= | B1 | Rewrite via install-time template |
+| Apps/system-monitor/blackbox-monitor.service | 9 | ExecStart= | B1 | Rewrite via install-time template |
+| .mcp.json | 6 | full path to MCP server | B2 | ${BLACKBOX_ROOT} substitution |
+| .mcp.json | 10 | BLACKBOX_ROOT value | B2 | ${BLACKBOX_ROOT} substitution |
+| Apps/echoes-of-titan/index.html | 227 | Tailscale FQDN audio src | B4 | Use relative /ui/uploads/ |
+| ... etc ... |
+```
+
+(Full table populated by inspection — Task 0.3.4 batches the actual edits per bucket.)
+
+**Step 3: Commit the audit doc**
+
+```bash
+git add docs/onboarding/path-sweep-audit.md
+git commit -m "docs(onboarding): full audit of 194 hardcoded path references
+
+Buckets: B1 systemd, B2 config, B3 code, B4 app HTML, B5 docs, B6 intentional.
+Each bucket gets its own subsequent task to apply the fix consistently."
+```
+
+### Task 0.3.4: Apply Bucket B3 fixes — Python code path-resolver migration
+
+**Files:** Every Python file in B3 (likely 5-15 files based on the audit).
+
+**Step 1: For each B3 file, replace patterns like:**
+
+```python
+# OLD
+SNAPSHOT_DIR = "/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Manifest"
+```
+
+```python
+# NEW
+from Orchestrator.utils.paths import manifest_dir
+SNAPSHOT_DIR = str(manifest_dir())
+```
+
+**Step 2: Run full test smoke**
+
+```bash
+sudo systemctl restart blackbox.service && sleep 70
+curl -s http://localhost:9091/health | python3 -m json.tool | head -10
+# Spot-check 2-3 endpoints that touched modified files
+```
+
+**Step 3: Commit**
+
+```bash
+git add <files>
+git commit -m "refactor(paths): migrate B3 Python code to use BLACKBOX_ROOT path resolver
+
+<list of files modified>
+Eliminates hardcoded /home/ai-black-box-fc/ references in Python."
+```
+
+### Task 0.3.5: Apply Bucket B4 fixes — App HTML media URLs
+
+**Files:** Every `Apps/*/index.html` from B4 (likely 5-10 files).
+
+**Step 1: For each app HTML, replace absolute Tailscale URLs with relative paths:**
+
+```html
+<!-- OLD -->
+<source src="https://ai-black-box-fc-a620ai-wifi.tail401fb3.ts.net/ui/uploads/foo.wav">
+
+<!-- NEW -->
+<source src="/ui/uploads/foo.wav">
+```
+
+When the app runs on a different port (8060-8099), make the URLs origin-aware via `<base href>` injected at app-load time:
+
+```html
+<head>
+    <!-- Origin pinned to BlackBox Orchestrator at request time -->
+    <base href="http://localhost:9091/">
+    ...
+</head>
+```
+
+OR (cleaner): a small JS shim at the top of each app:
+
+```html
+<script>
+  // Apps run on ports 8060-8099; their /ui/uploads/ paths must resolve to the
+  // Orchestrator on :9091. Inject a <base> tag matching the parent origin.
+  (function() {
+    const url = new URL(document.location.href);
+    const orchOrigin = url.protocol + '//' + url.hostname + ':9091';
+    const base = document.createElement('base');
+    base.href = orchOrigin + '/';
+    document.head.prepend(base);
+  })();
+</script>
+```
+
+**Step 2: Test each app loads its media**
+
+```bash
+# For each modified app, verify it serves and media plays
+ss -tlnp | grep -E "8060|8061|8062|8063|8064|8065|8066|8067|8068|8069|8070"
+# Visit each in browser and play a media element
+```
+
+**Step 3: Commit**
+
+```bash
+git add Apps/*/index.html
+git commit -m "fix(apps): replace hardcoded Tailscale FQDN media URLs with origin-aware paths
+
+Apps now resolve /ui/uploads/ via parent-origin <base> tag so they work on any
+machine without depending on the specific Tailscale hostname."
+```
+
+### Task 0.3.6: Apply Bucket B5 fixes — Documentation cleanup
+
+**Files:** Every `*.md` from B5 audit (likely `Claude.md`, `AUDIT_REPORT.md`, others).
+
+**Step 1: Replace specific FQDN/path references with placeholders + an explanatory note at top:**
+
+```markdown
+> **Note:** Examples in this document use placeholder strings for portability:
+> - `<BLACKBOX_ROOT>` — your project root (default `/home/<user>/blackbox_poc`)
+> - `<TAILSCALE_HOSTNAME>` — your Tailscale machine FQDN (e.g. `mybox.tailXXXX.ts.net`)
+> Substitute your actual values when copy-pasting commands.
+```
+
+Then s/`/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc`/`<BLACKBOX_ROOT>`/g
+And s/`ai-black-box-fc-a620ai-wifi.tail401fb3.ts.net`/`<TAILSCALE_HOSTNAME>`/g
+
+**Step 2: Commit**
+
+```bash
+git add *.md
+git commit -m "docs: replace hardcoded paths/hostnames with portable placeholders
+
+Adds explanatory note at top of each affected doc explaining placeholder
+substitution. No content lost — examples remain functional after substitution."
+```
+
+### Task 0.3.7: Apply Bucket B1 + B2 fixes — systemd + config templating
+
+This bucket involves install-time substitution rather than in-place edits, so it's deferred to Track 4 (Install scripts) where the install script writes the systemd unit + .mcp.json with substituted paths. Mark in audit doc as "deferred to Track 4."
+
+## Phase 0.4: Pairing endpoint relocation + claim flow
+
+**Background:** `/pair/start` is orphan-placed in `tts_routes.py:308-321`. There's no `/pair/claim` to validate token redemption. Move it and add the claim.
+
+### Task 0.4.1: Create the pairing routes module
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/routes/pairing_routes.py`
+
+**Step 1: Write the new module — extract the existing logic + add claim flow:**
+
+```python
+"""Pairing routes — QR-based device pairing for AI BlackBox.
+
+POST /pair/start   — Mint a one-time pairing token (TTL 5min).
+POST /pair/claim   — Redeem a token (called by the claiming device).
+GET  /pair/status  — Check if a token has been claimed (for poll-style UX).
+GET  /pair/qr/{token} — Render PNG QR code for the token (server-side).
+"""
+from __future__ import annotations
+
+import io
+import secrets
+import time
+from typing import Optional
+
+import qrcode
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+router = APIRouter(prefix="/pair", tags=["pairing"])
+
+PAIR_TOKEN_TTL_SECS = 300
+
+# Token store: token -> {created_at, claimed_at, claimed_by}
+# In-memory; tokens are short-lived. Restart-tolerant via TTL.
+_pair_tokens: dict[str, dict] = {}
+
+
+class PairStartResponse(BaseModel):
+    type: str = "pair"
+    token: str
+    exp: int
+
+
+class PairClaimRequest(BaseModel):
+    token: str
+    device_name: str
+    device_kind: str  # "android", "desktop", "ios", etc.
+
+
+class PairClaimResponse(BaseModel):
+    success: bool
+    operator: Optional[str] = None
+    origin: Optional[str] = None
+
+
+class PairStatusResponse(BaseModel):
+    exists: bool
+    claimed: bool
+    claimed_by: Optional[str] = None
+    expires_in: int
+
+
+def _purge_expired() -> None:
+    now = time.time()
+    expired = [t for t, m in _pair_tokens.items() if now - m["created_at"] > PAIR_TOKEN_TTL_SECS]
+    for t in expired:
+        del _pair_tokens[t]
+
+
+@router.post("/start", response_model=PairStartResponse)
+def pair_start() -> PairStartResponse:
+    _purge_expired()
+    token = secrets.token_urlsafe(16)
+    now = time.time()
+    _pair_tokens[token] = {
+        "created_at": now,
+        "claimed_at": None,
+        "claimed_by": None,
+    }
+    return PairStartResponse(token=token, exp=int(now + PAIR_TOKEN_TTL_SECS))
+
+
+@router.post("/claim", response_model=PairClaimResponse)
+def pair_claim(req: PairClaimRequest) -> PairClaimResponse:
+    _purge_expired()
+    meta = _pair_tokens.get(req.token)
+    if not meta:
+        raise HTTPException(status_code=404, detail="token unknown or expired")
+    if meta["claimed_at"]:
+        raise HTTPException(status_code=409, detail="token already claimed")
+    meta["claimed_at"] = time.time()
+    meta["claimed_by"] = req.device_name
+    # Pull operator + origin from /health-style config (kept minimal here)
+    from Orchestrator.config import DEFAULT_OPERATOR, DEFAULT_ORIGIN  # added in 0.4.2
+    return PairClaimResponse(success=True, operator=DEFAULT_OPERATOR, origin=DEFAULT_ORIGIN)
+
+
+@router.get("/status", response_model=PairStatusResponse)
+def pair_status(token: str) -> PairStatusResponse:
+    _purge_expired()
+    meta = _pair_tokens.get(token)
+    if not meta:
+        return PairStatusResponse(exists=False, claimed=False, expires_in=0)
+    expires_in = max(0, int(PAIR_TOKEN_TTL_SECS - (time.time() - meta["created_at"])))
+    return PairStatusResponse(
+        exists=True,
+        claimed=meta["claimed_at"] is not None,
+        claimed_by=meta["claimed_by"],
+        expires_in=expires_in,
+    )
+
+
+@router.get("/qr/{token}")
+def pair_qr(token: str):
+    """Render PNG QR for a pairing token. Replaces external api.qrserver.com."""
+    _purge_expired()
+    meta = _pair_tokens.get(token)
+    if not meta:
+        raise HTTPException(status_code=404, detail="token unknown or expired")
+    from Orchestrator.config import DEFAULT_OPERATOR, DEFAULT_ORIGIN
+    payload = (
+        '{"type":"pair","token":"' + token + '","exp":' + str(int(meta["created_at"] + PAIR_TOKEN_TTL_SECS))
+        + ',"origin":"' + DEFAULT_ORIGIN + '","operator":"' + DEFAULT_OPERATOR + '"}'
+    )
+    img = qrcode.make(payload)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return StreamingResponse(buf, media_type="image/png")
+```
+
+**Step 2: Wire it into `Orchestrator/app.py`** — find the section where other routers are included, add:
+
+```python
+from Orchestrator.routes import pairing_routes
+app.include_router(pairing_routes.router)
+```
+
+**Step 3: Add `DEFAULT_OPERATOR` + `DEFAULT_ORIGIN` to config.py** if not already exported (read from `config.ini` or env).
+
+**Step 4: Remove old `/pair/start` from `tts_routes.py:308-321`**
+
+**Step 5: Restart + test**
+
+```bash
+sudo systemctl restart blackbox.service && sleep 70
+curl -s -X POST http://localhost:9091/pair/start | python3 -m json.tool
+# Capture the token, then:
+TOKEN=$(curl -s -X POST http://localhost:9091/pair/start | python3 -c "import sys,json;print(json.load(sys.stdin)['token'])")
+curl -s "http://localhost:9091/pair/status?token=$TOKEN" | python3 -m json.tool
+curl -s "http://localhost:9091/pair/qr/$TOKEN" -o /tmp/test-pair-qr.png
+file /tmp/test-pair-qr.png  # should report PNG image
+```
+
+**Step 6: Commit**
+
+```bash
+git add Orchestrator/routes/pairing_routes.py Orchestrator/routes/tts_routes.py Orchestrator/app.py Orchestrator/config.py
+git commit -m "feat(pairing): proper pairing routes with claim flow + server-side QR
+
+- New Orchestrator/routes/pairing_routes.py owns /pair/{start,claim,status,qr/{token}}
+- Token TTL 5min, single-use claim, in-memory store (restart-tolerant via TTL)
+- Server-side QR generation via 'qrcode' lib — replaces external api.qrserver.com dependency
+- Removed orphan /pair/start from tts_routes.py
+- DEFAULT_OPERATOR + DEFAULT_ORIGIN added to config.py for claim/qr response payload"
+```
+
+### Task 0.4.2: Update Portal pairing UI to use server-side QR
+
+**Files:**
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/modules/ui-setup.js` (lines ~788-820)
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/index.html` (line 759-771 #pairModal)
+
+**Step 1: Replace the api.qrserver.com URL** with the new server-side endpoint:
+
+```javascript
+// OLD
+const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(payload)}&size=240x240`;
+
+// NEW
+const qrUrl = `/pair/qr/${token}`;  // token from /pair/start response
+```
+
+**Step 2: Test in browser** — open Portal, hit "Pair Device", confirm QR renders from local endpoint (no external network call).
+
+**Step 3: Commit**
+
+```bash
+git add Portal/modules/ui-setup.js Portal/index.html
+git commit -m "fix(portal): use local /pair/qr/{token} instead of api.qrserver.com
+
+Portal pairing flow no longer depends on external QR-rendering service.
+Works fully offline / on-prem."
+```
+
+---
+
+## Track 0 Checkpoint Commit
+
+After Phase 0.1 + 0.2 + 0.3 + 0.4 are done, the foundation is stable. Tag this checkpoint:
+
+```bash
+git tag -a track0-foundation-complete -m "Foundation cleanup complete — onboarding UI can build on top.
+
+Phase 0.1: requirements.txt pinned, system-packages.txt manifest
+Phase 0.2: 9 stragglers refactored, GEMINI_API_KEY in central config, 3 orphans quarantined
+Phase 0.3: BLACKBOX_ROOT + paths.py utility, 194 hardcoded paths bucketed, B3+B4+B5 fixed
+Phase 0.4: pairing_routes.py with claim flow + server-side QR, Portal updated
+
+Remaining for later tracks: B1 systemd + B2 config templating happens in Track 4."
+git push origin track0-foundation-complete
+```
+
+---
+
+# TRACK 1 — ONBOARDING BACKEND
+
+**Goal:** FastAPI routes the Portal wizard talks to. State endpoint (is onboarding done?), per-provider validators, save endpoint (write secrets to .env atomically), complete/skip endpoints.
+
+**Estimated effort:** 1 week
+**Dependencies:** Track 0
+**Outcome:** All wizard steps have a backend to call. Each provider validator does a 1-token cost call to confirm a key works.
+
+## Phase 1.1: First-run state detection
+
+### Task 1.1.1: Create the onboarding package
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/onboarding/__init__.py`
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/onboarding/state.py`
+
+**Step 1: Write `state.py`:**
+
+```python
+"""Onboarding state — first-run detection and step-completion tracking."""
+from __future__ import annotations
+
+import json
+import time
+from pathlib import Path
+from typing import Literal
+
+from Orchestrator.utils.paths import resolve
+
+STATE_FILE = resolve(".onboarding_state.json")
+COMPLETE_SENTINEL = resolve(".onboarding_complete")
+
+StepName = Literal[
+    "welcome",
+    "tailscale",
+    "api_keys",
+    "optional_integrations",
+    "pair_phone",
+    "operator",
+    "done",
+]
+
+ALL_STEPS: list[StepName] = [
+    "welcome", "tailscale", "api_keys",
+    "optional_integrations", "pair_phone", "operator", "done",
+]
+
+
+class OnboardingState:
+    """Persistent onboarding progress state.
+
+    Stored as JSON in {BLACKBOX_ROOT}/.onboarding_state.json.
+    Marker file {BLACKBOX_ROOT}/.onboarding_complete signals 'done' to other code.
+    """
+
+    def __init__(self) -> None:
+        self._data: dict = self._load()
+
+    def _load(self) -> dict:
+        if STATE_FILE.exists():
+            try:
+                return json.loads(STATE_FILE.read_text())
+            except Exception:
+                pass
+        return {
+            "started_at": time.time(),
+            "completed_steps": [],
+            "skipped_steps": [],
+            "current_step": "welcome",
+        }
+
+    def _save(self) -> None:
+        STATE_FILE.write_text(json.dumps(self._data, indent=2))
+
+    def is_complete(self) -> bool:
+        return COMPLETE_SENTINEL.exists()
+
+    def mark_step_complete(self, step: StepName) -> None:
+        if step not in self._data["completed_steps"]:
+            self._data["completed_steps"].append(step)
+        if step in self._data["skipped_steps"]:
+            self._data["skipped_steps"].remove(step)
+        self._save()
+
+    def mark_step_skipped(self, step: StepName) -> None:
+        if step not in self._data["skipped_steps"]:
+            self._data["skipped_steps"].append(step)
+        if step in self._data["completed_steps"]:
+            self._data["completed_steps"].remove(step)
+        self._save()
+
+    def set_current(self, step: StepName) -> None:
+        self._data["current_step"] = step
+        self._save()
+
+    def mark_complete(self) -> None:
+        """Final marker — wizard is done."""
+        COMPLETE_SENTINEL.write_text(f"completed_at={int(time.time())}\n")
+        self._data["completed_at"] = time.time()
+        self._save()
+
+    def reset(self) -> None:
+        """Clear onboarding state (for re-runs)."""
+        if STATE_FILE.exists():
+            STATE_FILE.unlink()
+        if COMPLETE_SENTINEL.exists():
+            COMPLETE_SENTINEL.unlink()
+        self._data = self._load()
+
+    def snapshot(self) -> dict:
+        """Return state dict for /onboarding/state response."""
+        return {
+            "is_complete": self.is_complete(),
+            "completed_steps": self._data["completed_steps"],
+            "skipped_steps": self._data["skipped_steps"],
+            "current_step": self._data["current_step"],
+            "all_steps": ALL_STEPS,
+        }
+```
+
+**Step 2: Verify**
+
+```bash
+Orchestrator/venv/bin/python -c "
+from Orchestrator.onboarding.state import OnboardingState, ALL_STEPS
+s = OnboardingState()
+print('is_complete:', s.is_complete())
+print('snapshot:', s.snapshot())
+print('all_steps:', ALL_STEPS)
+"
+```
+
+**Step 3: Commit**
+
+```bash
+git add Orchestrator/onboarding/__init__.py Orchestrator/onboarding/state.py
+git commit -m "feat(onboarding): state tracking module — step completion/skip + done sentinel"
+```
+
+## Phase 1.2: Per-provider validators
+
+### Task 1.2.1: Create validators module skeleton
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/onboarding/validators.py`
+
+**Step 1: Write the skeleton with one validator per Tier-1 integration:**
+
+```python
+"""Per-provider key validators.
+
+Each validator does a CHEAP call (1 token cost or one cheap metadata API)
+to confirm the supplied credential works. Returns ValidationResult with
+ok/error/latency_ms so the wizard can show clean per-provider feedback.
+
+Tier-1 (v1 wizard): OpenAI, Anthropic, Google, Tailscale, Gmail.
+Tier-2 (v1.1): Twilio, ElevenLabs, Asterisk, xAI, Perplexity.
+"""
+from __future__ import annotations
+
+import asyncio
+import shutil
+import subprocess
+import time
+from dataclasses import dataclass, asdict
+from typing import Any
+
+
+@dataclass
+class ValidationResult:
+    ok: bool
+    latency_ms: int
+    error: str | None = None
+    detail: dict[str, Any] | None = None
+
+
+def _measure(fn) -> ValidationResult:
+    """Wrap a sync validator with latency measurement + error capture."""
+    start = time.perf_counter()
+    try:
+        detail = fn()
+        return ValidationResult(
+            ok=True,
+            latency_ms=int((time.perf_counter() - start) * 1000),
+            detail=detail,
+        )
+    except Exception as e:
+        return ValidationResult(
+            ok=False,
+            latency_ms=int((time.perf_counter() - start) * 1000),
+            error=f"{type(e).__name__}: {e}",
+        )
+
+
+# ──────────────────────────── Tier-1 ────────────────────────────
+
+def validate_openai(api_key: str) -> ValidationResult:
+    """Validate OpenAI API key via models.list (no token cost)."""
+    def _fn():
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        models = client.models.list()
+        return {"model_count": len(list(models.data))}
+    return _measure(_fn)
+
+
+def validate_anthropic(api_key: str) -> ValidationResult:
+    """Validate Anthropic key via cheapest-possible message (1-token completion)."""
+    def _fn():
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1,
+            messages=[{"role": "user", "content": "hi"}],
+        )
+        return {"model": resp.model, "id": resp.id}
+    return _measure(_fn)
+
+
+def validate_google(api_key: str) -> ValidationResult:
+    """Validate Google AI key via list_models."""
+    def _fn():
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        models = list(client.models.list())
+        return {"model_count": len(models)}
+    return _measure(_fn)
+
+
+def validate_tailscale() -> ValidationResult:
+    """Validate Tailscale install + auth via 'tailscale status --json'."""
+    def _fn():
+        if not shutil.which("tailscale"):
+            raise RuntimeError("tailscale binary not found on PATH")
+        result = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"tailscale status failed: {result.stderr.strip()}")
+        import json as _json
+        data = _json.loads(result.stdout)
+        backend = data.get("BackendState", "unknown")
+        if backend != "Running":
+            raise RuntimeError(f"tailscale not running (BackendState={backend})")
+        self_node = data.get("Self", {})
+        return {
+            "hostname": self_node.get("DNSName", "").rstrip("."),
+            "ip": (self_node.get("TailscaleIPs") or ["unknown"])[0],
+            "online": self_node.get("Online", False),
+        }
+    return _measure(_fn)
+
+
+def validate_gmail_oauth(client_id: str, client_secret: str) -> ValidationResult:
+    """Validate Gmail OAuth client by attempting to construct an OAuth flow object.
+    Does NOT trigger interactive auth — that happens in the wizard browser frame.
+    """
+    def _fn():
+        from google_auth_oauthlib.flow import Flow
+        flow = Flow.from_client_config(
+            {"web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": ["http://localhost:9091/auth/gmail/callback"],
+            }},
+            scopes=["https://www.googleapis.com/auth/gmail.readonly"],
+        )
+        # Just verify the URL can be constructed
+        url, _ = flow.authorization_url()
+        return {"auth_url_prefix": url.split("?")[0]}
+    return _measure(_fn)
+```
+
+**Step 2: Verify with the actual current keys (sanity check)**
+
+```bash
+Orchestrator/venv/bin/python -c "
+from Orchestrator.onboarding.validators import validate_openai, validate_anthropic, validate_google, validate_tailscale
+from Orchestrator.config import OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY
+print('OpenAI:', validate_openai(OPENAI_API_KEY))
+print('Anthropic:', validate_anthropic(ANTHROPIC_API_KEY))
+print('Google:', validate_google(GOOGLE_API_KEY))
+print('Tailscale:', validate_tailscale())
+"
+```
+
+Expected: all four print `ValidationResult(ok=True, latency_ms=…, detail={…})`.
+
+**Step 3: Commit**
+
+```bash
+git add Orchestrator/onboarding/validators.py
+git commit -m "feat(onboarding): tier-1 per-provider validators (OpenAI/Anthropic/Google/Tailscale/Gmail)
+
+Each does a cheap 1-token (or metadata-only) call to confirm the credential works.
+Returns ValidationResult{ok, latency_ms, error?, detail?} for clean wizard UX."
+```
+
+## Phase 1.3: Onboarding routes
+
+### Task 1.3.1: Build the onboarding routes module
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/onboarding/secrets_writer.py`
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/routes/onboarding_routes.py`
+
+**Step 1: Write `secrets_writer.py` — atomic .env update with backup:**
+
+```python
+"""Atomic .env file writer with backup."""
+from __future__ import annotations
+
+import os
+import shutil
+import time
+from pathlib import Path
+
+from Orchestrator.utils.paths import resolve
+
+ENV_FILE = resolve(".env")
+
+
+def update_env(updates: dict[str, str]) -> dict:
+    """Atomically update key=value pairs in .env, preserving structure.
+
+    - Existing keys: replaced in-place (preserves comment ordering)
+    - New keys: appended
+    - Backup created at .env.backup.<timestamp> before writing
+    """
+    if not ENV_FILE.exists():
+        ENV_FILE.touch()
+
+    # Backup
+    ts = int(time.time())
+    backup = ENV_FILE.with_suffix(f".backup.{ts}")
+    shutil.copy2(ENV_FILE, backup)
+
+    # Read + update
+    lines = ENV_FILE.read_text().splitlines(keepends=True)
+    seen_keys: set[str] = set()
+    new_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            new_lines.append(line)
+            continue
+        if "=" in stripped:
+            k = stripped.split("=", 1)[0].strip()
+            if k in updates:
+                new_lines.append(f"{k}={updates[k]}\n")
+                seen_keys.add(k)
+                continue
+        new_lines.append(line)
+
+    # Append new keys
+    new_keys = [k for k in updates if k not in seen_keys]
+    if new_keys:
+        new_lines.append("\n# Added by onboarding wizard\n")
+        for k in new_keys:
+            new_lines.append(f"{k}={updates[k]}\n")
+
+    # Atomic write via tmp + rename
+    tmp = ENV_FILE.with_suffix(".tmp")
+    tmp.write_text("".join(new_lines))
+    os.replace(tmp, ENV_FILE)
+
+    return {"backup": str(backup), "updated_keys": list(updates.keys())}
+```
+
+**Step 2: Write `onboarding_routes.py`:**
+
+```python
+"""Onboarding wizard backend routes.
+
+Mounted at /onboarding/* by Orchestrator/app.py.
+"""
+from __future__ import annotations
+
+from typing import Literal
+
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+from Orchestrator.onboarding import validators
+from Orchestrator.onboarding.secrets_writer import update_env
+from Orchestrator.onboarding.state import (
+    OnboardingState,
+    StepName,
+    ALL_STEPS,
+)
+
+router = APIRouter(prefix="/onboarding", tags=["onboarding"])
+
+_state = OnboardingState()
+
+
+class StateResponse(BaseModel):
+    is_complete: bool
+    completed_steps: list[str]
+    skipped_steps: list[str]
+    current_step: str
+    all_steps: list[str]
+
+
+class ValidateRequest(BaseModel):
+    provider: Literal["openai", "anthropic", "google", "tailscale", "gmail"]
+    credentials: dict[str, str]  # provider-specific shape
+
+
+class ValidateResponse(BaseModel):
+    ok: bool
+    latency_ms: int
+    error: str | None = None
+    detail: dict | None = None
+
+
+class SaveRequest(BaseModel):
+    secrets: dict[str, str]  # env-var name -> value
+
+
+class StepActionRequest(BaseModel):
+    step: StepName
+
+
+@router.get("/state", response_model=StateResponse)
+def get_state() -> StateResponse:
+    return StateResponse(**_state.snapshot())
+
+
+@router.post("/validate", response_model=ValidateResponse)
+def validate(req: ValidateRequest) -> ValidateResponse:
+    creds = req.credentials
+    if req.provider == "openai":
+        result = validators.validate_openai(creds["api_key"])
+    elif req.provider == "anthropic":
+        result = validators.validate_anthropic(creds["api_key"])
+    elif req.provider == "google":
+        result = validators.validate_google(creds["api_key"])
+    elif req.provider == "tailscale":
+        result = validators.validate_tailscale()
+    elif req.provider == "gmail":
+        result = validators.validate_gmail_oauth(creds["client_id"], creds["client_secret"])
+    else:
+        raise HTTPException(status_code=400, detail=f"unknown provider {req.provider}")
+    return ValidateResponse(**vars(result))
+
+
+@router.post("/save")
+def save_secrets(req: SaveRequest) -> dict:
+    return update_env(req.secrets)
+
+
+@router.post("/step/complete")
+def step_complete(req: StepActionRequest) -> dict:
+    _state.mark_step_complete(req.step)
+    return _state.snapshot()
+
+
+@router.post("/step/skip")
+def step_skip(req: StepActionRequest) -> dict:
+    _state.mark_step_skipped(req.step)
+    return _state.snapshot()
+
+
+@router.post("/complete")
+def complete() -> dict:
+    """Mark onboarding fully complete — sentinel file written."""
+    _state.mark_complete()
+    return {"ok": True, "is_complete": True}
+
+
+@router.post("/reset")
+def reset() -> dict:
+    """Reset onboarding (for testing or re-onboarding)."""
+    _state.reset()
+    return _state.snapshot()
+```
+
+**Step 3: Wire it into `Orchestrator/app.py`:**
+
+```python
+from Orchestrator.routes import onboarding_routes
+app.include_router(onboarding_routes.router)
+```
+
+**Step 4: Restart and probe**
+
+```bash
+sudo systemctl restart blackbox.service && sleep 70
+curl -s http://localhost:9091/onboarding/state | python3 -m json.tool
+curl -s -X POST http://localhost:9091/onboarding/validate \
+  -H "Content-Type: application/json" \
+  -d "{\"provider\":\"openai\",\"credentials\":{\"api_key\":\"$OPENAI_API_KEY\"}}" \
+  | python3 -m json.tool
+```
+
+Expected: state JSON with empty completed_steps + current_step="welcome"; openai validation returns `ok=true, latency_ms<2000`.
+
+**Step 5: Commit**
+
+```bash
+git add Orchestrator/onboarding/secrets_writer.py Orchestrator/routes/onboarding_routes.py Orchestrator/app.py
+git commit -m "feat(onboarding): backend routes — state, validate, save, step actions, complete
+
+POST /onboarding/state — wizard reads completion state
+POST /onboarding/validate — per-provider key validation (1-token cost)
+POST /onboarding/save — atomic .env update with backup
+POST /onboarding/step/{complete,skip} — track per-step progress
+POST /onboarding/complete — write done sentinel
+POST /onboarding/reset — for testing"
+```
+
+### Task 1.3.2: Add first-run middleware/redirect
+
+**Files:**
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/app.py`
+
+**Step 1: Add middleware that redirects `/ui` to `/onboarding` if not complete:**
+
+```python
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import RedirectResponse
+from Orchestrator.onboarding.state import OnboardingState
+
+_onboarding_state = OnboardingState()
+
+class FirstRunMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        # Only redirect on /ui or /ui/index.html requests
+        path = request.url.path
+        if path in ("/ui", "/ui/", "/ui/index.html") and not _onboarding_state.is_complete():
+            return RedirectResponse(url="/onboarding/", status_code=307)
+        return await call_next(request)
+
+app.add_middleware(FirstRunMiddleware)
+```
+
+**Step 2: Test**
+
+```bash
+sudo systemctl restart blackbox.service && sleep 70
+# Reset onboarding to test redirect
+curl -X POST http://localhost:9091/onboarding/reset
+# This should now 307 → /onboarding/
+curl -sI http://localhost:9091/ui | head -3
+# Mark complete
+curl -X POST http://localhost:9091/onboarding/complete
+# Now /ui should serve normally
+curl -sI http://localhost:9091/ui | head -3
+```
+
+**Step 3: Commit**
+
+```bash
+git add Orchestrator/app.py
+git commit -m "feat(onboarding): first-run middleware redirects /ui to /onboarding when incomplete
+
+Customer's mini-PC autostart will hit /ui; gets transparently redirected to
+the wizard until /onboarding/complete is called."
+```
+
+---
+
+# TRACK 2 — ONBOARDING PORTAL UI
+
+**Goal:** The actual wizard UI customers see. Modernized, branded, step-by-step, resumable. Lives at `/onboarding/` — Tauri shell points its webview here.
+
+**Estimated effort:** 2-3 weeks
+**Dependencies:** Track 1
+**Outcome:** A polished customer-facing wizard with welcome, Tailscale, API keys, optional integrations, phone pairing, operator setup, and done steps.
+
+## Phase 2.1: Routing + base shell
+
+### Task 2.1.1: Set up the onboarding directory + index route
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/index.html`
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/onboarding.css`
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/onboarding.js`
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Orchestrator/app.py` (mount static)
+
+**Step 1: Write `index.html` — base wizard shell with progress bar and step container:**
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>AI BlackBox · Setup</title>
+    <link rel="stylesheet" href="onboarding.css" />
+</head>
+<body>
+    <div id="onboarding-app">
+        <header class="ob-header">
+            <div class="ob-brand">AI BlackBox</div>
+            <div class="ob-progress">
+                <div id="ob-progress-bar" class="ob-progress-bar"></div>
+                <div id="ob-progress-text" class="ob-progress-text"></div>
+            </div>
+        </header>
+        <main id="ob-step-container" class="ob-step-container">
+            <!-- Step content injected here by onboarding.js -->
+            <div class="ob-loading">Loading…</div>
+        </main>
+        <footer class="ob-footer">
+            <button id="ob-back" class="ob-btn ob-btn-secondary" hidden>Back</button>
+            <button id="ob-skip" class="ob-btn ob-btn-text" hidden>Skip for now</button>
+            <button id="ob-next" class="ob-btn ob-btn-primary" hidden>Next →</button>
+        </footer>
+    </div>
+    <script type="module" src="onboarding.js"></script>
+</body>
+</html>
+```
+
+**Step 2: Write minimal `onboarding.css`** matching Portal's design tokens (dark theme, accent color, etc.). Place in same file for now; can refactor later.
+
+**Step 3: Write `onboarding.js`** — the orchestrator that:
+- Fetches `/onboarding/state`
+- Routes to current step component
+- Wires next/back/skip buttons
+- Handles step transitions
+
+```javascript
+// Top-level orchestrator
+const STEPS = [
+    "welcome", "tailscale", "api_keys",
+    "optional_integrations", "pair_phone", "operator", "done",
+];
+
+let state = null;
+let currentStepIdx = 0;
+
+async function fetchState() {
+    const r = await fetch("/onboarding/state");
+    state = await r.json();
+    currentStepIdx = STEPS.indexOf(state.current_step);
+}
+
+async function renderStep() {
+    const stepName = STEPS[currentStepIdx];
+    const container = document.getElementById("ob-step-container");
+    const mod = await import(`./steps/${stepName}.js`);
+    await mod.render(container, { state, next, back, skip });
+    updateProgress();
+}
+
+function updateProgress() {
+    const pct = ((currentStepIdx) / (STEPS.length - 1)) * 100;
+    document.getElementById("ob-progress-bar").style.width = pct + "%";
+    document.getElementById("ob-progress-text").textContent =
+        `Step ${currentStepIdx + 1} of ${STEPS.length}`;
+}
+
+async function next() {
+    if (currentStepIdx < STEPS.length - 1) {
+        await fetch("/onboarding/step/complete", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({step: STEPS[currentStepIdx]}),
+        });
+        currentStepIdx++;
+        await renderStep();
+    }
+}
+
+async function back() {
+    if (currentStepIdx > 0) {
+        currentStepIdx--;
+        await renderStep();
+    }
+}
+
+async function skip() {
+    await fetch("/onboarding/step/skip", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({step: STEPS[currentStepIdx]}),
+    });
+    currentStepIdx++;
+    await renderStep();
+}
+
+(async () => {
+    await fetchState();
+    if (state.is_complete) {
+        location.href = "/ui";
+        return;
+    }
+    await renderStep();
+})();
+```
+
+**Step 4: Mount static directory in `Orchestrator/app.py`:**
+
+```python
+from fastapi.staticfiles import StaticFiles
+from Orchestrator.utils.paths import resolve
+app.mount("/onboarding", StaticFiles(directory=str(resolve("Portal", "onboarding")), html=True), name="onboarding")
+```
+
+(Note: this mount must come AFTER all `/onboarding/*` API routes are registered, otherwise the static handler swallows them. Adjust ordering carefully — the API router with prefix `/onboarding` registers individual routes; the static mount handles the index. Verify with curl.)
+
+**Step 5: Test**
+
+```bash
+sudo systemctl restart blackbox.service && sleep 70
+curl -sI http://localhost:9091/onboarding/ | head -3
+# Should serve index.html
+curl -s http://localhost:9091/onboarding/state | python3 -m json.tool
+# API still works
+```
+
+**Step 6: Commit**
+
+```bash
+git add Portal/onboarding/ Orchestrator/app.py
+git commit -m "feat(portal-ob): wizard base shell — index/css/js, progress bar, step container
+
+Steps live as ES module files in Portal/onboarding/steps/{step}.js
+each exposing async render(container, {state, next, back, skip}).
+Static mount in app.py serves the wizard at /onboarding/."
+```
+
+## Phase 2.2 through 2.7: Per-step UI tasks
+
+Each step is its own ES module under `Portal/onboarding/steps/`. The pattern is identical, so I'll detail Phase 2.2 (Welcome) fully and skeletalize 2.3-2.7.
+
+### Phase 2.2 — Welcome + License
+
+#### Task 2.2.1: Welcome step component
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/steps/welcome.js`
+
+**Step 1: Write the component:**
+
+```javascript
+export async function render(container, {next}) {
+    container.innerHTML = `
+        <section class="ob-step ob-welcome">
+            <h1 class="ob-step-title">Welcome to AI BlackBox</h1>
+            <p class="ob-step-lede">
+                Your personal AI infrastructure — voice, vision, memory, and tools,
+                all running on hardware you own.
+            </p>
+            <div class="ob-welcome-features">
+                <div class="ob-feature"><span class="ob-feature-icon">🔒</span> Your data stays on your hardware</div>
+                <div class="ob-feature"><span class="ob-feature-icon">🌐</span> Access from any device, anywhere via Tailscale</div>
+                <div class="ob-feature"><span class="ob-feature-icon">🤖</span> Works with OpenAI, Anthropic, Google, and more</div>
+                <div class="ob-feature"><span class="ob-feature-icon">📱</span> Pair your phone for on-the-go voice and vision</div>
+            </div>
+            <p class="ob-step-helper">
+                We'll walk through everything in a few minutes. You can skip any step
+                you're not ready for and return later.
+            </p>
+            <button class="ob-btn ob-btn-primary ob-btn-large" id="ob-welcome-start">
+                Let's get started →
+            </button>
+        </section>
+    `;
+    document.getElementById("ob-welcome-start").addEventListener("click", next);
+}
+```
+
+**Step 2: Test in browser** — visit `http://localhost:9091/onboarding/`, confirm welcome step renders + "Let's get started" advances to step 2.
+
+**Step 3: Commit**
+
+```bash
+git add Portal/onboarding/steps/welcome.js
+git commit -m "feat(portal-ob): welcome step component"
+```
+
+### Phase 2.3 — Tailscale step
+
+#### Task 2.3.1: Tailscale install detection + auth flow
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/steps/tailscale.js`
+
+**Step 1: Component renders:**
+- Detection: probe `/onboarding/validate` with `{provider:"tailscale"}` on mount
+- If `ok=true`: show "Tailscale already configured ✓ — your hostname: X.tail-net.ts.net" + Continue
+- If `ok=false`:
+  - If `error` mentions "binary not found": show install instructions + copy-button for `curl -fsSL https://tailscale.com/install.sh | sudo sh`
+  - If `error` mentions "BackendState": show "Tailscale installed but not authenticated — run `sudo tailscale up`"
+  - "Re-check" button to re-validate
+  - "Skip for now" → LAN-only mode
+- On success, persist `BLACKBOX_TAILNET_HOSTNAME=<hostname>` via `/onboarding/save`
+
+**Step 2: Commit**
+
+```bash
+git add Portal/onboarding/steps/tailscale.js
+git commit -m "feat(portal-ob): tailscale step — detect, install instructions, auth, hostname capture"
+```
+
+### Phase 2.4 — API keys step (BYOK)
+
+#### Task 2.4.1: API keys step component
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/steps/api_keys.js`
+
+**Step 1: Component renders 3 provider cards** (OpenAI, Anthropic, Google):
+- Each with paste field, "Get a key →" link, "Validate" button
+- On validate: `POST /onboarding/validate` with provider+key
+- Show ✓/✗ with latency
+- "Save & continue" button (active when ≥1 provider validated)
+- On save: `POST /onboarding/save` with `{OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY}` (only the validated ones)
+
+**Step 2: Commit**
+
+```bash
+git add Portal/onboarding/steps/api_keys.js
+git commit -m "feat(portal-ob): API keys step — BYOK paste/validate/save for OpenAI, Anthropic, Google"
+```
+
+### Phase 2.5 — Optional integrations
+
+#### Task 2.5.1: Optional integrations step component
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/steps/optional_integrations.js`
+
+**Step 1: Component renders cards for each optional integration** (Gmail, Twilio v1.1 placeholder, ElevenLabs v1.1 placeholder):
+- For Gmail: client_id + client_secret paste fields + "Walk me through Google Cloud" expandable instructions
+- "Validate" button per integration
+- "Save & continue" — saves what was provided, skips the rest
+
+**Step 2: Commit**
+
+```bash
+git add Portal/onboarding/steps/optional_integrations.js
+git commit -m "feat(portal-ob): optional integrations step — Gmail OAuth client setup"
+```
+
+### Phase 2.6 — Pair phone
+
+#### Task 2.6.1: Phone pairing step component
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/steps/pair_phone.js`
+
+**Step 1: Component:**
+- On mount, `POST /pair/start` to mint token
+- Render `<img src="/pair/qr/${token}" />`
+- Poll `GET /pair/status?token=…` every 2 seconds
+- When `claimed=true`: show "✓ Paired with <device_name>"
+- "Continue" button (after pair OR skip-for-now)
+
+**Step 2: Commit**
+
+```bash
+git add Portal/onboarding/steps/pair_phone.js
+git commit -m "feat(portal-ob): phone pairing step — QR display + claim polling"
+```
+
+### Phase 2.7 — Operator setup
+
+#### Task 2.7.1: Operator step component
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/steps/operator.js`
+
+**Step 1: Component:**
+- Single-input "Your name" (defaults to current `Brandon`)
+- POST `/operator/add` with the name
+- "Add another operator later" — note about System Menu
+- Continue
+
+**Step 2: Commit**
+
+```bash
+git add Portal/onboarding/steps/operator.js
+git commit -m "feat(portal-ob): operator step — single-operator setup, multi-op deferred to System Menu"
+```
+
+### Phase 2.8 — Done / handoff
+
+#### Task 2.8.1: Done step + handoff to Portal
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/steps/done.js`
+
+**Step 1: Component:**
+- "🎉 Setup complete!"
+- Summary card (what was configured, what was skipped)
+- "Open Portal →" button
+- On click: `POST /onboarding/complete`, then `location.href = "/ui"`
+
+**Step 2: Commit**
+
+```bash
+git add Portal/onboarding/steps/done.js
+git commit -m "feat(portal-ob): done step — summary card, complete-and-handoff to Portal"
+```
+
+## Phase 2.9: UI Polish + branding
+
+### Task 2.9.1: Visual design pass
+
+**Files:**
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/onboarding.css`
+
+**Step 1: Apply BlackBox visual brand:**
+- Use existing Portal design tokens (`--bbx-accent`, `--bbx-dim`, `--neutral-*`)
+- Dark background, accent gradient for progress bar, glass-surface cards
+- Typography matching Portal (system-ui, weight progression)
+- Smooth transitions between steps (fade-out/fade-in 200ms)
+- Animated success checkmarks on validation
+- Mobile-friendly: viewport meta, touch-friendly tap targets ≥44px
+
+**Step 2: Walk-through in browser** — full wizard, all 7 steps, on a 1920×1080 display + a phone-emulator viewport.
+
+**Step 3: Commit**
+
+```bash
+git add Portal/onboarding/onboarding.css
+git commit -m "style(portal-ob): apply BlackBox brand — dark glass, accent gradient, smooth transitions"
+```
+
+### Task 2.9.2: Track 2 checkpoint
+
+```bash
+git tag -a track2-portal-ui-complete -m "Portal onboarding wizard complete — all 7 steps + branding"
+git push origin track2-portal-ui-complete
+```
+
+---
+
+# TRACK 3 — TAURI SHELL APP
+
+**Goal:** Standalone Rust app wrapping the Portal `/onboarding` webview. Provides full-screen branded chrome, taskbar icon, no browser address bar. ~10MB binary. Bundled as `.deb` and `.AppImage` for Linux.
+
+**Estimated effort:** 1-2 weeks
+**Dependencies:** Track 2 (or can mock against placeholder)
+**Outcome:** A standalone app `blackbox-setup` that launches the wizard in a polished native window.
+
+## Phase 3.1: Cargo project skeleton
+
+### Task 3.1.1: Initialize the Tauri project
+
+**Files (Create):**
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/installer/Cargo.toml`
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/installer/src-tauri/Cargo.toml`
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/installer/src-tauri/tauri.conf.json`
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/installer/src-tauri/src/main.rs`
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/installer/src-tauri/build.rs`
+- `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/installer/src-tauri/icons/` (set of icon PNGs)
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/.gitignore` (add `installer/src-tauri/target/`)
+
+**Step 1: Install Tauri prerequisites** (system + cargo):
+
+```bash
+# System deps for Tauri on Ubuntu
+sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+  libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+# Rust toolchain (if not already)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+cargo install create-tauri-app --locked
+```
+
+**Step 2: Scaffold the project**
+
+```bash
+cd /home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc
+cargo create-tauri-app installer --template vanilla --identifier com.blackbox.setup --name "BlackBox Setup"
+cd installer
+npm install   # Tauri scaffolding requires this even for vanilla
+```
+
+**Step 3: Update `installer/src-tauri/tauri.conf.json`** — set the dev URL to point at our running Orchestrator:
+
+```json
+{
+  "build": {
+    "devUrl": "http://localhost:9091/onboarding/",
+    "frontendDist": "../dist",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "windows": [{
+      "title": "AI BlackBox Setup",
+      "width": 1280,
+      "height": 800,
+      "fullscreen": false,
+      "resizable": true,
+      "decorations": true,
+      "transparent": false,
+      "url": "http://localhost:9091/onboarding/"
+    }],
+    "security": {"csp": null}
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage"],
+    "icon": ["icons/icon.png"],
+    "identifier": "com.blackbox.setup",
+    "category": "Utility",
+    "shortDescription": "First-run setup for AI BlackBox",
+    "longDescription": "Walks you through setting up your AI BlackBox device — Tailscale, API keys, phone pairing, and more."
+  },
+  "productName": "BlackBox Setup",
+  "version": "0.1.0",
+  "identifier": "com.blackbox.setup"
+}
+```
+
+**Step 4: Smoke test build**
+
+```bash
+cd installer
+cargo build --manifest-path src-tauri/Cargo.toml --release  # ~5-10 min first time
+```
+
+**Step 5: Commit**
+
+```bash
+git add installer/ .gitignore
+git commit -m "feat(installer): Tauri app skeleton — wraps Portal /onboarding webview
+
+Standalone Rust binary that launches a native window pointing at the BlackBox
+onboarding wizard. ~10MB build artifact, bundled as .deb + .AppImage."
+```
+
+## Phase 3.2: Webview wrapper customization
+
+### Task 3.2.1: Customize window styling
+
+**Files:**
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/installer/src-tauri/tauri.conf.json`
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/installer/src-tauri/src/main.rs`
+
+**Step 1: Make the window full-screen on launch + no decorations:**
+
+```json
+"windows": [{
+  "title": "AI BlackBox Setup",
+  "fullscreen": true,
+  "decorations": false,
+  "transparent": false,
+  "alwaysOnTop": true,
+  "skipTaskbar": false,
+  "url": "http://localhost:9091/onboarding/"
+}]
+```
+
+**Step 2: In `main.rs`, add a wait-for-server health check** before opening the webview (so we don't show a blank page during boot):
+
+```rust
+fn wait_for_server(url: &str, timeout_secs: u64) -> bool {
+    let start = std::time::Instant::now();
+    while start.elapsed().as_secs() < timeout_secs {
+        if reqwest::blocking::get(url).is_ok() {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(500));
+    }
+    false
+}
+
+fn main() {
+    if !wait_for_server("http://localhost:9091/health", 90) {
+        eprintln!("Orchestrator failed to come up within 90s");
+        std::process::exit(1);
+    }
+    tauri::Builder::default()
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
+```
+
+**Step 3: Commit**
+
+```bash
+git add installer/src-tauri/tauri.conf.json installer/src-tauri/src/main.rs
+git commit -m "feat(installer): wait-for-orchestrator + fullscreen no-decoration window"
+```
+
+## Phase 3.3: Branding (icons + splash)
+
+### Task 3.3.1: Generate icon set + splash
+
+**Files (Create):** `installer/src-tauri/icons/` set: `32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.icns` (mac, optional), `icon.ico` (win, optional), `icon.png` (Linux primary).
+
+**Step 1: Generate icons from a master 512×512 PNG using Tauri CLI:**
+
+```bash
+cargo install tauri-cli --locked
+cd installer
+tauri icon path/to/master-icon-512.png
+```
+
+(Master icon: simple BlackBox logo on dark background. Can be generated by `mcp__blackbox__generate_image` with prompt "minimalist black box logo on dark background, white outline, modern tech aesthetic, 512x512".)
+
+**Step 2: Commit**
+
+```bash
+git add installer/src-tauri/icons/
+git commit -m "chore(installer): icon set — 32, 128, 128@2x for Linux + Mac + Windows"
+```
+
+## Phase 3.4: Auto-launch wiring
+
+### Task 3.4.1: .desktop autostart file
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/installer/dist/blackbox-setup.desktop`
+
+**Step 1: Write the .desktop:**
+
+```ini
+[Desktop Entry]
+Type=Application
+Name=AI BlackBox Setup
+Exec=/usr/local/bin/blackbox-setup
+Icon=blackbox-setup
+Comment=First-run setup wizard for AI BlackBox
+Categories=Utility;
+X-GNOME-Autostart-enabled=true
+Terminal=false
+StartupNotify=true
+```
+
+**Step 2:** This file is INSTALLED by the Track 4 install script (not auto-deployed); it lives in the installer dist for distribution.
+
+**Step 3: Commit**
+
+```bash
+git add installer/dist/blackbox-setup.desktop
+git commit -m "chore(installer): .desktop autostart file for first-boot launch"
+```
+
+## Phase 3.5: Self-disable + handoff
+
+### Task 3.5.1: Tauri app self-disables after onboarding completes
+
+**Files:**
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/installer/src-tauri/src/main.rs`
+
+**Step 1: After window closes (i.e., user clicked "Open Portal"), check `/onboarding/state` for `is_complete`:**
+
+```rust
+// In a window-close-event handler:
+.on_window_event(|window, event| {
+    if let tauri::WindowEvent::CloseRequested { .. } = event {
+        let state: serde_json::Value = reqwest::blocking::get("http://localhost:9091/onboarding/state")
+            .and_then(|r| r.json())
+            .unwrap_or(serde_json::json!({"is_complete": false}));
+        if state["is_complete"].as_bool().unwrap_or(false) {
+            // Remove the autostart .desktop so we don't relaunch on next boot
+            let autostart = dirs::config_dir()
+                .map(|d| d.join("autostart").join("blackbox-setup.desktop"));
+            if let Some(p) = autostart {
+                let _ = std::fs::remove_file(p);
+            }
+        }
+    }
+})
+```
+
+**Step 2: Also kill our own process explicitly** so the Tauri runtime exits cleanly.
+
+**Step 3: Commit**
+
+```bash
+git add installer/src-tauri/src/main.rs
+git commit -m "feat(installer): self-disable autostart after onboarding completes
+
+When user clicks 'Open Portal' (window-close), check /onboarding/state.
+If complete: remove ~/.config/autostart/blackbox-setup.desktop so the wizard
+doesn't relaunch on next boot."
+```
+
+## Phase 3.6: Build + package
+
+### Task 3.6.1: Build .deb and .AppImage
+
+**Steps:**
+
+```bash
+cd installer
+cargo tauri build --bundles deb,appimage
+ls -la src-tauri/target/release/bundle/
+```
+
+Expected: `bundle/deb/blackbox-setup_0.1.0_amd64.deb` and `bundle/appimage/blackbox-setup_0.1.0_amd64.AppImage`.
+
+### Task 3.6.2: Track 3 checkpoint
+
+```bash
+git tag -a track3-tauri-shell-complete -m "Tauri standalone setup app — bundles to .deb + .AppImage"
+git push origin track3-tauri-shell-complete
+```
+
+---
+
+# TRACK 4 — INSTALL SCRIPTS
+
+**Goal:** Modernized `Scripts/install.sh` that template-substitutes paths, installs systemd unit, and is idempotent on re-run. Plus a factory-image build script (skeletal — fills in once hardware spec is locked).
+
+**Estimated effort:** 1 week
+**Dependencies:** Track 0 (paths), Track 3 (Tauri binary to install)
+**Outcome:** A single command bootstraps a fresh Ubuntu 24.04 mini-PC into a working BlackBox.
+
+## Phase 4.1: Modern install.sh
+
+### Task 4.1.1: Modernized installer
+
+**Files:**
+- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/setup.sh`
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Scripts/install.sh` (replaces)
+
+**Step 1: Write the new install.sh:**
+
+```bash
+#!/usr/bin/env bash
+# AI BlackBox installer — Ubuntu 24.04
+set -euo pipefail
+
+# Determine BLACKBOX_ROOT: parent of the directory holding this script
+BLACKBOX_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+echo "[install] BLACKBOX_ROOT=$BLACKBOX_ROOT"
+
+# 1. apt deps
+echo "[install] Installing system packages..."
+sudo apt update
+xargs -a "$BLACKBOX_ROOT/Scripts/onboarding/system-packages.txt" -d '\n' \
+    grep -vE '^#|^$' \
+    | grep '# MUST_HAVE' | awk '{print $1}' \
+    | sudo xargs apt install -y
+
+# 2. venv
+echo "[install] Creating Python venv..."
+python3.12 -m venv "$BLACKBOX_ROOT/Orchestrator/venv"
+"$BLACKBOX_ROOT/Orchestrator/venv/bin/pip" install --upgrade pip
+"$BLACKBOX_ROOT/Orchestrator/venv/bin/pip" install -r "$BLACKBOX_ROOT/requirements.txt"
+
+# 3. .env from template
+if [[ ! -f "$BLACKBOX_ROOT/.env" ]]; then
+    cp "$BLACKBOX_ROOT/.env.template" "$BLACKBOX_ROOT/.env"
+    echo "BLACKBOX_ROOT=$BLACKBOX_ROOT" >> "$BLACKBOX_ROOT/.env"
+    echo "[install] Created .env from template"
+fi
+
+# 4. systemd unit (template-substituted)
+echo "[install] Installing blackbox.service..."
+sudo tee /etc/systemd/system/blackbox.service > /dev/null <<EOF
+[Unit]
+Description=AI BlackBox Orchestrator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$BLACKBOX_ROOT
+EnvironmentFile=$BLACKBOX_ROOT/.env
+ExecStart=$BLACKBOX_ROOT/Orchestrator/venv/bin/python -m uvicorn Orchestrator.app:app --host 0.0.0.0 --port 9091
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable --now blackbox.service
+
+# 5. Tauri setup app (if .deb is bundled here)
+if [[ -f "$BLACKBOX_ROOT/installer/dist/blackbox-setup.deb" ]]; then
+    echo "[install] Installing BlackBox Setup app..."
+    sudo dpkg -i "$BLACKBOX_ROOT/installer/dist/blackbox-setup.deb" || sudo apt install -fy
+fi
+
+# 6. Autostart .desktop
+mkdir -p "$HOME/.config/autostart"
+cp "$BLACKBOX_ROOT/installer/dist/blackbox-setup.desktop" "$HOME/.config/autostart/"
+
+echo "[install] Done. Reboot to launch BlackBox Setup, or run /usr/local/bin/blackbox-setup now."
+```
+
+**Step 2: Test in a clean Ubuntu 24.04 VM** (via vagrant or virt-manager):
+
+```bash
+# In a fresh Ubuntu 24.04 box:
+git clone https://github.com/TechBran/blackbox-poc.git
+cd blackbox-poc
+./Scripts/install.sh
+# Reboot
+# Confirm Tauri setup app autostarts and shows the wizard
+```
+
+**Step 3: Commit**
+
+```bash
+git add Scripts/install.sh
+git rm setup.sh   # delete old, stale installer
+git commit -m "feat(install): modernized installer — apt deps, venv, .env, systemd, Tauri app, autostart
+
+Single command bootstraps a fresh Ubuntu 24.04 mini-PC into a working BlackBox.
+Replaces the stale setup.sh from Oct 2025."
+```
+
+## Phase 4.2: Factory image build (skeletal)
+
+### Task 4.2.1: Factory image script (placeholder until hardware spec)
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Scripts/build-factory-image.sh`
+
+**Step 1: Skeleton with TODOs:**
+
+```bash
+#!/usr/bin/env bash
+# Build a factory-ready Ubuntu 24.04 image with BlackBox pre-installed
+# TODO: fill in once hardware spec is locked.
+#
+# Steps when ready:
+#   1. Start from Ubuntu 24.04 base ISO
+#   2. Mount + chroot
+#   3. Pre-install: git clone blackbox-poc, run ./Scripts/install.sh
+#   4. Pre-bake: Tauri setup app, autostart .desktop
+#   5. Resize partition for target SSD size
+#   6. Output: .img file ready to flash
+echo "TODO: factory image build deferred until hardware spec locked."
+exit 1
+```
+
+**Step 2: Commit**
+
+```bash
+git add Scripts/build-factory-image.sh
+git commit -m "chore(install): factory image build skeleton — fills in when hardware spec lands"
+```
+
+---
+
+# TRACK 5 — CUSTOMER-FACING DOCS
+
+**Goal:** README.md, TROUBLESHOOTING.md, per-integration setup guides. Written AFTER onboarding flow lands so they accurately describe the actual UX.
+
+**Estimated effort:** 1 week
+**Dependencies:** Track 2 (so README can describe real flow)
+**Outcome:** A customer (or future contractor) can land on the GitHub repo and immediately understand what BlackBox is and how to install it.
+
+## Phase 5.1: README.md
+
+### Task 5.1.1: Repo landing page
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/README.md`
+- Delete: `README.txt` (legacy, stale)
+
+**Step 1: Write the README** with:
+- Logo / hero
+- 1-paragraph what-is-it
+- "How to install" — link to Quick Start
+- "How to use" — link to Portal docs
+- "Architecture overview" — diagram of orchestrator + portal + apps + Tauri
+- "Hardware product or DIY" — explain both paths
+- License + contact
+
+**Step 2: Commit**
+
+```bash
+git add README.md
+git rm README.txt
+git commit -m "docs: replace legacy README.txt with proper README.md landing page"
+```
+
+## Phase 5.2: TROUBLESHOOTING.md
+
+### Task 5.2.1: Common failure modes + recovery
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/docs/TROUBLESHOOTING.md`
+
+**Step 1: Cover:**
+- "Tauri app doesn't launch on boot" → check `~/.config/autostart/blackbox-setup.desktop`
+- "Wizard says Tailscale not found" → install link + manual command
+- "API key validation fails" → common error patterns per provider
+- "Phone QR scan does nothing" → check LAN reachability, check token expiry
+- "Onboarding stuck — how to reset" → `curl -X POST http://localhost:9091/onboarding/reset`
+- "Re-run setup after fresh install" → `rm ~/.config/autostart/blackbox-setup.desktop && rm $BLACKBOX_ROOT/.onboarding_complete`
+
+**Step 2: Commit**
+
+```bash
+git add docs/TROUBLESHOOTING.md
+git commit -m "docs(install): troubleshooting guide for common onboarding failures"
+```
+
+## Phase 5.3: Per-integration setup guides
+
+### Task 5.3.1: Gmail OAuth setup walkthrough
+
+**Files:**
+- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/docs/integrations/gmail.md`
+
+**Step 1: Walkthrough with screenshots:**
+- Open Google Cloud Console
+- Create project
+- Enable Gmail API
+- Create OAuth 2.0 client (Web application)
+- Add authorized redirect URIs
+- Download client_secret JSON (or copy client_id + client_secret)
+- Paste into BlackBox wizard
+
+**Step 2: Repeat for each Tier-1 integration** (each as own task):
+- `docs/integrations/openai.md`
+- `docs/integrations/anthropic.md`
+- `docs/integrations/google.md`
+- `docs/integrations/tailscale.md`
+
+**Step 3: Commit (after each)**
+
+```bash
+git add docs/integrations/<provider>.md
+git commit -m "docs(integrations): <provider> setup walkthrough for onboarding"
+```
+
+---
+
+# TRACK 6 — (v2 DEFERRED) Software-only distribution
+
+**Status:** DEFERRED until v1 hardware-product onboarding ships.
+
+**Scope when picked up:** Build a SECOND Tauri app — `blackbox-installer` — that:
+1. Is downloaded by customer to their own Linux machine
+2. Verifies system meets requirements (Ubuntu 24.04, etc.)
+3. Downloads BlackBox source from GitHub release artifact
+4. Runs `Scripts/install.sh`
+5. Launches `blackbox-setup` (the v1 Tauri shell from Track 3)
+6. Reuses 100% of Track 3 codebase
+
+**Estimated effort when scheduled:** ~2 weeks (mostly Cargo + reusing Track 3 patterns)
+
+---
+
+# Verification — End-to-End Smoke Test
+
+After Tracks 0-5 ship:
+
+1. **Provision a fresh Ubuntu 24.04 VM** (virt-manager or vagrant)
+2. **Clone the repo:** `git clone https://github.com/TechBran/blackbox-poc.git`
+3. **Run install:** `cd blackbox-poc && ./Scripts/install.sh` (~5-10 min)
+4. **Reboot:** `sudo reboot`
+5. **On boot:** Tauri setup app autostarts; wizard appears
+6. **Walk through wizard:** welcome → tailscale → API keys → optional integrations → phone pairing → operator → done
+7. **Click "Open Portal":** wizard closes; Portal launches; autostart `.desktop` removed
+8. **Verify:** `curl http://localhost:9091/health` returns `ok`; Portal shows chat interface; Brandon (or chosen name) is the operator
+
+**Pass criteria:**
+- Total time from clean OS to working chat: <30 minutes including download
+- Customer never sees a terminal except for the install command itself
+- All keys validated successfully OR explicitly skipped
+- Phone pairs successfully via QR
+- Onboarding state persisted across Tauri app restart (resume mid-flow if interrupted)
+
+---
+
+# Out of Scope (Explicitly Deferred)
+
+- **Track 6 (v2 software-only distribution)** — picks up after v1 ships
+- **Migration flow** — bringing existing snapshots/config/paired devices forward (v1.5)
+- **Tier-2 integrations** (Twilio, ElevenLabs, Asterisk, xAI, Perplexity) — v1.1
+- **Hardware-spec-dependent tasks in Track 5** — fills in once spec lands
+- **GitHub Actions / CI** — independent of onboarding; can ship anytime
+- **LICENSE file** — independent
+- **Branch protection rules / PR templates** — independent
+
+These are tracked in `SNAP-20260509-6533` and `docs/onboarding/discovery-notes.md` for future sessions.
+
+---
+
+# Execution Handoff
+
+**Plan complete and saved to `docs/plans/2026-05-10-onboarding-flow.md`.**
+
+When ready to implement, two execution options:
+
+1. **Subagent-Driven (recommended for this plan)** — fresh subagent per task with two-stage review (spec compliance, then code quality). Stay in this session. Use `superpowers:subagent-driven-development`.
+
+2. **Parallel Session** — open a new Claude Code session in a worktree. Use `superpowers:executing-plans`. Better when stepping away from active development.
+
+Either way: **read this plan + `docs/onboarding/discovery-notes.md` + the `project_onboarding_architecture.md` memory entry first**. The plan assumes that context.
+
+---
+
+*End of plan. Audit session can override defaults, edit task lists, or split tracks across multiple plan files for finer-grained execution.*
