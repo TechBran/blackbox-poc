@@ -191,6 +191,29 @@ def get_config_value(key: str, request: Request, reveal: bool = False) -> dict:
     return {"key": key, "value": _redact(value), "present": bool(value)}
 
 
+@router.delete("/config/{key}")
+def delete_config_value(key: str) -> dict:
+    """Delete a single allowlisted env-var from .env.
+
+    Atomic + backup via secrets_writer.remove_env_keys. Same allowlist as
+    GET /config/{key}?reveal=true. The deletion takes effect on disk
+    immediately, but Orchestrator.config still holds the old value in memory
+    until BlackBox restart.
+    """
+    if key not in ALLOWED_REVEAL_KEYS:
+        raise HTTPException(
+            status_code=403,
+            detail=f"key {key!r} not in allowlist",
+        )
+    from Orchestrator.onboarding.secrets_writer import remove_env_keys
+    try:
+        result = remove_env_keys([key])
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    logger.info("config delete: key=%s removed=%s", key, result.get("removed_keys"))
+    return {"ok": True, **result}
+
+
 @router.post("/validate", response_model=ValidateResponse)
 def validate(req: ValidateRequest) -> ValidateResponse:
     creds = req.credentials
