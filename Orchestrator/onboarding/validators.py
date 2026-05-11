@@ -1,0 +1,124 @@
+"""Per-provider key validators.
+
+Each validator does a CHEAP call (1 token cost or one cheap metadata API)
+to confirm the supplied credential works. Returns ValidationResult with
+ok/error/latency_ms so the wizard can show clean per-provider feedback.
+
+Tier-1 (v1 wizard): OpenAI, Anthropic, Google, Tailscale, Gmail.
+Tier-2 (v1.1): Twilio, ElevenLabs, Asterisk, xAI, Perplexity.
+"""
+from __future__ import annotations
+
+import shutil
+import subprocess
+import time
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass
+class ValidationResult:
+    ok: bool
+    latency_ms: int
+    error: str | None = None
+    detail: dict[str, Any] | None = None
+
+
+def _measure(fn) -> ValidationResult:
+    """Wrap a sync validator with latency measurement + error capture."""
+    start = time.perf_counter()
+    try:
+        detail = fn()
+        return ValidationResult(
+            ok=True,
+            latency_ms=int((time.perf_counter() - start) * 1000),
+            detail=detail,
+        )
+    except Exception as e:
+        return ValidationResult(
+            ok=False,
+            latency_ms=int((time.perf_counter() - start) * 1000),
+            error=f"{type(e).__name__}: {e}",
+        )
+
+
+# ──────────────────────────── Tier-1 ────────────────────────────
+
+def validate_openai(api_key: str) -> ValidationResult:
+    """Validate OpenAI API key via models.list (no token cost)."""
+    def _fn():
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        models = client.models.list()
+        return {"model_count": len(list(models.data))}
+    return _measure(_fn)
+
+
+def validate_anthropic(api_key: str) -> ValidationResult:
+    """Validate Anthropic key via cheapest-possible message (1-token completion)."""
+    def _fn():
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1,
+            messages=[{"role": "user", "content": "hi"}],
+        )
+        return {"model": resp.model, "id": resp.id}
+    return _measure(_fn)
+
+
+def validate_google(api_key: str) -> ValidationResult:
+    """Validate Google AI key via list_models."""
+    def _fn():
+        from google import genai
+        client = genai.Client(api_key=api_key)
+        models = list(client.models.list())
+        return {"model_count": len(models)}
+    return _measure(_fn)
+
+
+def validate_tailscale() -> ValidationResult:
+    """Validate Tailscale install + auth via 'tailscale status --json'."""
+    def _fn():
+        if not shutil.which("tailscale"):
+            raise RuntimeError("tailscale binary not found on PATH")
+        result = subprocess.run(
+            ["tailscale", "status", "--json"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"tailscale status failed: {result.stderr.strip()}")
+        import json as _json
+        data = _json.loads(result.stdout)
+        backend = data.get("BackendState", "unknown")
+        if backend != "Running":
+            raise RuntimeError(f"tailscale not running (BackendState={backend})")
+        self_node = data.get("Self", {})
+        return {
+            "hostname": self_node.get("DNSName", "").rstrip("."),
+            "ip": (self_node.get("TailscaleIPs") or ["unknown"])[0],
+            "online": self_node.get("Online", False),
+        }
+    return _measure(_fn)
+
+
+def validate_gmail_oauth(client_id: str, client_secret: str) -> ValidationResult:
+    """Validate Gmail OAuth client by attempting to construct an OAuth flow object.
+    Does NOT trigger interactive auth — that happens in the wizard browser frame.
+    """
+    def _fn():
+        from google_auth_oauthlib.flow import Flow
+        flow = Flow.from_client_config(
+            {"web": {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "redirect_uris": ["http://localhost:9091/auth/gmail/callback"],
+            }},
+            scopes=["https://www.googleapis.com/auth/gmail.readonly"],
+        )
+        url, _ = flow.authorization_url()
+        return {"auth_url_prefix": url.split("?")[0]}
+    return _measure(_fn)
