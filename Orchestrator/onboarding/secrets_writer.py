@@ -37,6 +37,9 @@ def update_env(updates: dict[str, str]) -> dict:
         ENV_FILE.touch()
         os.chmod(ENV_FILE, 0o600)
 
+    # NOTE: this backup→chmod→prune→atomic-rewrite block is duplicated in
+    # remove_env_keys below. If a third .env mutator lands, extract a shared
+    # `_atomic_rewrite(transform_fn)` helper (rule of three).
     ts = int(time.time())
     backup = ENV_FILE.with_suffix(f".backup.{ts}")
     shutil.copy2(ENV_FILE, backup)
@@ -102,6 +105,25 @@ def remove_env_keys(keys: list[str]) -> dict:
     if not ENV_FILE.exists():
         return {"backup": None, "removed_keys": []}
 
+    keys_set = set(keys)
+    lines = ENV_FILE.read_text().splitlines(keepends=True)
+
+    # Scan first — if nothing matches, no backup + no rewrite needed.
+    out: list[str] = []
+    removed: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            k = stripped.split("=", 1)[0].strip()
+            if k in keys_set:
+                removed.append(k)
+                continue  # drop the line entirely
+        out.append(line)
+    if not removed:
+        return {"backup": None, "removed_keys": []}
+
+    # NOTE: this backup→chmod→prune→atomic-rewrite block mirrors update_env above.
+    # See the note there for the extraction trigger if a third mutator lands.
     ts = int(time.time())
     backup = ENV_FILE.with_suffix(f".backup.{ts}")
     shutil.copy2(ENV_FILE, backup)
@@ -118,19 +140,6 @@ def remove_env_keys(keys: list[str]) -> dict:
             old.unlink()
         except OSError:
             pass
-
-    keys_set = set(keys)
-    lines = ENV_FILE.read_text().splitlines(keepends=True)
-    out: list[str] = []
-    removed: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in stripped:
-            k = stripped.split("=", 1)[0].strip()
-            if k in keys_set:
-                removed.append(k)
-                continue  # drop the line entirely
-        out.append(line)
 
     tmp = ENV_FILE.with_suffix(".tmp")
     tmp.write_text("".join(out))
