@@ -23,6 +23,16 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
+
+def _redact(value: str | None, keep: int = 4) -> str | None:
+    """Show last N chars only; full mask if value shorter than 2*keep."""
+    if not value:
+        return None
+    if len(value) < 2 * keep:
+        return "•" * len(value)
+    return "•" * (len(value) - keep) + value[-keep:]
+
+
 # Use the singleton from state.py — DO NOT instantiate OnboardingState() directly.
 _state = get_state()
 
@@ -33,6 +43,19 @@ class StateResponse(BaseModel):
     skipped_steps: list[str]
     current_step: str
     all_steps: list[str]
+
+
+class CurrentConfigResponse(BaseModel):
+    """Redacted snapshot of current setup state. Sensitive values shown as last-4 only.
+
+    Use GET /onboarding/config/{key}?reveal=1 (T1.4.3) to fetch full value of a single key.
+    Loopback-only via T1.3.2 first-run middleware once that lands.
+    """
+    providers: dict[str, dict]
+    operators: list[str]
+    paired_devices: list[dict]
+    tailscale: dict
+    onboarding_state: dict
 
 
 class ValidateRequest(BaseModel):
@@ -58,6 +81,67 @@ class StepActionRequest(BaseModel):
 @router.get("/state", response_model=StateResponse)
 def get_onboarding_state() -> StateResponse:
     return StateResponse(**_state.snapshot())
+
+
+@router.get("/current-config", response_model=CurrentConfigResponse)
+def current_config() -> CurrentConfigResponse:
+    """Return a redacted snapshot of what's configured today. Manage-mode UI reads this."""
+    from Orchestrator.config import (
+        OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY,
+        GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET,
+    )
+    val_at = _state.validated_at()
+    providers = {
+        "openai": {
+            "present": bool(OPENAI_API_KEY),
+            "last4": _redact(OPENAI_API_KEY),
+            "validated_at": val_at.get("openai"),
+        },
+        "anthropic": {
+            "present": bool(ANTHROPIC_API_KEY),
+            "last4": _redact(ANTHROPIC_API_KEY),
+            "validated_at": val_at.get("anthropic"),
+        },
+        "google": {
+            "present": bool(GOOGLE_API_KEY),
+            "last4": _redact(GOOGLE_API_KEY),
+            "validated_at": val_at.get("google"),
+        },
+        "gmail": {
+            "present": bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET),
+            "client_id": GOOGLE_OAUTH_CLIENT_ID or None,  # public per Google OAuth docs
+            "secret_last4": _redact(GOOGLE_OAUTH_CLIENT_SECRET),
+            "validated_at": val_at.get("gmail"),
+        },
+    }
+    # Tailscale status — live probe (~10-30ms via subprocess)
+    try:
+        from Orchestrator.onboarding.validators import validate_tailscale
+        ts_result = validate_tailscale()
+        tailscale = {
+            "configured": ts_result.ok,
+            "validated_at": val_at.get("tailscale"),
+            "detail": ts_result.detail or {},
+        }
+    except Exception as e:
+        logger.exception("current-config tailscale probe failed")
+        tailscale = {"configured": False, "validated_at": val_at.get("tailscale"), "detail": {}}
+    # Operators — read from admin_routes' module-level USERS_LIST
+    try:
+        from Orchestrator.routes.admin_routes import USERS_LIST
+        operators = list(USERS_LIST)
+    except Exception:
+        logger.exception("current-config operator list import failed")
+        operators = []
+    # Paired devices — TODO: surface from pairing_routes._CLAIMS once claim store gets a public accessor
+    paired_devices: list[dict] = []
+    return CurrentConfigResponse(
+        providers=providers,
+        operators=operators,
+        paired_devices=paired_devices,
+        tailscale=tailscale,
+        onboarding_state=_state.snapshot(),
+    )
 
 
 @router.post("/validate", response_model=ValidateResponse)
