@@ -6,9 +6,10 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import os
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from Orchestrator.onboarding import validators
@@ -22,6 +23,15 @@ from Orchestrator.onboarding.state import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
+
+
+ALLOWED_REVEAL_KEYS = {
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GOOGLE_API_KEY",
+    "GOOGLE_OAUTH_CLIENT_ID",
+    "GOOGLE_OAUTH_CLIENT_SECRET",
+}
 
 
 def _redact(value: str | None, keep: int = 4) -> str | None:
@@ -144,6 +154,31 @@ def current_config() -> CurrentConfigResponse:
         tailscale=tailscale,
         onboarding_state=_state.snapshot(),
     )
+
+
+@router.get("/config/{key}")
+def get_config_value(key: str, request: Request, reveal: int = 0) -> dict:
+    """Return a single config value. With ?reveal=1, returns full cleartext.
+
+    Loopback-only when revealing — refuses if request not from 127.0.0.1 / ::1.
+    Without reveal, returns the same redacted ••••XXXX shape as /current-config.
+    Both modes require the key to be in ALLOWED_REVEAL_KEYS.
+    """
+    if key not in ALLOWED_REVEAL_KEYS:
+        raise HTTPException(
+            status_code=403,
+            detail=f"key {key!r} not in reveal allowlist",
+        )
+    value = os.getenv(key, "")
+    if reveal:
+        client_host = request.client.host if request.client else ""
+        if client_host not in ("127.0.0.1", "::1", "localhost"):
+            raise HTTPException(
+                status_code=403,
+                detail="reveal only permitted from loopback",
+            )
+        return {"key": key, "value": value, "present": bool(value)}
+    return {"key": key, "value": _redact(value), "present": bool(value)}
 
 
 @router.post("/validate", response_model=ValidateResponse)
