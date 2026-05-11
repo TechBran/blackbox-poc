@@ -11,6 +11,7 @@ won't leave a corrupt JSON file that silently rewinds the user to step 1.
 """
 from __future__ import annotations
 
+import copy
 import json
 import logging
 import os
@@ -75,7 +76,8 @@ class OnboardingState:
         self._data: dict = self._load()
 
     def _load(self) -> dict:
-        defaults = {**_DEFAULTS, "started_at": time.time()}
+        defaults = copy.deepcopy(_DEFAULTS)
+        defaults["started_at"] = time.time()
         if STATE_FILE.exists():
             try:
                 loaded = json.loads(STATE_FILE.read_text())
@@ -127,6 +129,18 @@ class OnboardingState:
             self._data = self._load()
             self._data["current_step"] = step
             self._save()
+
+    def record_validation(self, provider: str) -> None:
+        """Stamp this provider as freshly validated. Called from /onboarding/validate when ok=true."""
+        with _lock:
+            self._data = self._load()
+            self._data.setdefault("validated_at", {})[provider] = time.time()
+            self._save()
+            logger.info("onboarding validation recorded: %s", provider)
+
+    def validated_at(self) -> dict[str, float]:
+        """Return a shallow copy of the {provider: timestamp} map for read-only use by manage-mode UI."""
+        return dict(self._data.get("validated_at", {}))
 
     def mark_complete(self) -> None:
         """Final marker — wizard is done. Sentinel is the authoritative source."""

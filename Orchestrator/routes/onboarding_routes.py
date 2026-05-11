@@ -83,6 +83,8 @@ def validate(req: ValidateRequest) -> ValidateResponse:
     except Exception as e:
         logger.exception("validator dispatch failed for provider=%s", req.provider)
         return ValidateResponse(ok=False, latency_ms=0, error=f"{type(e).__name__}: {str(e)[:200]}")
+    if result.ok:
+        _state.record_validation(req.provider)
     return ValidateResponse(**dataclasses.asdict(result))
 
 
