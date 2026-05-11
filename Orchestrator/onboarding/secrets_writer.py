@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import time
 from pathlib import Path
@@ -9,6 +10,8 @@ from pathlib import Path
 from Orchestrator.utils.paths import resolve
 
 ENV_FILE = resolve(".env")
+
+_KEY_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
 
 def update_env(updates: dict[str, str]) -> dict:
@@ -18,13 +21,38 @@ def update_env(updates: dict[str, str]) -> dict:
     - New keys: appended in a labeled section
     - Backup created at .env.backup.<timestamp> before writing
     - Atomic rename via os.replace
+    - All written files are mode 0600 (secrets must not leak via umask)
+    - Validates env-var names and rejects newline/null in values
     """
+    for k, v in updates.items():
+        if not _KEY_RE.match(k):
+            raise ValueError(f"invalid env-var name: {k!r} (must match {_KEY_RE.pattern})")
+        if any(ch in v for ch in ("\n", "\r", "\x00")):
+            raise ValueError(f"value for {k!r} contains newline or null — would corrupt .env")
+
+    if not updates:
+        return {"backup": None, "updated_keys": []}
+
     if not ENV_FILE.exists():
         ENV_FILE.touch()
+        os.chmod(ENV_FILE, 0o600)
 
     ts = int(time.time())
     backup = ENV_FILE.with_suffix(f".backup.{ts}")
     shutil.copy2(ENV_FILE, backup)
+    os.chmod(backup, 0o600)
+
+    # Keep only the 5 most recent backups; older ones are noise.
+    backups = sorted(
+        ENV_FILE.parent.glob(".env.backup.*"),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+    for old in backups[5:]:
+        try:
+            old.unlink()
+        except OSError:
+            pass  # best-effort cleanup, never fatal
 
     lines = ENV_FILE.read_text().splitlines(keepends=True)
     seen_keys: set[str] = set()
@@ -50,6 +78,7 @@ def update_env(updates: dict[str, str]) -> dict:
 
     tmp = ENV_FILE.with_suffix(".tmp")
     tmp.write_text("".join(new_lines))
+    os.chmod(tmp, 0o600)
     os.replace(tmp, ENV_FILE)
 
     return {"backup": str(backup), "updated_keys": list(updates.keys())}

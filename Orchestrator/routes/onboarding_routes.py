@@ -4,6 +4,8 @@ Mounted at /onboarding/* by Orchestrator/app.py.
 """
 from __future__ import annotations
 
+import dataclasses
+import logging
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException
@@ -16,6 +18,8 @@ from Orchestrator.onboarding.state import (
     ALL_STEPS,
     get_state,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
@@ -74,12 +78,23 @@ def validate(req: ValidateRequest) -> ValidateResponse:
             raise HTTPException(status_code=400, detail=f"unknown provider {req.provider}")
     except KeyError as e:
         raise HTTPException(status_code=400, detail=f"missing credential field: {e.args[0]}")
-    return ValidateResponse(**vars(result))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("validator dispatch failed for provider=%s", req.provider)
+        return ValidateResponse(ok=False, latency_ms=0, error=f"{type(e).__name__}: {str(e)[:200]}")
+    return ValidateResponse(**dataclasses.asdict(result))
 
 
 @router.post("/save")
 def save_secrets(req: SaveRequest) -> dict:
-    return update_env(req.secrets)
+    """Write secrets to .env (atomic + backup). Trusted-client endpoint —
+    must remain loopback-only after T1.3.2 first-run middleware lands."""
+    logger.info("onboarding /save: keys=%s", list(req.secrets.keys()))
+    try:
+        return update_env(req.secrets)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.post("/step/complete")
@@ -97,6 +112,7 @@ def step_skip(req: StepActionRequest) -> dict:
 @router.post("/complete")
 def complete() -> dict:
     """Mark onboarding fully complete — sentinel file written."""
+    logger.info("onboarding /complete: marking done")
     _state.mark_complete()
     return {"ok": True, "is_complete": True}
 
@@ -104,5 +120,6 @@ def complete() -> dict:
 @router.post("/reset")
 def reset() -> dict:
     """Reset onboarding state (for testing or re-onboarding)."""
+    logger.info("onboarding /reset: clearing state")
     _state.reset()
     return _state.snapshot()
