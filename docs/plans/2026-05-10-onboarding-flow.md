@@ -2,7 +2,7 @@
 
 > **For Claude:** This plan is large (6 tracks, ~7-9 weeks including manage-mode). REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` to execute (fresh subagent per task with two-stage review). `superpowers:executing-plans` is the alternative for parallel-session execution.
 
-**Goal:** Build a customer-facing first-run onboarding experience for AI BlackBox — a Tauri standalone app that wraps Portal `/onboarding` routes, walks the customer through Tailscale install, BYOK API keys (incl. Twilio for phone), optional integrations, QR phone pairing, operator setup, and completion handoff. **Ships with a paired maintenance UI** (same wizard re-entered via `?mode=manage`) accessible from Portal's System Menu and a persistent desktop launcher — customers can review/update their configuration any time. Ships as the first-boot experience on pre-installed mini-PC hardware.
+**Goal:** Build a customer-facing first-run onboarding experience for AI BlackBox — a Tauri standalone app that wraps Portal `/onboarding` routes, walks the customer through Tailscale install, BYOK API keys, optional integrations, QR phone pairing, operator setup, and completion handoff. **Ships with a paired maintenance UI** (same wizard re-entered via `?mode=manage`) accessible from Portal's System Menu and a persistent desktop launcher — customers can review/update their configuration any time. Ships as the first-boot experience on pre-installed mini-PC hardware.
 
 **Architecture:** Tauri (Rust) shell wraps a webview pointing at `http://localhost:9091/onboarding`. Portal's existing FastAPI server hosts the wizard UI as HTML/CSS/JS. Tauri shell provides full-screen branded chrome, taskbar icon, no browser address bar. After completion, app self-disables and Portal becomes the regular kiosk view. Six implementation tracks executed in dependency order: **Foundation Cleanup → Onboarding Backend → Portal Wizard UI → Tauri Shell → Install Scripts → Customer Docs.** Track 5 (docs) drafts can begin earlier but finalize after Track 2.
 
@@ -48,7 +48,7 @@ These are reasonable defaults baked into this plan. **The audit session may over
 | 3 | Migration vs fresh | **v1 = fresh install only** | Migration from existing install is a v1.5 feature. Most customers never migrate. |
 | 4 | Single vs multi-operator setup | **Wizard collects 1+ operator name(s) from the customer; registers them via `/operator/add` so they exist in the system before Portal opens. "Brandon" stays as a code-level technical seed only — never shown as a default to customers.** | Pre-registers real operators so the customer doesn't have to set them up post-onboarding. Multi-name input via "Add another operator" button. The internal Brandon seed is analogous to the "system" operator used for apps — unchanged by wizard. |
 | 5 | Hardening at install time | **DROPPED — defer to v1.1.** Document existing weak defaults (Drachtio "cymru", FreeSWITCH "ClueCon", TG200 "password") in `docs/TROUBLESHOOTING.md` with manual-rotation instructions. | Auto-rotation requires cross-component coordination (Drachtio↔FreeSWITCH share a secret; rotating one without the other silently breaks SIP). Out of scope for v1 — implementation surface is large and the failure mode (broken phone in field) is the worst kind of regression. |
-| 6 | Tier-1 integrations for v1 wizard | **OpenAI, Anthropic, Google, Twilio, Tailscale, Gmail (6 providers).** ElevenLabs / Asterisk / xAI / Perplexity → v1.1. Cellular + UGV → never in v1 wizard. | Phone is a flagship BlackBox capability — Twilio belongs in v1 so the customer's first call works after onboarding without a return trip to System Menu. Validator: `client.api.accounts(sid).fetch()`. |
+| 6 | Tier-1 integrations for v1 wizard | **OpenAI, Anthropic, Google, Tailscale, Gmail (5 providers).** Twilio / ElevenLabs / Asterisk / xAI / Perplexity → v1.1. Cellular + UGV → never in v1 wizard. | Phone calls + SMS in v1 are handled by the **TG200 cellular modem** (already auto-detected via `Orchestrator/cellular/hotplug.py` — no customer credentials to collect). Twilio is reserved for v1.1 customers who want a second phone path. |
 | 7 | Hardware spec for shipped mini-PC | **TBD — Track 5 factory-image build is plan-skeletal** | Plan stays hardware-spec-agnostic for v1. When spec lands, fill in Track 5 image-build details. |
 | 8 | Tailscale customer flow | **Each customer owns their tailnet (own auth) AND wizard handles "no account yet" path.** | Simpler architecture — no shared subdomain. New-to-Tailscale customers get an explicit "Don't have an account? → tailscale.com/start (~5 min)" branch with brief explainer. Skip → LAN-only remains as escape hatch. |
 
@@ -1219,50 +1219,46 @@ def validate_gmail_oauth(client_id: str, client_secret: str) -> ValidationResult
     return _measure(_fn)
 
 
-def validate_twilio(account_sid: str, auth_token: str) -> ValidationResult:
-    """Validate Twilio credentials by fetching account metadata (no charge)."""
-    def _fn():
-        from twilio.rest import Client
-        client = Client(account_sid, auth_token)
-        acct = client.api.accounts(account_sid).fetch()
-        return {
-            "friendly_name": acct.friendly_name,
-            "status": acct.status,
-            "type": acct.type,
-        }
-    return _measure(_fn)
 ```
+
+> **Note (2026-05-11 audit reversal):** Twilio is intentionally NOT a Tier-1 validator in v1. Phone calls + SMS are handled by the **TG200 cellular modem** (auto-detected via `Orchestrator/cellular/hotplug.py` — no creds to collect). A `validate_twilio` function may be added in v1.1 once the wizard offers a Twilio second-path. Do not import the `twilio` SDK here.
 
 **Step 2: Verify with the actual current keys (sanity check)**
 
 ```bash
 Orchestrator/venv/bin/python -c "
 from Orchestrator.onboarding.validators import (
-    validate_openai, validate_anthropic, validate_google, validate_tailscale, validate_twilio
+    validate_openai, validate_anthropic, validate_google, validate_tailscale, validate_gmail_oauth
 )
 from Orchestrator.config import (
     OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY,
-    TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN,
 )
 print('OpenAI:', validate_openai(OPENAI_API_KEY))
 print('Anthropic:', validate_anthropic(ANTHROPIC_API_KEY))
 print('Google:', validate_google(GOOGLE_API_KEY))
 print('Tailscale:', validate_tailscale())
-print('Twilio:', validate_twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN))
+# Gmail OAuth requires client_id + client_secret — load from .env if present, else skip
+import os
+gid, gsec = os.getenv('GMAIL_CLIENT_ID'), os.getenv('GMAIL_CLIENT_SECRET')
+if gid and gsec:
+    print('Gmail OAuth:', validate_gmail_oauth(gid, gsec))
+else:
+    print('Gmail OAuth: SKIPPED (no GMAIL_CLIENT_ID/SECRET in .env yet)')
 "
 ```
 
-Expected: all five print `ValidationResult(ok=True, latency_ms=…, detail={…})`.
+Expected: 4-5 print `ValidationResult(ok=True, latency_ms=…, detail={…})` (Gmail row only if creds exist).
 
 **Step 3: Commit**
 
 ```bash
 git add Orchestrator/onboarding/validators.py
-git commit -m "feat(onboarding): tier-1 per-provider validators (OpenAI/Anthropic/Google/Twilio/Tailscale/Gmail)
+git commit -m "feat(onboarding): tier-1 per-provider validators (OpenAI/Anthropic/Google/Tailscale/Gmail)
 
 Each does a cheap 1-token (or metadata-only) call to confirm the credential works.
 Returns ValidationResult{ok, latency_ms, error?, detail?} for clean wizard UX.
-Twilio promoted to Tier-1 per audit decision (phone is a flagship capability)."
+Twilio explicitly deferred to Tier-2 (v1.1) — TG200 cellular modem handles
+phone+SMS in v1, no Twilio webhooks needed."
 ```
 
 ## Phase 1.3: Onboarding routes
@@ -1574,7 +1570,6 @@ def _redact(value: str | None, keep: int = 4) -> str | None:
 def current_config() -> CurrentConfigResponse:
     from Orchestrator.config import (
         OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY,
-        TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER,
         GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET,
     )
     val_at = _state.validated_at()
@@ -1593,12 +1588,6 @@ def current_config() -> CurrentConfigResponse:
             "present": bool(GOOGLE_API_KEY),
             "last4": _redact(GOOGLE_API_KEY),
             "validated_at": val_at.get("google"),
-        },
-        "twilio": {
-            "present": bool(TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN),
-            "sid_last4": _redact(TWILIO_ACCOUNT_SID),
-            "phone_number": TWILIO_PHONE_NUMBER or None,  # not secret, full reveal OK
-            "validated_at": val_at.get("twilio"),
         },
         "gmail": {
             "present": bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET),
@@ -1657,7 +1646,6 @@ git commit -m "feat(onboarding): GET /current-config — redacted snapshot for m
 ```python
 ALLOWED_REVEAL_KEYS = {
     "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY",
-    "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER",
     "GOOGLE_OAUTH_CLIENT_ID", "GOOGLE_OAUTH_CLIENT_SECRET",
 }
 
@@ -2093,7 +2081,7 @@ git commit -m "feat(portal-ob): tailscale step — detect, install instructions,
 - "Save & continue" button (active when ≥1 provider validated)
 - On save: `POST /onboarding/save` with `{OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY}` (only the validated ones)
 
-**Step 2:** Twilio (phone) is collected in its own dedicated step (Phase 2.4b below) since it requires three fields (SID, Auth Token, Phone Number) and walks through external account setup.
+**Step 2:** Phone calls + SMS in v1 are handled by the **TG200 cellular modem** (auto-detected via `Orchestrator/cellular/hotplug.py` — no creds to collect). No phone step in v1 wizard. Twilio is reserved for v1.1 customers wanting a second phone path.
 
 **Step 3: Commit**
 
@@ -2102,34 +2090,9 @@ git add Portal/onboarding/steps/api_keys.js
 git commit -m "feat(portal-ob): API keys step — BYOK paste/validate/save for OpenAI, Anthropic, Google"
 ```
 
-### Phase 2.4b — Phone (Twilio) step — NEW per audit decision
+### Phase 2.4b — DEFERRED (Twilio phone step → v1.1)
 
-#### Task 2.4b.1: Twilio phone setup step component
-
-**Files:**
-- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/steps/phone.js`
-- Modify: `Portal/onboarding/onboarding.js` — add `"phone"` between `"api_keys"` and `"optional_integrations"` in the `STEPS` array
-- Modify: `Orchestrator/onboarding/state.py` — add `"phone"` to `StepName` Literal + `ALL_STEPS`
-
-**Step 1: Component renders:**
-- Lede: "Phone integration — make and receive calls/SMS through your BlackBox. Optional but recommended for full functionality."
-- 3 paste fields: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` (E.164 format, e.g. `+15551234567`)
-- "Get Twilio credentials →" expandable disclosure with brief walkthrough:
-  > 1. Sign up at twilio.com (~3 min, free trial credit)
-  > 2. Buy a phone number ($1/mo) — Console → Phone Numbers → Buy
-  > 3. Find your Account SID and Auth Token on Console homepage
-  > 4. Paste all three values here
-- "Validate" button → `POST /onboarding/validate` with `{provider:"twilio", credentials:{account_sid, auth_token}}`
-- Show ✓/✗ + account friendly_name on success
-- "Save & continue" → `POST /onboarding/save` with all 3 vars (only if validated)
-- "Skip for now" → records skip; phone integration off until configured later
-
-**Step 2: Commit**
-
-```bash
-git add Portal/onboarding/steps/phone.js Portal/onboarding/onboarding.js Orchestrator/onboarding/state.py
-git commit -m "feat(portal-ob): Twilio phone step — Tier-1 promotion per audit decision"
-```
+Phase 2.4b was originally planned to collect Twilio credentials (SID/Auth Token/Phone Number) for inbound webhook-based phone calls. **Reverted in 2026-05-11 audit-fix:** the TG200 cellular modem already provides phone+SMS in v1 via `Orchestrator/cellular/hotplug.py` (zero customer config). When v1.1 adds an opt-in Twilio path, recreate this phase with `phone.js` step + `validate_twilio` validator + StepName/ALL_STEPS amendment.
 
 ### Phase 2.5 — Optional integrations
 
@@ -2393,8 +2356,6 @@ export function render(container, {config, openStep}) {
          summary: config.tailscale.detail.hostname || "Skipped"},
         {step: "api_keys", label: "API Keys", state: countConfigured(config.providers, ["openai","anthropic","google"]) > 0 ? "✓" : "⊘",
          summary: `${countConfigured(config.providers, ["openai","anthropic","google"])} of 3 providers`},
-        {step: "phone", label: "Phone (Twilio)", state: config.providers.twilio.present ? "✓" : "⊘",
-         summary: config.providers.twilio.phone_number || "Not configured"},
         {step: "optional_integrations", label: "Gmail", state: config.providers.gmail.present ? "✓" : "⊘",
          summary: config.providers.gmail.client_id ? "OAuth client configured" : "Skipped"},
         {step: "pair_phone", label: "Paired Devices", state: config.paired_devices.length > 0 ? "✓" : "⊘",
@@ -3360,7 +3321,7 @@ After Tracks 0-5 ship, run all four scenarios — happy path is necessary but no
 3. **Run install:** `cd blackbox-poc && ./Scripts/install.sh` (~5-10 min)
 4. **Reboot:** `sudo reboot`
 5. **On boot:** Tauri setup app autostarts; wizard appears
-6. **Walk through wizard:** welcome → tailscale → API keys (3 providers) → phone (Twilio) → optional integrations (Gmail) → phone pairing (QR) → operator (enter 2 operator names) → done
+6. **Walk through wizard:** welcome → tailscale → API keys (3 providers) → optional integrations (Gmail) → phone pairing (QR) → operator (enter 2 operator names) → done
 7. **Click "Open Portal":** wizard closes; Portal launches; autostart `.desktop` removed
 8. **Verify:**
    - `curl http://localhost:9091/health` returns `ok`
@@ -3386,7 +3347,7 @@ After Tracks 0-5 ship, run all four scenarios — happy path is necessary but no
 3. **Force-quit Tauri app** (or close laptop lid mid-wizard)
 4. Reopen Tauri app (or reboot)
 5. **Verify:**
-   - `.onboarding_state.json` exists with `current_step: "phone"` (or wherever you stopped)
+   - `.onboarding_state.json` exists with `current_step: "optional_integrations"` (or wherever you stopped)
    - `.onboarding_complete` does NOT exist
    - Wizard resumes at the step that was current when interrupted
    - Previously-validated providers (OpenAI etc.) show as ✓ already-configured
@@ -3436,7 +3397,7 @@ After Scenario 1 completes (full onboarding):
 
 - **Track 6 (v2 software-only distribution)** — picks up after v1 ships
 - **Migration flow** — bringing existing snapshots/config/paired devices forward (v1.5)
-- **Tier-2 integrations** (ElevenLabs, Asterisk, xAI, Perplexity) — v1.1. (Twilio promoted to Tier-1 per audit decision; was previously deferred.)
+- **Tier-2 integrations** (Twilio, ElevenLabs, Asterisk, xAI, Perplexity) — v1.1. (Twilio re-deferred to v1.1 per 2026-05-11 audit-fix: TG200 cellular modem handles phone+SMS in v1, no Twilio webhooks needed.)
 - **Auto-rotate weak default passwords** (Drachtio "cymru", FreeSWITCH "ClueCon", TG200 "password") — deferred to v1.1 per audit decision. Cross-component coordination (Drachtio↔FreeSWITCH share secrets) is non-trivial. Document existing weak defaults in `docs/TROUBLESHOOTING.md` (Track 5) with manual-rotation instructions.
 - **Migrate `@app.on_event` → FastAPI lifespan** — `Orchestrator/startup.py` has 11 deprecated `@app.on_event` decorators. T1.3.2's middleware approach works fine in either pattern, so not blocking. Optional cleanup task.
 - **Hardware-spec-dependent tasks in Track 5** — fills in once spec lands
