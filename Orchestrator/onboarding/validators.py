@@ -9,9 +9,11 @@ Tier-2 (v1.1): Twilio, ElevenLabs, Asterisk, xAI, Perplexity.
 """
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -24,7 +26,7 @@ class ValidationResult:
     detail: dict[str, Any] | None = None
 
 
-def _measure(fn) -> ValidationResult:
+def _measure(fn: Callable[[], dict[str, Any]]) -> ValidationResult:
     """Wrap a sync validator with latency measurement + error capture."""
     start = time.perf_counter()
     try:
@@ -38,7 +40,7 @@ def _measure(fn) -> ValidationResult:
         return ValidationResult(
             ok=False,
             latency_ms=int((time.perf_counter() - start) * 1000),
-            error=f"{type(e).__name__}: {e}",
+            error=f"{type(e).__name__}: {str(e)[:200]}",
         )
 
 
@@ -48,9 +50,9 @@ def validate_openai(api_key: str) -> ValidationResult:
     """Validate OpenAI API key via models.list (no token cost)."""
     def _fn():
         from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-        models = client.models.list()
-        return {"model_count": len(list(models.data))}
+        with OpenAI(api_key=api_key, timeout=10.0, max_retries=0) as client:
+            models = client.models.list()
+            return {"model_count": len(models.data)}
     return _measure(_fn)
 
 
@@ -58,13 +60,13 @@ def validate_anthropic(api_key: str) -> ValidationResult:
     """Validate Anthropic key via cheapest-possible message (1-token completion)."""
     def _fn():
         import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-        resp = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1,
-            messages=[{"role": "user", "content": "hi"}],
-        )
-        return {"model": resp.model, "id": resp.id}
+        with anthropic.Anthropic(api_key=api_key, timeout=10.0, max_retries=0) as client:
+            resp = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1,
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            return {"model": resp.model, "id": resp.id}
     return _measure(_fn)
 
 
@@ -72,9 +74,13 @@ def validate_google(api_key: str) -> ValidationResult:
     """Validate Google AI key via list_models."""
     def _fn():
         from google import genai
-        client = genai.Client(api_key=api_key)
-        models = list(client.models.list())
-        return {"model_count": len(models)}
+        from google.genai.types import HttpOptions
+        with genai.Client(
+            api_key=api_key,
+            http_options=HttpOptions(timeout=10000),  # ms
+        ) as client:
+            models = list(client.models.list())
+            return {"model_count": len(models)}
     return _measure(_fn)
 
 
@@ -89,8 +95,7 @@ def validate_tailscale() -> ValidationResult:
         )
         if result.returncode != 0:
             raise RuntimeError(f"tailscale status failed: {result.stderr.strip()}")
-        import json as _json
-        data = _json.loads(result.stdout)
+        data = json.loads(result.stdout)
         backend = data.get("BackendState", "unknown")
         if backend != "Running":
             raise RuntimeError(f"tailscale not running (BackendState={backend})")
