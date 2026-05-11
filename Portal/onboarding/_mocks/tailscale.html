@@ -15,6 +15,22 @@
 
         *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
+        /* Focus visible: keyboard users see where they are */
+        .ob-cta:focus-visible,
+        .ob-secondary:focus-visible,
+        .ob-copy-btn:focus-visible {
+            outline: 2px solid var(--ob-text-primary);
+            outline-offset: 6px;
+        }
+        .ob-skip:focus-visible,
+        .ob-back:focus-visible,
+        .ob-disclosure-summary:focus-visible,
+        .ob-disclosure-link:focus-visible {
+            outline: 2px solid var(--ob-text-primary);
+            outline-offset: 3px;
+            border-radius: 2px;
+        }
+
         html { scroll-behavior: smooth; }
         body {
             background: var(--ob-surface-bg);
@@ -89,7 +105,7 @@
             display: flex;
             flex-direction: column;
             gap: var(--ob-space-2);
-            min-width: 280px;
+            min-width: 200px;
         }
         .ob-progress-bar-track {
             height: 2px;
@@ -99,6 +115,7 @@
         }
         .ob-progress-bar {
             height: 100%;
+            /* MOCK-ONLY: progress bar width hardcoded for sign-off; production driven by JS state */
             width: 28.6%;  /* 2 of 7 steps */
             background: var(--ob-accent);
             box-shadow: var(--ob-accent-glow);
@@ -294,7 +311,8 @@
         .ob-action-card-os {
             font-family: var(--ob-font-body);
             font-size: var(--ob-text-xs);
-            color: var(--ob-text-quaternary);
+            /* Customer-facing OS detection — must pass WCAG AA, hence tertiary not quaternary */
+            color: var(--ob-text-tertiary);
             text-transform: uppercase;
             letter-spacing: 0.12em;
             display: inline-flex;
@@ -610,6 +628,7 @@
             z-index: 2;
             background: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
         }
         .ob-footer-meta { display: flex; gap: var(--ob-space-6); }
         .ob-footer-meta span::before {
@@ -625,6 +644,14 @@
         }
 
         /* ── Responsive ───────────────────────────────────────── */
+        @media (max-width: 900px) {
+            .ob-progress {
+                min-width: 180px;
+            }
+            .ob-progress-step {
+                display: none; /* Hide "Step 02 / 07" label; keep bar + step name visible */
+            }
+        }
         @media (max-width: 720px) {
             .ob-header { padding: var(--ob-space-4) var(--ob-space-6); }
             .ob-step {
@@ -707,6 +734,7 @@
                 </button>
             </div>
 
+            <!-- MOCK-ONLY: <details open> for visual sign-off; production renders collapsed by default -->
             <details class="ob-disclosure" open>
                 <summary class="ob-disclosure-summary">
                     <span class="ob-disclosure-q">Don't have a <em>Tailscale</em> account yet?</span>

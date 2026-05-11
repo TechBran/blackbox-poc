@@ -101,7 +101,7 @@
             display: flex;
             flex-direction: column;
             gap: var(--ob-space-2);
-            min-width: 280px;
+            min-width: 200px;
         }
         .ob-progress-bar-track {
             height: 2px;
@@ -111,6 +111,7 @@
         }
         .ob-progress-bar {
             height: 100%;
+            /* MOCK-ONLY: progress bar width hardcoded for sign-off; production driven by JS state */
             width: 14.3%;  /* 1 of 7 steps */
             background: var(--ob-accent);
             box-shadow: var(--ob-accent-glow);
@@ -351,7 +352,8 @@
             font-size: var(--ob-text-xs);
             text-transform: uppercase;
             letter-spacing: 0.16em;
-            color: var(--ob-text-quaternary);
+            /* Customer-facing time estimate — must pass WCAG AA, hence tertiary not quaternary */
+            color: var(--ob-text-tertiary);
             text-align: right;
             padding-top: var(--ob-space-3);
             white-space: nowrap;
@@ -397,9 +399,15 @@
                 2px 2px 0 var(--ob-text-primary),
                 var(--ob-accent-glow);
         }
+        /* Focus visible: keyboard users see where they are */
         .ob-cta:focus-visible {
             outline: 2px solid var(--ob-text-primary);
             outline-offset: 6px;
+        }
+        .ob-skip:focus-visible {
+            outline: 2px solid var(--ob-text-primary);
+            outline-offset: 3px;
+            border-radius: 2px;
         }
         .ob-cta-arrow {
             font-family: var(--ob-font-display);
@@ -442,6 +450,7 @@
             z-index: 2;
             background: rgba(0, 0, 0, 0.6);
             backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
         }
         .ob-footer-meta {
             display: flex;
@@ -469,6 +478,14 @@
         }
 
         /* ── Responsive ───────────────────────────────────────── */
+        @media (max-width: 900px) {
+            .ob-progress {
+                min-width: 180px;
+            }
+            .ob-progress-step {
+                display: none; /* Hide "Step 01 / 07" label; keep bar + step name visible */
+            }
+        }
         @media (max-width: 720px) {
             .ob-header { padding: var(--ob-space-4) var(--ob-space-6); }
             .ob-step {

@@ -17,8 +17,7 @@
 
 @font-face {
     font-family: "Fraunces";
-    src: url("./fonts/Fraunces.ttf") format("truetype-variations"),
-         url("./fonts/Fraunces.ttf") format("truetype");
+    src: url("./fonts/Fraunces.ttf") format("truetype");
     font-weight: 100 900;
     font-style: normal;
     font-display: swap;
@@ -26,8 +25,7 @@
 
 @font-face {
     font-family: "JetBrains Mono";
-    src: url("./fonts/JetBrainsMono.ttf") format("truetype-variations"),
-         url("./fonts/JetBrainsMono.ttf") format("truetype");
+    src: url("./fonts/JetBrainsMono.ttf") format("truetype");
     font-weight: 100 800;
     font-style: normal;
     font-display: swap;
@@ -75,7 +73,13 @@
     --ob-space-24: 6rem;          /* 96px */
     --ob-space-32: 8rem;          /* 128px */
 
-    /* ── Motion timings + easing ── */
+    /* ── Motion timings + easing ──
+     * Note: CTA arrow micro-motion is glyph-aware. → translates X+4px,
+     * ↻ rotates 60deg, and other glyphs may have their own treatment.
+     * This is intentional — the motion mirrors the icon's affordance
+     * (arrow points = move forward; refresh-arc = spin = re-check).
+     * Don't unify into a single transform.
+     */
     --ob-motion-instant: 80ms;
     --ob-motion-fast: 180ms;
     --ob-motion-base: 320ms;
@@ -126,6 +130,10 @@
     --ob-text-primary: #ffffff;
     --ob-text-secondary: #cccccc;
     --ob-text-tertiary: #888888;
+    /* DECORATIVE-ONLY: 2.4:1 contrast fails WCAG AA. Use ONLY for
+     * non-essential pips, dots, dividers, or visual texture. NEVER
+     * for customer-facing words/numbers (use --ob-text-tertiary instead).
+     */
     --ob-text-quaternary: #555555;
     --ob-text-on-accent: #000000;
 
@@ -135,4 +143,23 @@
     --ob-content-wide: 72rem;            /* ~1152px — for two-column layouts */
     --ob-step-min-height: 60vh;
     --ob-header-height: 72px;
+}
+
+/* ── Accessibility: motion-sensitive users ──────────────────────
+ * Customers with vestibular conditions, certain learning styles,
+ * or simply OS-level "reduce motion" preferences should NOT see
+ * the choreographed staggered fade-up animations on every wizard
+ * step. Honor prefers-reduced-motion globally — collapses
+ * animations to near-instant + drops the blur-in keyframe entirely.
+ */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-delay: 0ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
 }
