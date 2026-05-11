@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI BlackBox · Connect tailnet (Mock)</title>
+    <link rel="stylesheet" href="../onboarding-tokens.css">
+    <style>
+        /* ===========================================================
+         * tailscale.html — Step 02: connect your tailnet.
+         * Static mock, "installed but not authenticated" branch.
+         * Validates the design system handles status states, code
+         * blocks, disclosure expansion, and multi-weight CTAs.
+         * =========================================================== */
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+        body {
+            background: var(--ob-surface-bg);
+            color: var(--ob-text-primary);
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-base);
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow-x: hidden;
+            position: relative;
+        }
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 60% 50% at 75% 15%,
+                    rgba(255, 74, 74, 0.06) 0%,
+                    transparent 60%),
+                radial-gradient(ellipse 80% 60% at 10% 95%,
+                    rgba(255, 74, 74, 0.03) 0%,
+                    transparent 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        body::after {
+            content: "";
+            position: fixed;
+            inset: 0;
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+            opacity: 0.6;
+            mix-blend-mode: overlay;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Header (shared chrome) ──────────────────────────── */
+        .ob-header {
+            display: grid;
+            grid-template-columns: auto 1fr auto;
+            align-items: center;
+            gap: var(--ob-space-8);
+            padding: var(--ob-space-5) var(--ob-space-10);
+            border-bottom: 1px solid var(--ob-surface-border);
+            position: relative;
+            z-index: 2;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .ob-brand { display: flex; align-items: baseline; gap: var(--ob-space-2); }
+        .ob-brand-mark {
+            font-family: var(--ob-font-display);
+            font-weight: var(--ob-display-weight-bold);
+            font-size: var(--ob-text-lg);
+            font-variation-settings: "SOFT" var(--ob-display-soft), "opsz" 24;
+            letter-spacing: -0.02em;
+        }
+        .ob-brand-mark em { font-style: italic; color: var(--ob-accent); }
+        .ob-brand-meta {
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-xs);
+            color: var(--ob-text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+        }
+        .ob-progress {
+            display: flex;
+            flex-direction: column;
+            gap: var(--ob-space-2);
+            min-width: 280px;
+        }
+        .ob-progress-bar-track {
+            height: 2px;
+            background: var(--ob-surface-border);
+            position: relative;
+            overflow: hidden;
+        }
+        .ob-progress-bar {
+            height: 100%;
+            width: 28.6%;  /* 2 of 7 steps */
+            background: var(--ob-accent);
+            box-shadow: var(--ob-accent-glow);
+            transform-origin: left center;
+            animation: ob-bar-grow 1100ms var(--ob-ease-out) 100ms backwards;
+        }
+        @keyframes ob-bar-grow {
+            from { transform: scaleX(0); }
+            to   { transform: scaleX(1); }
+        }
+        .ob-progress-meta {
+            display: flex;
+            justify-content: space-between;
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-xs);
+            color: var(--ob-text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+        }
+        .ob-progress-step { color: var(--ob-text-secondary); }
+
+        /* ── Step content ────────────────────────────────────── */
+        .ob-step {
+            flex: 1;
+            display: grid;
+            grid-template-columns: minmax(80px, 0.6fr) minmax(0, 8fr);
+            gap: var(--ob-space-12);
+            max-width: var(--ob-content-wide);
+            width: 100%;
+            margin: 0 auto;
+            padding: var(--ob-space-16) var(--ob-space-10) var(--ob-space-16);
+            position: relative;
+            z-index: 1;
+            min-height: var(--ob-step-min-height);
+        }
+
+        .ob-step-sigil {
+            display: flex;
+            flex-direction: column;
+            gap: var(--ob-space-3);
+            padding-top: var(--ob-space-4);
+            animation: ob-fade-up var(--ob-motion-moment) var(--ob-ease-out) 80ms backwards;
+        }
+        .ob-step-sigil-num {
+            font-family: var(--ob-font-display);
+            font-weight: var(--ob-display-weight-light);
+            font-size: 5rem;
+            line-height: 0.9;
+            color: var(--ob-text-primary);
+            font-variation-settings: "opsz" 144, "SOFT" 0, "WONK" 1;
+            letter-spacing: -0.04em;
+        }
+        .ob-step-sigil-num em {
+            font-style: italic;
+            color: var(--ob-accent);
+            font-weight: var(--ob-display-weight-regular);
+        }
+        .ob-step-sigil-rule {
+            width: 32px;
+            height: 1px;
+            background: var(--ob-accent);
+            margin-top: var(--ob-space-2);
+        }
+        .ob-step-sigil-label {
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-xs);
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: var(--ob-text-tertiary);
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            margin-top: var(--ob-space-4);
+        }
+
+        .ob-step-body { display: flex; flex-direction: column; }
+
+        .ob-step-eyebrow {
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-xs);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            color: var(--ob-accent);
+            margin-bottom: var(--ob-space-5);
+            display: inline-flex;
+            align-items: center;
+            gap: var(--ob-space-3);
+            animation: ob-fade-up var(--ob-motion-moment) var(--ob-ease-out) 100ms backwards;
+        }
+        .ob-step-eyebrow::before {
+            content: "";
+            width: 8px;
+            height: 8px;
+            background: var(--ob-accent);
+            border-radius: 50%;
+            box-shadow: 0 0 12px rgba(255, 74, 74, 0.6);
+        }
+
+        .ob-step-title {
+            font-family: var(--ob-font-display);
+            font-weight: var(--ob-display-weight-light);
+            font-size: clamp(2.4rem, 5.8vw, var(--ob-text-3xl));
+            line-height: 1.05;
+            letter-spacing: -0.025em;
+            font-variation-settings: "opsz" 144, "SOFT" var(--ob-display-soft);
+            margin-bottom: var(--ob-space-5);
+            color: var(--ob-text-primary);
+            max-width: 18ch;
+            animation: ob-fade-up var(--ob-motion-moment) var(--ob-ease-out) 200ms backwards;
+        }
+        .ob-step-title em {
+            font-style: italic;
+            color: var(--ob-accent);
+            font-weight: var(--ob-display-weight-regular);
+            font-variation-settings: "opsz" 144, "SOFT" 80, "WONK" 1;
+        }
+
+        .ob-step-lede {
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-base);
+            font-weight: 400;
+            line-height: 1.6;
+            color: var(--ob-text-secondary);
+            max-width: var(--ob-content-narrow);
+            margin-bottom: var(--ob-space-12);
+            animation: ob-fade-up var(--ob-motion-moment) var(--ob-ease-out) 350ms backwards;
+        }
+
+        /* ── Status badge — "installed but not authenticated" ── */
+        .ob-status {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--ob-space-3);
+            padding: var(--ob-space-3) var(--ob-space-5);
+            background: var(--ob-warning-soft);
+            border: 1px solid rgba(255, 184, 74, 0.3);
+            border-left: 3px solid var(--ob-warning);
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-sm);
+            color: var(--ob-text-primary);
+            margin-bottom: var(--ob-space-8);
+            align-self: flex-start;
+            animation: ob-fade-up var(--ob-motion-moment) var(--ob-ease-out) 450ms backwards;
+        }
+        .ob-status-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: var(--ob-warning);
+            color: var(--ob-text-on-accent);
+            font-size: 11px;
+            font-weight: 700;
+            font-family: var(--ob-font-body);
+        }
+        .ob-status-label { font-weight: 500; }
+        .ob-status-detail {
+            color: var(--ob-text-tertiary);
+            font-size: var(--ob-text-xs);
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            margin-left: var(--ob-space-2);
+        }
+
+        /* ── Action card — terminal command + copy + run ──── */
+        .ob-action-card {
+            background: var(--ob-surface-elevated);
+            border: 1px solid var(--ob-surface-border);
+            margin-bottom: var(--ob-space-8);
+            animation: ob-fade-up var(--ob-motion-moment) var(--ob-ease-out) 550ms backwards;
+        }
+        .ob-action-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--ob-space-3) var(--ob-space-5);
+            border-bottom: 1px solid var(--ob-surface-border);
+            background: var(--ob-surface-card);
+        }
+        .ob-action-card-title {
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-xs);
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: var(--ob-text-tertiary);
+        }
+        .ob-action-card-os {
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-xs);
+            color: var(--ob-text-quaternary);
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            display: inline-flex;
+            align-items: center;
+            gap: var(--ob-space-2);
+        }
+        .ob-action-card-os::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--ob-success);
+            box-shadow: 0 0 8px rgba(39, 217, 128, 0.5);
+        }
+        .ob-code {
+            display: flex;
+            align-items: center;
+            gap: var(--ob-space-4);
+            padding: var(--ob-space-5);
+            background: var(--ob-surface-code);
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-base);
+            font-weight: 400;
+            color: var(--ob-text-primary);
+            position: relative;
+        }
+        .ob-code-prompt {
+            color: var(--ob-accent);
+            user-select: none;
+            font-weight: 600;
+        }
+        .ob-code-text {
+            flex: 1;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .ob-code-text em {
+            color: var(--ob-warning);
+            font-style: normal;
+            font-weight: 500;
+        }
+        .ob-copy-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--ob-space-2);
+            padding: var(--ob-space-2) var(--ob-space-4);
+            background: transparent;
+            border: 1px solid var(--ob-surface-border-emphasis);
+            color: var(--ob-text-secondary);
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-xs);
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            cursor: pointer;
+            transition: all var(--ob-motion-fast) var(--ob-ease-out);
+            white-space: nowrap;
+        }
+        .ob-copy-btn:hover {
+            background: var(--ob-text-primary);
+            color: var(--ob-text-on-accent);
+            border-color: var(--ob-text-primary);
+        }
+
+        /* ── CTA row ──────────────────────────────────────────── */
+        .ob-cta-row {
+            display: flex;
+            align-items: center;
+            gap: var(--ob-space-6);
+            flex-wrap: wrap;
+            margin-bottom: var(--ob-space-12);
+            animation: ob-fade-up var(--ob-motion-moment) var(--ob-ease-out) 650ms backwards;
+        }
+        .ob-cta {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--ob-space-3);
+            padding: var(--ob-space-4) var(--ob-space-8);
+            background: var(--ob-accent);
+            color: var(--ob-text-on-accent);
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-base);
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            border: none;
+            cursor: pointer;
+            transition: transform var(--ob-motion-fast) var(--ob-ease-out),
+                        box-shadow var(--ob-motion-fast) var(--ob-ease-out);
+            box-shadow:
+                4px 4px 0 var(--ob-text-primary),
+                var(--ob-accent-glow);
+        }
+        .ob-cta:hover {
+            transform: translate(-2px, -2px);
+            box-shadow:
+                6px 6px 0 var(--ob-text-primary),
+                var(--ob-accent-glow-strong);
+        }
+        .ob-cta:active {
+            transform: translate(0, 0);
+            box-shadow: 2px 2px 0 var(--ob-text-primary), var(--ob-accent-glow);
+        }
+        .ob-cta-arrow {
+            font-family: var(--ob-font-display);
+            font-style: italic;
+            font-size: 1.2em;
+            transition: transform var(--ob-motion-fast) var(--ob-ease-out);
+        }
+        .ob-cta:hover .ob-cta-arrow { transform: rotate(60deg); }
+
+        .ob-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--ob-space-2);
+            padding: var(--ob-space-3) var(--ob-space-6);
+            background: transparent;
+            color: var(--ob-text-secondary);
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-sm);
+            font-weight: 500;
+            letter-spacing: 0.04em;
+            border: 1px solid var(--ob-surface-border-emphasis);
+            cursor: pointer;
+            transition: all var(--ob-motion-fast) var(--ob-ease-out);
+        }
+        .ob-secondary:hover {
+            color: var(--ob-text-primary);
+            border-color: var(--ob-text-primary);
+        }
+
+        /* ── Disclosure (no account yet) ─────────────────────── */
+        .ob-disclosure {
+            border-top: 1px solid var(--ob-surface-border);
+            padding-top: var(--ob-space-8);
+            margin-bottom: var(--ob-space-12);
+            animation: ob-fade-up var(--ob-motion-moment) var(--ob-ease-out) 750ms backwards;
+        }
+        .ob-disclosure-summary {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: var(--ob-space-4);
+            cursor: pointer;
+            user-select: none;
+            margin-bottom: var(--ob-space-5);
+            transition: color var(--ob-motion-fast) var(--ob-ease-out);
+        }
+        .ob-disclosure-q {
+            font-family: var(--ob-font-display);
+            font-weight: var(--ob-display-weight-medium);
+            font-size: var(--ob-text-xl);
+            color: var(--ob-text-primary);
+            line-height: 1.2;
+            font-variation-settings: "opsz" 36, "SOFT" var(--ob-display-soft);
+        }
+        .ob-disclosure-q em {
+            font-style: italic;
+            color: var(--ob-accent);
+            font-weight: var(--ob-display-weight-regular);
+        }
+        .ob-disclosure-toggle {
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-xs);
+            color: var(--ob-text-tertiary);
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: var(--ob-space-2);
+            padding-top: var(--ob-space-2);
+        }
+        .ob-disclosure-toggle::after {
+            content: "−";
+            font-size: 1.2em;
+            color: var(--ob-accent);
+            font-family: var(--ob-font-display);
+            font-weight: var(--ob-display-weight-regular);
+        }
+        .ob-disclosure-body {
+            display: grid;
+            grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+            gap: var(--ob-space-10);
+            padding-left: 0;
+        }
+        .ob-disclosure-prose p {
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-sm);
+            line-height: 1.65;
+            color: var(--ob-text-secondary);
+            margin-bottom: var(--ob-space-3);
+        }
+        .ob-disclosure-prose p:last-child { margin-bottom: 0; }
+        .ob-disclosure-link {
+            display: inline-flex;
+            align-items: baseline;
+            gap: var(--ob-space-2);
+            color: var(--ob-accent);
+            text-decoration: none;
+            border-bottom: 1px solid currentColor;
+            padding-bottom: 1px;
+            font-weight: 500;
+            transition: opacity var(--ob-motion-fast) var(--ob-ease-out);
+        }
+        .ob-disclosure-link:hover { opacity: 0.7; }
+        .ob-disclosure-link::after {
+            content: "↗";
+            font-family: var(--ob-font-display);
+            font-style: italic;
+            font-size: 0.9em;
+        }
+        .ob-disclosure-aside {
+            background: var(--ob-surface-card);
+            border-left: 2px solid var(--ob-accent);
+            padding: var(--ob-space-5);
+        }
+        .ob-disclosure-aside-label {
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-xs);
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: var(--ob-text-tertiary);
+            margin-bottom: var(--ob-space-3);
+        }
+        .ob-disclosure-aside-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: var(--ob-space-2);
+        }
+        .ob-disclosure-aside-list li {
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-sm);
+            color: var(--ob-text-secondary);
+            display: flex;
+            align-items: baseline;
+            gap: var(--ob-space-3);
+        }
+        .ob-disclosure-aside-list li::before {
+            content: "✓";
+            color: var(--ob-success);
+            font-weight: 700;
+        }
+
+        /* ── Step nav (back / skip / forward) ────────────────── */
+        .ob-step-nav {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--ob-surface-border);
+            padding-top: var(--ob-space-6);
+            animation: ob-fade-up var(--ob-motion-moment) var(--ob-ease-out) 850ms backwards;
+        }
+        .ob-back {
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-sm);
+            color: var(--ob-text-tertiary);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: var(--ob-space-2);
+            transition: color var(--ob-motion-fast) var(--ob-ease-out);
+        }
+        .ob-back:hover { color: var(--ob-text-primary); }
+        .ob-back::before {
+            content: "←";
+            font-family: var(--ob-font-display);
+            font-style: italic;
+            color: var(--ob-accent);
+        }
+        .ob-skip {
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-sm);
+            color: var(--ob-text-tertiary);
+            text-decoration: none;
+            border-bottom: 1px solid var(--ob-surface-border-emphasis);
+            padding-bottom: 2px;
+            transition: color var(--ob-motion-fast) var(--ob-ease-out),
+                        border-color var(--ob-motion-fast) var(--ob-ease-out);
+        }
+        .ob-skip:hover {
+            color: var(--ob-text-primary);
+            border-color: var(--ob-text-primary);
+        }
+        .ob-skip-arrow {
+            color: var(--ob-accent);
+            font-style: italic;
+            font-family: var(--ob-font-display);
+            margin-left: var(--ob-space-2);
+        }
+
+        /* ── Footer ───────────────────────────────────────────── */
+        .ob-footer {
+            padding: var(--ob-space-6) var(--ob-space-10);
+            border-top: 1px solid var(--ob-surface-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-family: var(--ob-font-body);
+            font-size: var(--ob-text-xs);
+            color: var(--ob-text-quaternary);
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            position: relative;
+            z-index: 2;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(12px);
+        }
+        .ob-footer-meta { display: flex; gap: var(--ob-space-6); }
+        .ob-footer-meta span::before {
+            content: "·";
+            margin-right: var(--ob-space-3);
+            color: var(--ob-accent);
+        }
+        .ob-footer-meta span:first-child::before { content: ""; margin-right: 0; }
+
+        @keyframes ob-fade-up {
+            from { opacity: 0; transform: translateY(20px); filter: blur(2px); }
+            to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+        }
+
+        /* ── Responsive ───────────────────────────────────────── */
+        @media (max-width: 720px) {
+            .ob-header { padding: var(--ob-space-4) var(--ob-space-6); }
+            .ob-step {
+                grid-template-columns: 1fr;
+                gap: var(--ob-space-6);
+                padding: var(--ob-space-12) var(--ob-space-6);
+            }
+            .ob-step-sigil { flex-direction: row; align-items: baseline; gap: var(--ob-space-4); }
+            .ob-step-sigil-label { writing-mode: horizontal-tb; transform: none; margin: 0; }
+            .ob-step-sigil-rule { display: none; }
+            .ob-disclosure-body { grid-template-columns: 1fr; gap: var(--ob-space-6); }
+            .ob-code { font-size: var(--ob-text-sm); flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+    <header class="ob-header">
+        <div class="ob-brand">
+            <div class="ob-brand-mark">AI <em>BlackBox</em></div>
+            <div class="ob-brand-meta">First-run setup</div>
+        </div>
+        <div></div>
+        <div class="ob-progress">
+            <div class="ob-progress-bar-track">
+                <div class="ob-progress-bar"></div>
+            </div>
+            <div class="ob-progress-meta">
+                <span class="ob-progress-step">Step 02 / 07</span>
+                <span>Tailnet</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="ob-step">
+        <aside class="ob-step-sigil" aria-hidden="true">
+            <div class="ob-step-sigil-num"><em>02</em></div>
+            <div class="ob-step-sigil-rule"></div>
+            <div class="ob-step-sigil-label">Tailnet</div>
+        </aside>
+
+        <div class="ob-step-body">
+            <div class="ob-step-eyebrow">Private mesh networking</div>
+
+            <h1 class="ob-step-title">
+                Connect your <em>tailnet</em>.
+            </h1>
+
+            <p class="ob-step-lede">
+                Your BlackBox needs to join your private Tailscale network so your
+                phone, laptop, and any other devices can reach it securely — without
+                exposing anything to the public internet.
+            </p>
+
+            <div class="ob-status" role="status">
+                <span class="ob-status-icon" aria-hidden="true">!</span>
+                <span class="ob-status-label">Tailscale installed — not authenticated</span>
+                <span class="ob-status-detail">v1.84.2</span>
+            </div>
+
+            <div class="ob-action-card">
+                <div class="ob-action-card-header">
+                    <span class="ob-action-card-title">Run on this device</span>
+                    <span class="ob-action-card-os">Ubuntu 24.04 detected</span>
+                </div>
+                <div class="ob-code">
+                    <span class="ob-code-prompt">$</span>
+                    <code class="ob-code-text">sudo tailscale up <em>--ssh</em></code>
+                    <button class="ob-copy-btn" type="button">
+                        <span aria-hidden="true">⎘</span> Copy
+                    </button>
+                </div>
+            </div>
+
+            <div class="ob-cta-row">
+                <button class="ob-cta" type="button">
+                    Re-check status <span class="ob-cta-arrow" aria-hidden="true">↻</span>
+                </button>
+                <button class="ob-secondary" type="button">
+                    Open auth URL in browser
+                </button>
+            </div>
+
+            <details class="ob-disclosure" open>
+                <summary class="ob-disclosure-summary">
+                    <span class="ob-disclosure-q">Don't have a <em>Tailscale</em> account yet?</span>
+                    <span class="ob-disclosure-toggle">Hide</span>
+                </summary>
+                <div class="ob-disclosure-body">
+                    <div class="ob-disclosure-prose">
+                        <p>
+                            Tailscale is a peer-to-peer mesh VPN that gives every device
+                            you own a stable private IP. It's the easiest way to reach
+                            your BlackBox from anywhere — coffee shop, hotel, your phone
+                            on cellular — without opening firewall ports or exposing it
+                            to the public internet.
+                        </p>
+                        <p>
+                            The free Personal plan covers up to 100 devices and 3 users,
+                            which is more than enough for a household. Sign in with
+                            Google, GitHub, Apple, or Microsoft — no separate password.
+                        </p>
+                        <p>
+                            <a href="https://login.tailscale.com/start" target="_blank"
+                               rel="noopener" class="ob-disclosure-link">
+                                Create a free Tailscale account
+                            </a>
+                        </p>
+                    </div>
+                    <aside class="ob-disclosure-aside">
+                        <div class="ob-disclosure-aside-label">Free plan includes</div>
+                        <ul class="ob-disclosure-aside-list">
+                            <li>Up to 100 devices</li>
+                            <li>Up to 3 users</li>
+                            <li>End-to-end WireGuard encryption</li>
+                            <li>MagicDNS &amp; HTTPS certs</li>
+                            <li>SSO via Google, GitHub, Apple</li>
+                        </ul>
+                    </aside>
+                </div>
+            </details>
+
+            <nav class="ob-step-nav" aria-label="Step navigation">
+                <a href="#" class="ob-back">Back to welcome</a>
+                <a href="#" class="ob-skip">
+                    Skip — I'll use LAN-only mode
+                    <span class="ob-skip-arrow" aria-hidden="true">→</span>
+                </a>
+            </nav>
+        </div>
+    </main>
+
+    <footer class="ob-footer">
+        <div>AI BlackBox · v0.9</div>
+        <div class="ob-footer-meta">
+            <span>Hardware: this device</span>
+            <span>Network: LAN ready</span>
+            <span>Tailnet: pending</span>
+        </div>
+    </footer>
+</body>
+</html>
