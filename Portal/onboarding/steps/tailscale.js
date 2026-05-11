@@ -21,6 +21,8 @@
 // Visual reference: Portal/onboarding/_mocks/tailscale.html (shows Branch C
 // with the disclosure expanded).
 
+let recheckBusy = false;
+
 export async function render(container, { next, back, skip }) {
     // Initial loading state
     container.innerHTML = `
@@ -63,16 +65,29 @@ export async function render(container, { next, back, skip }) {
     }
 
     const statusEl = document.getElementById("ob-tailscale-status");
-    const recheck = () => render(container, { next, back, skip });
+
+    // Re-entrancy guard — prevents double-click on Re-check from firing
+    // two concurrent validator probes. The orchestrator's `busy` flag is
+    // held only for the initial render call, not subsequent re-checks
+    // fired from inside the step.
+    const guardedRecheck = async () => {
+        if (recheckBusy) return;
+        recheckBusy = true;
+        try {
+            await render(container, { next, back, skip });
+        } finally {
+            recheckBusy = false;
+        }
+    };
 
     if (result.ok) {
         renderBranchA(statusEl, result, { next, back, skip });
     } else if (typeof result.error === "string" && result.error.includes("binary not found")) {
-        renderBranchB(statusEl, result, { back, skip, recheck });
+        renderBranchB(statusEl, result, { back, skip, recheck: guardedRecheck });
     } else {
         // BackendState mismatch OR any other error → "installed, needs auth".
         // Re-checking is the recovery path.
-        renderBranchC(statusEl, result, { back, skip, recheck });
+        renderBranchC(statusEl, result, { back, skip, recheck: guardedRecheck });
     }
 }
 

@@ -935,8 +935,13 @@ body::after {
 }
 
 /* ── Tailscale step responsive collapse ────────────────────────── */
-@media (max-width: 720px) {
+/* Disclosure two-column grid collapses earlier (matches the 900px
+   breakpoint used elsewhere in this file) to avoid awkward column
+   compression in the 720-900px range. */
+@media (max-width: 900px) {
     .ob-disclosure-body { grid-template-columns: 1fr; gap: var(--ob-space-6); }
+}
+@media (max-width: 720px) {
     .ob-code-block { font-size: var(--ob-text-sm); flex-wrap: wrap; }
     .ob-action-card-header { flex-wrap: wrap; gap: var(--ob-space-2); }
 }
