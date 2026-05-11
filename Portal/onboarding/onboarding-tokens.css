@@ -85,7 +85,15 @@
     --ob-ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
     --ob-ease-in: cubic-bezier(0.55, 0, 1, 0.45);
 
-    /* ── Accent treatments ── */
+    /* ── Accent treatments ──
+     * Audit decision (Brandon, post-T2.0.1 mock preview): the wizard
+     * intentionally collapses warning into the same red as accent and
+     * error. Portal uses a SINGLE attention signal — red — as part of
+     * its identity, and the wizard should match. Semantic token names
+     * (--ob-warning / --ob-warning-soft) are preserved so future code
+     * has a clean hook-point if the warning treatment ever needs to
+     * diverge again.
+     */
     --ob-accent: var(--accent, #ff4a4a);
     --ob-accent-soft: rgba(255, 74, 74, 0.12);
     --ob-accent-glow: 0 0 32px rgba(255, 74, 74, 0.18);
@@ -93,8 +101,8 @@
     --ob-success: #27d980;            /* validation success — green complement */
     --ob-success-soft: rgba(39, 217, 128, 0.12);
     --ob-success-glow: 0 0 24px rgba(39, 217, 128, 0.20);
-    --ob-warning: #ffb84a;
-    --ob-warning-soft: rgba(255, 184, 74, 0.12);
+    --ob-warning: var(--ob-accent);            /* red — single attention signal matching Portal's identity */
+    --ob-warning-soft: var(--ob-accent-soft);  /* red — single attention signal matching Portal's identity */
     --ob-error: #ff4a4a;              /* same as accent — error is primary signal */
     --ob-info: #4dd0e1;
 

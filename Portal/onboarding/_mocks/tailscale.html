@@ -227,14 +227,18 @@
             animation: ob-fade-up var(--ob-motion-moment) var(--ob-ease-out) 350ms backwards;
         }
 
-        /* ── Status badge — "installed but not authenticated" ── */
+        /* ── Status badge — "installed but not authenticated" ──
+         * Uses --ob-warning (which now aliases the red accent per the
+         * audit comment in onboarding-tokens.css) so the badge reads
+         * as Portal's single red attention signal: "stop and look here."
+         */
         .ob-status {
             display: inline-flex;
             align-items: center;
             gap: var(--ob-space-3);
             padding: var(--ob-space-3) var(--ob-space-5);
             background: var(--ob-warning-soft);
-            border: 1px solid rgba(255, 184, 74, 0.3);
+            border: 1px solid rgba(255, 74, 74, 0.3);
             border-left: 3px solid var(--ob-warning);
             font-family: var(--ob-font-body);
             font-size: var(--ob-text-sm);
@@ -327,10 +331,18 @@
             white-space: pre;
             overflow-x: auto;
         }
+        /* Audit decision (Brandon, post-T2.0.1 mock preview): the
+         * `--ssh` flag highlight was dropped. The customer's job here is
+         * "copy this literal command", not "understand the flag taxonomy"
+         * — so an extra color on the flag was decoration. Red would also
+         * have competed with the red `$` prompt sitting two characters to
+         * the left. The <em> wrapper is still in the markup for future
+         * hookability, but renders as plain JetBrains Mono.
+         */
         .ob-code-text em {
-            color: var(--ob-warning);
+            color: inherit;
             font-style: normal;
-            font-weight: 500;
+            font-weight: inherit;
         }
         .ob-copy-btn {
             display: inline-flex;
