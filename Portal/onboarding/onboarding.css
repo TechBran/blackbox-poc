@@ -945,3 +945,194 @@ body::after {
     .ob-code-block { font-size: var(--ob-text-sm); flex-wrap: wrap; }
     .ob-action-card-header { flex-wrap: wrap; gap: var(--ob-space-2); }
 }
+
+/* ════════════════════════════════════════════════════════════════
+ * API keys step (T2.4.1) — provider cards with paste/validate UI
+ * ════════════════════════════════════════════════════════════════
+ *
+ * Classes used by Portal/onboarding/steps/api_keys.js. Three provider
+ * cards (OpenAI, Anthropic, Google) each containing a paste input,
+ * reveal toggle, validate button, and a status pill that animates
+ * between idle / validating / ok / error.
+ *
+ * Visual lineage: extends .ob-status-badge primitives from the
+ * Tailscale block (success/error coloration), but introduces a
+ * lighter "pill" treatment because each card hosts its own status
+ * inline rather than as a step-level banner.
+ *
+ * Twilio intentionally absent from PROVIDERS — Tier-2 deferred to
+ * v1.1 per the 2026-05-11 audit reversal (TG200 cellular handles
+ * phone in v1).
+ */
+
+.ob-providers {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ob-space-4);
+    margin: var(--ob-space-8) 0 var(--ob-space-6);
+}
+
+.ob-provider-card {
+    background: var(--ob-surface-elevated);
+    border: 1px solid var(--ob-surface-border);
+    padding: var(--ob-space-4) var(--ob-space-5);
+    transition: border-color var(--ob-motion-fast) var(--ob-ease-out);
+}
+
+.ob-provider-card:focus-within {
+    border-color: var(--ob-accent);
+}
+
+.ob-provider-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: var(--ob-space-3);
+}
+
+.ob-provider-label {
+    font-family: var(--ob-font-display);
+    font-weight: var(--ob-display-weight-bold);
+    font-size: var(--ob-text-lg);
+    font-variation-settings: "SOFT" var(--ob-display-soft);
+}
+
+.ob-provider-link {
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-xs);
+    color: var(--ob-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    text-decoration: none;
+    border-bottom: 1px solid transparent;
+    transition: border-color var(--ob-motion-fast) var(--ob-ease-out);
+}
+
+.ob-provider-link:hover {
+    border-bottom-color: var(--ob-accent);
+}
+
+.ob-provider-input-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: var(--ob-space-2);
+    align-items: stretch;
+}
+
+.ob-provider-input {
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-sm);
+    background: var(--ob-surface-bg);
+    color: var(--ob-text-primary);
+    border: 1px solid var(--ob-surface-border);
+    padding: var(--ob-space-3) var(--ob-space-4);
+    transition: border-color var(--ob-motion-fast) var(--ob-ease-out);
+    min-width: 0;  /* prevent flex blowout */
+}
+
+.ob-provider-input:focus {
+    outline: none;
+    border-color: var(--ob-accent);
+}
+
+.ob-provider-input:disabled {
+    opacity: 0.6;
+}
+
+.ob-reveal-btn,
+.ob-validate-btn {
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-sm);
+    background: transparent;
+    color: var(--ob-text-primary);
+    border: 1px solid var(--ob-surface-border);
+    padding: 0 var(--ob-space-4);
+    cursor: pointer;
+    transition: all var(--ob-motion-fast) var(--ob-ease-out);
+    white-space: nowrap;
+}
+
+.ob-reveal-btn {
+    width: 2.75rem;
+    padding: 0;
+    font-size: var(--ob-text-base);
+}
+
+.ob-reveal-btn:hover,
+.ob-validate-btn:hover:not(:disabled) {
+    border-color: var(--ob-accent);
+    color: var(--ob-accent);
+}
+
+.ob-validate-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.ob-provider-status {
+    margin-top: var(--ob-space-3);
+    min-height: 1.5em;  /* reserve space so layout doesn't jump */
+}
+
+.ob-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ob-space-2);
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: var(--ob-space-1) var(--ob-space-3);
+    border: 1px solid var(--ob-surface-border);
+}
+
+.ob-status-pill-validating {
+    color: var(--ob-text-secondary);
+    border-color: var(--ob-surface-border-emphasis);
+}
+
+.ob-status-pill-ok {
+    color: var(--ob-success);
+    border-color: var(--ob-success);
+    background: var(--ob-success-soft);
+}
+
+.ob-status-pill-error {
+    color: var(--ob-accent);
+    border-color: var(--ob-accent);
+    background: var(--ob-accent-soft);
+}
+
+.ob-status-pill-glyph {
+    font-weight: 700;
+}
+
+.ob-step-error-inline {
+    margin: var(--ob-space-4) 0;
+    padding: var(--ob-space-3) var(--ob-space-4);
+    color: var(--ob-accent);
+    border: 1px solid var(--ob-accent);
+    background: var(--ob-accent-soft);
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-sm);
+}
+
+/* Focus-visible for new interactive controls */
+.ob-provider-input:focus-visible,
+.ob-reveal-btn:focus-visible,
+.ob-validate-btn:focus-visible {
+    outline: 2px solid var(--ob-text-primary);
+    outline-offset: 4px;
+}
+
+@media (max-width: 720px) {
+    .ob-provider-input-row {
+        grid-template-columns: 1fr auto;
+        grid-template-areas:
+            "input reveal"
+            "validate validate";
+    }
+    .ob-provider-input { grid-area: input; }
+    .ob-reveal-btn { grid-area: reveal; }
+    .ob-validate-btn { grid-area: validate; }
+}
