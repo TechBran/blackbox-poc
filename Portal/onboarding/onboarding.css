@@ -413,6 +413,20 @@ body::after {
         2px 2px 0 var(--ob-text-primary),
         var(--ob-accent-glow);
 }
+/* Disabled state — desaturated, no shadow, no pointer events.
+ * Affects every step with a Save & Continue button (api_keys, operator,
+ * optional_integrations, etc.). Without this rule the disabled DOM state
+ * was visually identical to enabled — confusing UX where the button
+ * looked clickable but did nothing. */
+.ob-cta:disabled,
+.ob-cta[disabled] {
+    background: var(--ob-surface-elevated);
+    color: var(--ob-text-tertiary);
+    cursor: not-allowed;
+    pointer-events: none;
+    box-shadow: none;
+    transform: none;
+}
 .ob-cta-arrow {
     font-family: var(--ob-font-display);
     font-style: italic;
