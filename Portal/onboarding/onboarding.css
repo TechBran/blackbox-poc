@@ -1225,3 +1225,183 @@ body::after {
 .ob-field-label + .ob-provider-input {
     margin-top: var(--ob-space-1);
 }
+
+/* ════════════════════════════════════════════════════════════════
+ * Phone pairing step (T2.6.1) — QR frame + claim/expired states
+ * ════════════════════════════════════════════════════════════════ */
+
+.ob-pair-stage {
+    margin: var(--ob-space-8) 0 var(--ob-space-6);
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--ob-space-6);
+}
+
+/* QR frame: brutalist corner brackets around the image */
+.ob-qr-frame {
+    position: relative;
+    padding: var(--ob-space-6);
+    background: #ffffff;
+    width: 264px;
+    height: 264px;
+    box-shadow: var(--ob-accent-glow);
+    /* The corners are positioned with absolute; the frame is the anchor. */
+}
+
+.ob-qr-img {
+    width: 100%;
+    height: 100%;
+    display: block;
+    image-rendering: pixelated;  /* crisp edges on the QR */
+}
+
+.ob-qr-corner {
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--ob-accent);
+}
+.ob-qr-corner-tl { top: -4px; left: -4px; border-right: none; border-bottom: none; }
+.ob-qr-corner-tr { top: -4px; right: -4px; border-left: none; border-bottom: none; }
+.ob-qr-corner-bl { bottom: -4px; left: -4px; border-right: none; border-top: none; }
+.ob-qr-corner-br { bottom: -4px; right: -4px; border-left: none; border-top: none; }
+
+/* Pair meta — status row + countdown */
+.ob-pair-meta {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ob-space-2);
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-sm);
+}
+
+.ob-pair-status-row {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ob-space-3);
+    color: var(--ob-text-primary);
+}
+
+.ob-pair-pulse {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--ob-accent);
+    box-shadow: 0 0 0 0 var(--ob-accent);
+    animation: ob-pair-pulse 1600ms infinite;
+}
+
+@keyframes ob-pair-pulse {
+    0%   { box-shadow: 0 0 0 0 rgba(204, 0, 0, 0.6); }
+    70%  { box-shadow: 0 0 0 12px rgba(204, 0, 0, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(204, 0, 0, 0); }
+}
+
+.ob-pair-meta-row {
+    display: flex;
+    gap: var(--ob-space-3);
+    align-items: baseline;
+    font-size: var(--ob-text-xs);
+    color: var(--ob-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.ob-pair-countdown {
+    font-variant-numeric: tabular-nums;
+    color: var(--ob-text-secondary);
+}
+
+.ob-pair-error-inline {
+    color: var(--ob-accent);
+    font-size: var(--ob-text-xs);
+    min-height: 1em;
+}
+
+/* Claimed state */
+.ob-pair-claimed {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--ob-space-4);
+    padding: var(--ob-space-6) 0;
+}
+
+.ob-pair-claimed-glyph {
+    font-size: var(--ob-text-3xl);
+    color: var(--ob-success);
+    line-height: 1;
+    text-shadow: var(--ob-success-glow);
+}
+
+.ob-pair-claimed-title {
+    font-family: var(--ob-font-display);
+    font-weight: var(--ob-display-weight-light);
+    font-size: var(--ob-text-2xl);
+    line-height: 1.1;
+    margin: 0;
+}
+
+.ob-pair-claimed-title em {
+    font-style: italic;
+    color: var(--ob-accent);
+}
+
+.ob-pair-claimed-meta {
+    color: var(--ob-text-tertiary);
+    font-size: var(--ob-text-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+/* Expired state */
+.ob-pair-expired {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--ob-space-4);
+    padding: var(--ob-space-6) 0;
+}
+
+.ob-pair-expired-glyph {
+    font-size: var(--ob-text-3xl);
+    color: var(--ob-warning);
+    line-height: 1;
+}
+
+.ob-pair-expired-title {
+    font-family: var(--ob-font-display);
+    font-weight: var(--ob-display-weight-light);
+    font-size: var(--ob-text-2xl);
+    line-height: 1.1;
+    margin: 0;
+}
+
+/* Error state */
+.ob-pair-error {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--ob-space-4);
+    padding: var(--ob-space-6);
+    border: 1px solid var(--ob-accent);
+    background: var(--ob-accent-soft);
+}
+
+.ob-pair-error-glyph {
+    font-size: var(--ob-text-2xl);
+    color: var(--ob-accent);
+}
+
+.ob-pair-error-msg {
+    color: var(--ob-text-primary);
+    font-size: var(--ob-text-sm);
+}
+
+@media (max-width: 720px) {
+    .ob-qr-frame {
+        width: 220px;
+        height: 220px;
+    }
+}
