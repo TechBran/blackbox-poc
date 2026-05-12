@@ -109,6 +109,7 @@ async function renderBranchA(statusEl, result, { next, back, skip }) {
         console.warn("Couldn't persist BLACKBOX_TAILNET_HOSTNAME:", e);
     }
 
+    const portalUrl = `https://${hostname}`;
     statusEl.innerHTML = `
         <div class="ob-status-badge ob-status-badge-success" role="status">
             <span class="ob-status-badge-pip" aria-hidden="true">&check;</span>
@@ -117,11 +118,19 @@ async function renderBranchA(statusEl, result, { next, back, skip }) {
             </span>
             <span class="ob-status-badge-version">${escapeHtml(ip)}</span>
         </div>
-        <p class="ob-step-helper">
-            Your BlackBox is reachable on your tailnet at
-            <code>${escapeHtml(hostname)}</code>.
-            We've saved this so other parts of the system can find it.
-        </p>
+        <div class="ob-tailnet-url-card">
+            <div class="ob-tailnet-url-label">Your Portal URL</div>
+            <div class="ob-tailnet-url-row">
+                <code class="ob-tailnet-url-code">${escapeHtml(portalUrl)}</code>
+                <button type="button" class="ob-copy-btn" data-copy="${escapeHtml(portalUrl)}">
+                    <span aria-hidden="true">&#9112;</span> Copy
+                </button>
+            </div>
+            <p class="ob-tailnet-url-hint">
+                Open this in any browser on a phone, laptop, or other device on
+                your tailnet &mdash; pair the Android app, or just use desktop.
+            </p>
+        </div>
         <div class="ob-cta-row">
             <button type="button" class="ob-cta" id="ob-tailscale-continue">
                 Continue <span class="ob-cta-arrow" aria-hidden="true">&rarr;</span>
@@ -131,6 +140,7 @@ async function renderBranchA(statusEl, result, { next, back, skip }) {
         ${renderStepNav({ showSkip: false })}
     `;
 
+    wireCopyBtn(statusEl);
     document.getElementById("ob-tailscale-continue").addEventListener("click", next);
     wireStepNav(statusEl, { back, skip });
 }

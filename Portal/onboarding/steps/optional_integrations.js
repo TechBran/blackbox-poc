@@ -1,6 +1,11 @@
 // Optional integrations step — fourth screen of the onboarding wizard.
 // Gmail OAuth (active) + Twilio / ElevenLabs (v1.1 deferred placeholders).
 // Save & continue is always enabled — every integration here is optional.
+//
+// Rehydration: on mount we fetch /onboarding/current-config. If
+// GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET are already in .env
+// we render an "Already configured" card with a Replace button instead of
+// empty paste fields. Mirrors the api_keys.js T2.4.1 pattern.
 
 const GMAIL_PROVIDER = {
     id: "gmail",
@@ -28,8 +33,33 @@ const PLACEHOLDER_INTEGRATIONS = [
 let busy = false;
 
 export async function render(container, { next, back, skip }) {
+    // Fetch current config first so we can rehydrate the Gmail card if
+    // GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET are already set.
+    // Fail-open: empty config means render the original empty-input flow.
+    let currentConfig = null;
+    try {
+        const r = await fetch("/onboarding/current-config");
+        if (r.ok) {
+            currentConfig = await r.json();
+        }
+    } catch (e) {
+        currentConfig = null;
+    }
+
+    const gmailCfg = currentConfig?.providers?.gmail || null;
     const state = {
-        gmail: { client_id: "", client_secret: "", status: "idle", result: null },
+        gmail: {
+            client_id: "",
+            client_secret: "",
+            status: "idle",
+            result: null,
+            wasPresent: !!(gmailCfg && gmailCfg.present),
+            // gmail differs from openai/anthropic/google: full client_id is
+            // public per Google OAuth docs, only secret_last4 is redacted.
+            existingClientId: gmailCfg?.client_id || null,
+            secretLast4: gmailCfg?.secret_last4 || null,
+            replacing: false,
+        },
     };
 
     container.innerHTML = `
@@ -52,7 +82,7 @@ export async function render(container, { next, back, skip }) {
                     skip and configure later from the System Menu.
                 </p>
                 <div class="ob-providers" id="ob-integrations">
-                    ${renderGmailCard(GMAIL_PROVIDER)}
+                    ${renderGmailCardForState(GMAIL_PROVIDER, state)}
                     ${PLACEHOLDER_INTEGRATIONS.map(renderPlaceholderCard).join("")}
                 </div>
                 <div class="ob-cta-row">
@@ -72,10 +102,63 @@ export async function render(container, { next, back, skip }) {
         </section>
     `;
 
-    wireGmailCard(container, state, GMAIL_PROVIDER);
+    wireGmailCardForState(container, state, GMAIL_PROVIDER);
     wireSave(container, state, next);
     document.getElementById("ob-extras-back").addEventListener("click", back);
     document.getElementById("ob-extras-skip").addEventListener("click", skip);
+}
+
+// Dispatcher: pick configured-state card or input-state card based on
+// rehydration state.
+function renderGmailCardForState(p, state) {
+    const s = state.gmail;
+    if (s.wasPresent && !s.replacing) {
+        return renderGmailCardConfigured(p, s);
+    }
+    return renderGmailCard(p);
+}
+
+// Configured-state Gmail card: shown when GOOGLE_OAUTH_CLIENT_ID +
+// GOOGLE_OAUTH_CLIENT_SECRET are already in .env. Replace button swaps
+// to the input form via in-place re-render (see startReplacingGmail).
+function renderGmailCardConfigured(p, s) {
+    const clientIdDisplay = s.existingClientId || "(unknown)";
+    const secretPreview = formatSecretPreview(s.secretLast4);
+    return `
+        <div class="ob-provider-card ob-integration-card ob-provider-configured" data-provider="${p.id}">
+            <div class="ob-provider-header">
+                <div class="ob-provider-label">${escapeHtml(p.label)}</div>
+                <a class="ob-provider-link" href="${escapeHtml(p.consoleUrl)}" target="_blank" rel="noopener">
+                    Google Cloud Console <span aria-hidden="true">↗</span>
+                </a>
+            </div>
+            <p class="ob-integration-desc">${escapeHtml(p.description)}</p>
+            <div class="ob-provider-configured-row">
+                <span class="ob-status-pill ob-status-pill-ok">
+                    <span class="ob-status-pill-glyph" aria-hidden="true">&check;</span>
+                    Already configured
+                </span>
+                <button type="button" class="ob-replace-btn" data-provider="${p.id}">Replace</button>
+            </div>
+            <dl class="ob-gmail-configured-detail">
+                <dt>Client ID</dt>
+                <dd><code>${escapeHtml(clientIdDisplay)}</code></dd>
+                <dt>Secret</dt>
+                <dd><code>${escapeHtml(secretPreview)}</code></dd>
+            </dl>
+        </div>
+    `;
+}
+
+// Reduce the server-rendered redacted preview down to a short, readable
+// suffix: 4 leading bullets + the trailing alphanumeric tail (typically the
+// real last 4 characters of the secret).
+function formatSecretPreview(raw) {
+    if (!raw) return "set";
+    const m = String(raw).match(/([A-Za-z0-9_\-]+)$/);
+    const tail = m ? m[1] : "";
+    if (!tail) return "set";
+    return "••••" + tail;
 }
 
 function renderGmailCard(p) {
@@ -149,12 +232,53 @@ function renderPlaceholderCard(p) {
     `;
 }
 
+// Wire either the configured-state Replace button OR the input-state form,
+// depending on which variant is currently rendered.
+function wireGmailCardForState(container, state, p) {
+    const s = state.gmail;
+    if (s.wasPresent && !s.replacing) {
+        const replaceBtn = container.querySelector(
+            `.ob-provider-card[data-provider="${p.id}"] .ob-replace-btn`
+        );
+        if (replaceBtn) {
+            replaceBtn.addEventListener("click", () => startReplacingGmail(p, state, container));
+        }
+        return;
+    }
+    wireGmailCard(container, state, p);
+}
+
+// Swap the Gmail card from configured -> input state when Replace is clicked.
+function startReplacingGmail(p, state, container) {
+    state.gmail.replacing = true;
+    state.gmail.wasPresent = false;
+    state.gmail.existingClientId = null;
+    state.gmail.secretLast4 = null;
+    state.gmail.status = "idle";
+    state.gmail.result = null;
+    state.gmail.client_id = "";
+    state.gmail.client_secret = "";
+
+    const card = container.querySelector(`.ob-provider-card[data-provider="${p.id}"]`);
+    if (card) {
+        const tmp = document.createElement("div");
+        tmp.innerHTML = renderGmailCard(p).trim();
+        const newCard = tmp.firstElementChild;
+        card.replaceWith(newCard);
+        wireGmailCard(container, state, p);
+        const newInput = container.querySelector("#ob-gmail-client-id");
+        if (newInput) newInput.focus();
+    }
+}
+
 function wireGmailCard(container, state, p) {
     const idInput = container.querySelector("#ob-gmail-client-id");
     const secretInput = container.querySelector("#ob-gmail-client-secret");
     const revealBtn = container.querySelector("#ob-gmail-reveal");
     const validateBtn = container.querySelector("#ob-gmail-validate");
     const statusEl = container.querySelector("#ob-gmail-status");
+
+    if (!idInput || !secretInput || !revealBtn || !validateBtn || !statusEl) return;
 
     function updateValidateButton() {
         validateBtn.disabled = !(state.gmail.client_id && state.gmail.client_secret);
@@ -264,6 +388,9 @@ function wireSave(container, state, next) {
         const orig = saveBtn.innerHTML;
         saveBtn.innerHTML = "Saving&hellip;";
 
+        // Only POST Gmail credentials when newly validated. If the customer
+        // is keeping pre-existing creds (wasPresent + !replacing), the keys
+        // already in .env stay untouched.
         const secrets = {};
         if (state.gmail.status === "ok") {
             secrets.GOOGLE_OAUTH_CLIENT_ID = state.gmail.client_id;

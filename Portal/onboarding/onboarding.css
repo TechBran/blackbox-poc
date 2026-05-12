@@ -1258,6 +1258,31 @@ body::after {
     gap: var(--ob-space-3);
 }
 
+/* Configured-state detail list — shown when GOOGLE_OAUTH_CLIENT_ID +
+ * GOOGLE_OAUTH_CLIENT_SECRET are already in .env. Client ID is rendered
+ * in full (it's public per Google OAuth docs); secret is redacted. */
+.ob-gmail-configured-detail {
+    margin: var(--ob-space-3) 0 0;
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--ob-space-2) var(--ob-space-4);
+    font-size: var(--ob-text-xs);
+}
+.ob-gmail-configured-detail dt {
+    color: var(--ob-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+.ob-gmail-configured-detail dd {
+    margin: 0;
+    color: var(--ob-text-primary);
+    overflow-x: auto;
+}
+.ob-gmail-configured-detail dd code {
+    font-family: var(--ob-font-body);
+    word-break: break-all;
+}
+
 .ob-field-label {
     font-family: var(--ob-font-body);
     font-size: var(--ob-text-xs);
@@ -1601,4 +1626,66 @@ body::after {
     padding: var(--ob-space-5) var(--ob-space-12);
     font-size: var(--ob-text-lg);
     margin-top: var(--ob-space-4);
+}
+
+/* ════════════════════════════════════════════════════════════════
+ * Tailnet Portal URL card (Branch A — already configured)
+ * ────────────────────────────────────────────────────────────────
+ * Customer-facing copy block for the full https://<hostname> URL.
+ * Visual lineage: extends the .ob-action-card surface treatment
+ * but skips the dual-row header — this card is one quiet block
+ * with a label, the URL, and a copy button.
+ * ════════════════════════════════════════════════════════════════ */
+.ob-tailnet-url-card {
+    background: var(--ob-surface-elevated);
+    border: 1px solid var(--ob-surface-border);
+    padding: var(--ob-space-4) var(--ob-space-5);
+    margin-bottom: var(--ob-space-6);
+    animation: ob-fade-up var(--ob-motion-moment) var(--ob-ease-out) 450ms backwards;
+}
+
+.ob-tailnet-url-label {
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: var(--ob-text-tertiary);
+    margin-bottom: var(--ob-space-3);
+}
+
+.ob-tailnet-url-row {
+    display: flex;
+    align-items: center;
+    gap: var(--ob-space-4);
+    padding: var(--ob-space-3) var(--ob-space-4);
+    background: var(--ob-surface-code);
+    border: 1px solid var(--ob-surface-border);
+}
+
+.ob-tailnet-url-code {
+    flex: 1;
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-base);
+    color: var(--ob-text-primary);
+    overflow-x: auto;
+    white-space: nowrap;
+    user-select: all;
+}
+
+.ob-tailnet-url-hint {
+    margin: var(--ob-space-3) 0 0;
+    color: var(--ob-text-tertiary);
+    font-size: var(--ob-text-xs);
+    line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+    .ob-tailnet-url-row {
+        flex-wrap: wrap;
+    }
+    .ob-tailnet-url-code {
+        flex: 1 1 100%;
+        white-space: normal;
+        word-break: break-all;
+    }
 }
