@@ -9,12 +9,11 @@
   "app": {
     "windows": [{
       "title": "AI BlackBox Setup",
-      "width": 1280,
-      "height": 800,
-      "fullscreen": false,
-      "resizable": true,
-      "decorations": true,
-      "transparent": false
+      "fullscreen": true,
+      "decorations": false,
+      "transparent": false,
+      "alwaysOnTop": true,
+      "skipTaskbar": false
     }],
     "security": {"csp": null}
   },
