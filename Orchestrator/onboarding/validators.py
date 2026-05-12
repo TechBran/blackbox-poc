@@ -4,8 +4,8 @@ Each validator does a CHEAP call (1 token cost or one cheap metadata API)
 to confirm the supplied credential works. Returns ValidationResult with
 ok/error/latency_ms so the wizard can show clean per-provider feedback.
 
-Tier-1 (v1 wizard): OpenAI, Anthropic, Google, Tailscale, Gmail.
-Tier-2 (v1.1): Twilio, ElevenLabs, Asterisk, xAI, Perplexity.
+Tier-1 (v1 wizard): OpenAI, Anthropic, Google, xAI, Perplexity, Tailscale, Gmail.
+Tier-2 (v1.1): Twilio, ElevenLabs, Asterisk.
 """
 from __future__ import annotations
 
@@ -81,6 +81,52 @@ def validate_google(api_key: str) -> ValidationResult:
         ) as client:
             models = list(client.models.list())
             return {"model_count": len(models)}
+    return _measure(_fn)
+
+
+def validate_xai(api_key: str) -> ValidationResult:
+    """Validate xAI key via cheapest-possible chat completion (1-token completion).
+
+    xAI exposes an OpenAI-compatible API at api.x.ai/v1, so we reuse the openai SDK
+    with a custom base_url. Avoids adding a new SDK dependency.
+    """
+    def _fn():
+        from openai import OpenAI
+        with OpenAI(
+            api_key=api_key,
+            base_url="https://api.x.ai/v1",
+            timeout=10.0,
+            max_retries=0,
+        ) as client:
+            resp = client.chat.completions.create(
+                model="grok-3-mini",
+                max_tokens=1,
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            return {"model": resp.model, "id": resp.id}
+    return _measure(_fn)
+
+
+def validate_perplexity(api_key: str) -> ValidationResult:
+    """Validate Perplexity key via cheapest-possible chat completion (1-token).
+
+    Perplexity exposes an OpenAI-compatible API at api.perplexity.ai. Same SDK
+    reuse pattern as xAI.
+    """
+    def _fn():
+        from openai import OpenAI
+        with OpenAI(
+            api_key=api_key,
+            base_url="https://api.perplexity.ai",
+            timeout=10.0,
+            max_retries=0,
+        ) as client:
+            resp = client.chat.completions.create(
+                model="sonar",
+                max_tokens=1,
+                messages=[{"role": "user", "content": "hi"}],
+            )
+            return {"model": resp.model, "id": resp.id}
     return _measure(_fn)
 
 

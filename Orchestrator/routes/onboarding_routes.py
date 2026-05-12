@@ -29,6 +29,8 @@ ALLOWED_REVEAL_KEYS = {
     "OPENAI_API_KEY",
     "ANTHROPIC_API_KEY",
     "GOOGLE_API_KEY",
+    "XAI_API_KEY",
+    "PERPLEXITY_API_KEY",
     "GOOGLE_OAUTH_CLIENT_ID",
     "GOOGLE_OAUTH_CLIENT_SECRET",
 }
@@ -83,7 +85,7 @@ class CurrentConfigResponse(BaseModel):
 
 
 class ValidateRequest(BaseModel):
-    provider: Literal["openai", "anthropic", "google", "tailscale", "gmail"]
+    provider: Literal["openai", "anthropic", "google", "xai", "perplexity", "tailscale", "gmail"]
     credentials: dict[str, str] = {}  # provider-specific shape; tailscale needs none
 
 
@@ -112,6 +114,7 @@ def current_config() -> CurrentConfigResponse:
     """Return a redacted snapshot of what's configured today. Manage-mode UI reads this."""
     from Orchestrator.config import (
         OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY,
+        XAI_API_KEY, PERPLEXITY_API_KEY,
         GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET,
     )
     val_at = _state.validated_at()
@@ -130,6 +133,16 @@ def current_config() -> CurrentConfigResponse:
             "present": bool(GOOGLE_API_KEY),
             "last4": _redact(GOOGLE_API_KEY),
             "validated_at": val_at.get("google"),
+        },
+        "xai": {
+            "present": bool(XAI_API_KEY),
+            "last4": _redact(XAI_API_KEY),
+            "validated_at": val_at.get("xai"),
+        },
+        "perplexity": {
+            "present": bool(PERPLEXITY_API_KEY),
+            "last4": _redact(PERPLEXITY_API_KEY),
+            "validated_at": val_at.get("perplexity"),
         },
         "gmail": {
             "present": bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET),
@@ -238,6 +251,10 @@ def validate(req: ValidateRequest) -> ValidateResponse:
             result = validators.validate_anthropic(creds["api_key"])
         elif req.provider == "google":
             result = validators.validate_google(creds["api_key"])
+        elif req.provider == "xai":
+            result = validators.validate_xai(creds["api_key"])
+        elif req.provider == "perplexity":
+            result = validators.validate_perplexity(creds["api_key"])
         elif req.provider == "tailscale":
             result = validators.validate_tailscale()
         elif req.provider == "gmail":

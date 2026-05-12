@@ -35,6 +35,20 @@ const PROVIDERS = [
         keyUrl: "https://aistudio.google.com/apikey",
         keyHint: "AIza…",
     },
+    {
+        id: "xai",
+        label: "xAI (Grok)",
+        envVar: "XAI_API_KEY",
+        keyUrl: "https://console.x.ai",
+        keyHint: "xai-…",
+    },
+    {
+        id: "perplexity",
+        label: "Perplexity",
+        envVar: "PERPLEXITY_API_KEY",
+        keyUrl: "https://www.perplexity.ai/settings/api",
+        keyHint: "pplx-…",
+    },
 ];
 
 // Per-instance state — reset on each render() call (which fires when wizard
@@ -354,7 +368,7 @@ function formatDetail(providerId, detail) {
     if (providerId === "openai" || providerId === "google") {
         return detail.model_count ? `${detail.model_count} models` : "";
     }
-    if (providerId === "anthropic") {
+    if (providerId === "anthropic" || providerId === "xai" || providerId === "perplexity") {
         return detail.model ? detail.model : "";
     }
     return "";
