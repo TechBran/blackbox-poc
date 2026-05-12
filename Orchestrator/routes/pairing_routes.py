@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from Orchestrator.config import DEFAULT_OPERATOR
+from Orchestrator.config import BLACKBOX_TAILNET_HOSTNAME, DEFAULT_OPERATOR
 
 logger = logging.getLogger(__name__)
 
@@ -126,15 +126,28 @@ def pair_status(token: str) -> PairStatusResponse:
 def pair_qr(token: str, request: Request):
     """Render PNG QR for a pairing token. Replaces external api.qrserver.com.
 
-    Origin is derived from request.base_url so the QR encodes the URL the
-    Portal was loaded from (Tailscale Magic DNS / LAN / localhost) — phone
-    scanning the QR can reach the same URL via its own network path.
+    Origin selection: prefer BLACKBOX_TAILNET_HOSTNAME (persisted by the
+    onboarding Tailscale step T2.3.1 once validation succeeds). Fall back to
+    request.base_url only when the env is unset (customer skipped Tailscale).
+
+    Why this matters: the QR is consumed by a REMOTE phone, not the local
+    browser. request.base_url reflects whatever URL the local browser used
+    to load the Portal (often http://localhost:9091/ when accessed from the
+    BlackBox itself, or via the wizard at /onboarding/) — the phone can't
+    reach localhost. The tailnet Magic DNS name is the only origin a phone
+    on a different network can hit. Without this preference, scanning the
+    wizard's QR yields a useless localhost URL.
     """
     _purge_expired()
     meta = _pair_tokens.get(token)
     if not meta:
         raise HTTPException(status_code=404, detail="token unknown or expired")
-    origin = str(request.base_url).rstrip('/')
+    if BLACKBOX_TAILNET_HOSTNAME:
+        origin = f"https://{BLACKBOX_TAILNET_HOSTNAME}"
+    else:
+        # No tailnet configured — fall back to request origin (works for LAN
+        # setups where the phone can reach the BlackBox by IP).
+        origin = str(request.base_url).rstrip('/')
     payload = json.dumps({
         "type": "pair",
         "token": token,

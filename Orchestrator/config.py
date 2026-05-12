@@ -333,6 +333,13 @@ PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY", "")
 DEFAULT_OPERATOR = os.getenv("DEFAULT_OPERATOR", "Brandon")
 DEFAULT_ORIGIN = os.getenv("DEFAULT_ORIGIN", "http://localhost:9091")
 
+# Tailnet hostname (set by onboarding T2.3.1 after Tailscale validation succeeds).
+# When present, used to construct the canonical https://<hostname> origin for QR
+# pairing payloads — the local browser may load the Portal at localhost:9091, but
+# a remote phone scanning the QR can ONLY reach the BlackBox via the tailnet
+# Magic DNS name (or LAN IP). Empty string when customer skipped Tailscale.
+BLACKBOX_TAILNET_HOSTNAME = os.getenv("BLACKBOX_TAILNET_HOSTNAME", "").strip()
+
 # Configure Gemini for embeddings
 if GOOGLE_API_KEY:
     genai.configure(api_key=GOOGLE_API_KEY)
