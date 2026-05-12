@@ -1136,3 +1136,92 @@ body::after {
     .ob-reveal-btn { grid-area: reveal; }
     .ob-validate-btn { grid-area: validate; }
 }
+
+/* ════════════════════════════════════════════════════════════════
+ * Optional integrations step (T2.5.1) — Gmail + v1.1 placeholders
+ * ════════════════════════════════════════════════════════════════ */
+
+.ob-integration-card .ob-integration-desc {
+    color: var(--ob-text-secondary);
+    font-size: var(--ob-text-sm);
+    margin: var(--ob-space-2) 0 var(--ob-space-4);
+    line-height: 1.5;
+}
+
+.ob-integration-deferred {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.ob-deferred-pill {
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-xs);
+    color: var(--ob-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: var(--ob-space-1) var(--ob-space-3);
+    border: 1px solid var(--ob-surface-border);
+    border-radius: 0;
+}
+
+.ob-integration-deferred-note {
+    color: var(--ob-text-tertiary);
+    font-size: var(--ob-text-xs);
+    font-style: italic;
+    margin-top: var(--ob-space-3);
+}
+
+.ob-walkthrough {
+    margin-bottom: var(--ob-space-4);
+}
+
+.ob-walkthrough-body {
+    margin-top: var(--ob-space-3);
+    padding: var(--ob-space-4);
+    background: var(--ob-surface-bg);
+    border: 1px solid var(--ob-surface-border);
+}
+
+.ob-walkthrough-steps {
+    margin: 0;
+    padding-left: var(--ob-space-5);
+    color: var(--ob-text-secondary);
+    font-size: var(--ob-text-sm);
+    line-height: 1.6;
+}
+
+.ob-walkthrough-steps li + li {
+    margin-top: var(--ob-space-3);
+}
+
+.ob-walkthrough-steps a {
+    color: var(--ob-accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.ob-walkthrough-steps code {
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-xs);
+    background: var(--ob-surface-elevated);
+    padding: 2px 6px;
+    color: var(--ob-text-primary);
+}
+
+.ob-gmail-fields {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ob-space-3);
+}
+
+.ob-field-label {
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-xs);
+    color: var(--ob-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.ob-field-label + .ob-provider-input {
+    margin-top: var(--ob-space-1);
+}
