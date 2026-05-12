@@ -4,7 +4,7 @@
 fn wait_for_server(url: &str, timeout_secs: u64) -> bool {
     let start = std::time::Instant::now();
     while start.elapsed().as_secs() < timeout_secs {
-        if reqwest::blocking::get(url).is_ok() {
+        if reqwest::blocking::get(url).map(|r| r.status().is_success()).unwrap_or(false) {
             return true;
         }
         std::thread::sleep(std::time::Duration::from_millis(500));
