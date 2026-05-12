@@ -820,6 +820,13 @@ function setupAllHandlers(getOperator, setOperator, clearAudioCache, addCustomOp
     });
     safeSetOnClick("btnClosePair", () => pairModal && pairModal.classList.add("hide"));
 
+    // Manage Setup → re-enter onboarding wizard in manage mode
+    safeSetOnClick("btnManageSetup", () => {
+        // Wizard is the single source of truth for credential management.
+        // ?mode=manage suppresses the auto-redirect-to-/ui in onboarding.js:198.
+        location.href = "/onboarding/?mode=manage";
+    });
+
     // Clear history modal
     safeSetOnClick("ctlClear", () => confirmClearModal && confirmClearModal.classList.remove("hide"));
     safeSetOnClick("btnCancelClear", () => confirmClearModal && confirmClearModal.classList.add("hide"));
