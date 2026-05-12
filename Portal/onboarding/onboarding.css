@@ -1296,6 +1296,146 @@ body::after {
 }
 
 /* ════════════════════════════════════════════════════════════════
+ * Service-account credential card (T2.5.2) — drag-drop JSON file
+ * Sits in optional_integrations between Gmail and Twilio. Three visual
+ * states: empty (drop zone), uploading (spinner), configured (filename
+ * + actions). Reuses .ob-replace-btn + .ob-row-remove from earlier steps.
+ * ════════════════════════════════════════════════════════════════ */
+
+.ob-creds-body {
+    margin-top: var(--ob-space-2);
+}
+
+.ob-creds-dropzone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ob-space-2);
+    padding: var(--ob-space-8) var(--ob-space-5);
+    border: 2px dashed var(--ob-surface-border);
+    background: var(--ob-surface-bg);
+    cursor: pointer;
+    transition: all var(--ob-motion-fast) var(--ob-ease-out);
+}
+
+.ob-creds-dropzone:hover,
+.ob-creds-dropzone.ob-drop-active {
+    border-color: var(--ob-accent);
+    background: var(--ob-accent-soft);
+}
+
+.ob-creds-dropzone:focus-visible {
+    outline: 2px solid var(--ob-text-primary);
+    outline-offset: 4px;
+}
+
+.ob-creds-dropzone-icon {
+    font-family: var(--ob-font-display);
+    font-size: var(--ob-text-2xl);
+    color: var(--ob-text-tertiary);
+    line-height: 1;
+}
+
+.ob-creds-dropzone:hover .ob-creds-dropzone-icon,
+.ob-creds-dropzone.ob-drop-active .ob-creds-dropzone-icon {
+    color: var(--ob-accent);
+}
+
+.ob-creds-dropzone-text {
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-sm);
+    color: var(--ob-text-secondary);
+    text-align: center;
+}
+
+.ob-creds-dropzone-text code {
+    font-family: var(--ob-font-body);
+    background: var(--ob-surface-elevated);
+    padding: 2px 6px;
+    color: var(--ob-text-primary);
+}
+
+.ob-creds-dropzone-hint {
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-xs);
+    color: var(--ob-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+}
+
+.ob-creds-configured {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: var(--ob-space-3);
+    align-items: center;
+    padding: var(--ob-space-4) var(--ob-space-4);
+    background: var(--ob-success-soft);
+    border: 1px solid var(--ob-success);
+}
+
+.ob-creds-configured-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ob-space-1);
+    min-width: 0;
+}
+
+.ob-creds-configured-filename {
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-sm);
+    font-weight: 600;
+    color: var(--ob-text-primary);
+    word-break: break-all;
+}
+
+.ob-creds-configured-meta {
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-xs);
+    color: var(--ob-text-tertiary);
+}
+
+.ob-creds-configured-saline {
+    margin-top: var(--ob-space-1);
+}
+
+.ob-creds-configured-actions {
+    display: flex;
+    gap: var(--ob-space-2);
+    align-items: center;
+}
+
+.ob-creds-error {
+    margin-top: var(--ob-space-3);
+    padding: var(--ob-space-3) var(--ob-space-4);
+    color: var(--ob-accent);
+    background: var(--ob-accent-soft);
+    border: 1px solid var(--ob-accent);
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-sm);
+}
+
+.ob-creds-uploading {
+    text-align: center;
+    color: var(--ob-text-tertiary);
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-sm);
+    font-style: italic;
+    padding: var(--ob-space-8) var(--ob-space-5);
+    border: 2px dashed var(--ob-surface-border);
+    background: var(--ob-surface-bg);
+}
+
+@media (max-width: 720px) {
+    .ob-creds-configured {
+        grid-template-columns: 1fr;
+    }
+    .ob-creds-configured-actions {
+        justify-content: flex-end;
+    }
+}
+
+/* ════════════════════════════════════════════════════════════════
  * Phone pairing step (T2.6.1) — QR frame + claim/expired states
  * ════════════════════════════════════════════════════════════════ */
 

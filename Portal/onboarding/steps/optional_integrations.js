@@ -1,11 +1,13 @@
 // Optional integrations step — fourth screen of the onboarding wizard.
-// Gmail OAuth (active) + Twilio / ElevenLabs (v1.1 deferred placeholders).
+// Gmail OAuth (active) + Google Cloud service-account file (active) +
+// Twilio / ElevenLabs (v1.1 deferred placeholders).
 // Save & continue is always enabled — every integration here is optional.
 //
-// Rehydration: on mount we fetch /onboarding/current-config. If
-// GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET are already in .env
-// we render an "Already configured" card with a Replace button instead of
-// empty paste fields. Mirrors the api_keys.js T2.4.1 pattern.
+// Rehydration: on mount we fetch /onboarding/current-config + /onboarding/credentials.
+// If GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET are already in .env
+// we render an "Already configured" Gmail card with a Replace button. If a
+// service-account JSON is in credentials/ + linked via GOOGLE_APPLICATION_CREDENTIALS
+// we render the credential card in its configured state with Replace + Remove.
 
 const GMAIL_PROVIDER = {
     id: "gmail",
@@ -13,6 +15,15 @@ const GMAIL_PROVIDER = {
     description: "Read your Gmail inbox so the AI can help triage emails, draft replies, and surface calendar invites.",
     consoleUrl: "https://console.cloud.google.com/apis/credentials",
     docsUrl: "https://developers.google.com/workspace/guides/create-credentials#oauth-client-id",
+};
+
+// Sits next to Gmail since both relate to Google services. Distinct from
+// API keys: this is a JSON FILE upload (drag-drop), not a key paste.
+const CREDENTIAL_PROVIDER = {
+    id: "google-service-account",
+    label: "Google Cloud Service Account",
+    description: "JSON service-account key for Google Cloud TTS, Vertex AI, and other GCP-authenticated services. Drop the .json file you downloaded from the Google Cloud Console.",
+    consoleUrl: "https://console.cloud.google.com/iam-admin/serviceaccounts",
 };
 
 const PLACEHOLDER_INTEGRATIONS = [
@@ -33,17 +44,20 @@ const PLACEHOLDER_INTEGRATIONS = [
 let busy = false;
 
 export async function render(container, { next, back, skip }) {
-    // Fetch current config first so we can rehydrate the Gmail card if
-    // GOOGLE_OAUTH_CLIENT_ID + GOOGLE_OAUTH_CLIENT_SECRET are already set.
-    // Fail-open: empty config means render the original empty-input flow.
+    // Fetch current config + credentials in parallel — both inform rehydrate
+    // state for the Gmail card and the service-account credential card.
+    // Fail-open: empty responses mean render the original empty-input flow.
     let currentConfig = null;
+    let credsResp = null;
     try {
-        const r = await fetch("/onboarding/current-config");
-        if (r.ok) {
-            currentConfig = await r.json();
-        }
+        const [cfgR, credR] = await Promise.all([
+            fetch("/onboarding/current-config"),
+            fetch("/onboarding/credentials"),
+        ]);
+        if (cfgR.ok) currentConfig = await cfgR.json();
+        if (credR.ok) credsResp = await credR.json();
     } catch (e) {
-        currentConfig = null;
+        // Fail-open — keep nulls and render empty-input variants.
     }
 
     const gmailCfg = currentConfig?.providers?.gmail || null;
@@ -59,6 +73,12 @@ export async function render(container, { next, back, skip }) {
             existingClientId: gmailCfg?.client_id || null,
             secretLast4: gmailCfg?.secret_last4 || null,
             replacing: false,
+        },
+        creds: {
+            files: credsResp?.files || [],
+            activeCreds: credsResp?.google_application_credentials || null,
+            uploading: false,
+            error: null,
         },
     };
 
@@ -83,6 +103,7 @@ export async function render(container, { next, back, skip }) {
                 </p>
                 <div class="ob-providers" id="ob-integrations">
                     ${renderGmailCardForState(GMAIL_PROVIDER, state)}
+                    ${renderCredCard(CREDENTIAL_PROVIDER, state)}
                     ${PLACEHOLDER_INTEGRATIONS.map(renderPlaceholderCard).join("")}
                 </div>
                 <div class="ob-cta-row">
@@ -103,6 +124,7 @@ export async function render(container, { next, back, skip }) {
     `;
 
     wireGmailCardForState(container, state, GMAIL_PROVIDER);
+    wireCredCard(container, state, CREDENTIAL_PROVIDER);
     wireSave(container, state, next);
     document.getElementById("ob-extras-back").addEventListener("click", back);
     document.getElementById("ob-extras-skip").addEventListener("click", skip);
@@ -230,6 +252,244 @@ function renderPlaceholderCard(p) {
             <p class="ob-integration-deferred-note">${escapeHtml(p.v1_1_note)}</p>
         </div>
     `;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Service-account credential card (T2.5.2) — drag-drop JSON file upload
+// ─────────────────────────────────────────────────────────────────────────
+
+// Find the file in state.creds.files that matches GOOGLE_APPLICATION_CREDENTIALS.
+// We compare by basename since the env var stores an absolute path while the
+// list response carries filenames only.
+function findActiveCredFile(state) {
+    if (!state.creds.activeCreds) return null;
+    const activeBasename = state.creds.activeCreds.split("/").pop();
+    return state.creds.files.find(f => f.filename === activeBasename) || null;
+}
+
+function renderCredCard(p, state) {
+    const active = findActiveCredFile(state);
+    return `
+        <div class="ob-provider-card ob-integration-card ob-credential-card" data-provider="${p.id}">
+            <div class="ob-provider-header">
+                <div class="ob-provider-label">${escapeHtml(p.label)}</div>
+                <a class="ob-provider-link" href="${escapeHtml(p.consoleUrl)}" target="_blank" rel="noopener">
+                    Google Cloud Console <span aria-hidden="true">↗</span>
+                </a>
+            </div>
+            <p class="ob-integration-desc">${escapeHtml(p.description)}</p>
+            <div class="ob-creds-body">
+                ${renderCredCardBody(state, active)}
+            </div>
+            <input type="file" id="ob-creds-file-picker" accept="application/json,.json" hidden />
+        </div>
+    `;
+}
+
+// The body of the credential card swaps between three visual states:
+// uploading (spinner), configured (filename + actions), or empty (drop-zone).
+// Errors are appended below regardless of state.
+function renderCredCardBody(state, active) {
+    if (state.creds.uploading) {
+        return `<div class="ob-creds-uploading">Uploading&hellip;</div>`;
+    }
+    const errorBlock = state.creds.error
+        ? `<div class="ob-creds-error">${escapeHtml(state.creds.error)}</div>`
+        : "";
+    if (active) {
+        const sizeKb = (active.size_bytes / 1024).toFixed(1);
+        const saPip = active.is_google_service_account
+            ? `<span class="ob-status-pill ob-status-pill-ok">
+                   <span class="ob-status-pill-glyph" aria-hidden="true">&check;</span>
+                   Service account
+               </span>`
+            : `<span class="ob-status-pill ob-status-pill-error">
+                   <span class="ob-status-pill-glyph" aria-hidden="true">!</span>
+                   Not a service account
+               </span>`;
+        return `
+            <div class="ob-creds-configured">
+                <div class="ob-creds-configured-info">
+                    <span class="ob-creds-configured-filename">${escapeHtml(active.filename)}</span>
+                    <span class="ob-creds-configured-meta">${sizeKb} KB &middot; linked to GOOGLE_APPLICATION_CREDENTIALS</span>
+                    <span class="ob-creds-configured-saline">${saPip}</span>
+                </div>
+                <div class="ob-creds-configured-actions">
+                    <button type="button" class="ob-replace-btn" data-creds-action="replace">Replace</button>
+                    <button type="button" class="ob-row-remove" data-creds-action="remove" data-filename="${escapeHtml(active.filename)}" aria-label="Remove ${escapeHtml(active.filename)}">×</button>
+                </div>
+            </div>
+            ${errorBlock}
+        `;
+    }
+    // Empty state: show drop zone.
+    return `
+        <div class="ob-creds-dropzone" tabindex="0" role="button" aria-label="Drop or browse for a service account JSON file">
+            <span class="ob-creds-dropzone-icon" aria-hidden="true">+</span>
+            <span class="ob-creds-dropzone-text">
+                Drag a service account <code>.json</code> file here
+            </span>
+            <span class="ob-creds-dropzone-hint">or click to browse</span>
+        </div>
+        ${errorBlock}
+    `;
+}
+
+// Re-render the body subtree in place. Saves a full card teardown on every
+// state transition (drop → uploading → configured).
+function rerenderCredBody(container, state, p) {
+    const card = container.querySelector(`.ob-credential-card[data-provider="${p.id}"]`);
+    if (!card) return;
+    const body = card.querySelector(".ob-creds-body");
+    if (!body) return;
+    const active = findActiveCredFile(state);
+    body.innerHTML = renderCredCardBody(state, active);
+    wireCredCardBody(container, state, p);
+}
+
+// Wire the entire card: file picker + drop zone + configured-state actions.
+// Called once on mount, then again each time the body re-renders.
+function wireCredCard(container, state, p) {
+    wireCredCardBody(container, state, p);
+
+    // File picker is rendered ONCE at the card root and not destroyed by
+    // body re-renders. Wire it once.
+    const card = container.querySelector(`.ob-credential-card[data-provider="${p.id}"]`);
+    if (!card) return;
+    const filePicker = card.querySelector("#ob-creds-file-picker");
+    if (filePicker) {
+        filePicker.addEventListener("change", async (e) => {
+            const file = e.target.files && e.target.files[0];
+            // Reset the input value so picking the SAME file twice still fires change.
+            e.target.value = "";
+            if (file) await uploadCredentialFile(file, container, state, p);
+        });
+    }
+}
+
+function wireCredCardBody(container, state, p) {
+    const card = container.querySelector(`.ob-credential-card[data-provider="${p.id}"]`);
+    if (!card) return;
+
+    // Drop zone (empty state)
+    const dropZone = card.querySelector(".ob-creds-dropzone");
+    const filePicker = card.querySelector("#ob-creds-file-picker");
+    if (dropZone && filePicker) {
+        dropZone.addEventListener("click", () => filePicker.click());
+        dropZone.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                filePicker.click();
+            }
+        });
+        dropZone.addEventListener("dragover", (e) => {
+            e.preventDefault();
+            dropZone.classList.add("ob-drop-active");
+        });
+        dropZone.addEventListener("dragleave", () => {
+            dropZone.classList.remove("ob-drop-active");
+        });
+        dropZone.addEventListener("drop", async (e) => {
+            e.preventDefault();
+            dropZone.classList.remove("ob-drop-active");
+            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (!file) return;
+            if (!file.name.toLowerCase().endsWith(".json")) {
+                state.creds.error = "Only .json files are accepted.";
+                rerenderCredBody(container, state, p);
+                return;
+            }
+            await uploadCredentialFile(file, container, state, p);
+        });
+    }
+
+    // Configured-state actions: Replace + Remove
+    const replaceBtn = card.querySelector('[data-creds-action="replace"]');
+    if (replaceBtn) {
+        replaceBtn.addEventListener("click", () => filePicker && filePicker.click());
+    }
+    const removeBtn = card.querySelector('[data-creds-action="remove"]');
+    if (removeBtn) {
+        removeBtn.addEventListener("click", () => {
+            const filename = removeBtn.dataset.filename;
+            removeCredentialFile(filename, container, state, p);
+        });
+    }
+}
+
+async function uploadCredentialFile(file, container, state, p) {
+    if (state.creds.uploading) return;
+    state.creds.uploading = true;
+    state.creds.error = null;
+    rerenderCredBody(container, state, p);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+        const r = await fetch("/onboarding/credentials/upload", {
+            method: "POST",
+            body: formData,
+        });
+        let result = null;
+        try {
+            result = await r.json();
+        } catch (_) {
+            result = null;
+        }
+        if (!r.ok) {
+            state.creds.error = (result && result.detail) || `Upload failed (HTTP ${r.status})`;
+        } else {
+            await reloadCreds(state);
+            state.creds.error = null;
+        }
+    } catch (e) {
+        state.creds.error = `Network error: ${e.message}`;
+    } finally {
+        state.creds.uploading = false;
+        rerenderCredBody(container, state, p);
+    }
+}
+
+async function removeCredentialFile(filename, container, state, p) {
+    if (!filename) return;
+    const ok = window.confirm(
+        `Remove ${filename}? This will also clear GOOGLE_APPLICATION_CREDENTIALS if it points to this file.`
+    );
+    if (!ok) return;
+    try {
+        const r = await fetch(`/onboarding/credentials/${encodeURIComponent(filename)}`, {
+            method: "DELETE",
+        });
+        if (!r.ok) {
+            let detail = `HTTP ${r.status}`;
+            try {
+                const j = await r.json();
+                if (j.detail) detail = j.detail;
+            } catch (_) { /* ignore */ }
+            state.creds.error = `Remove failed: ${detail}`;
+        } else {
+            await reloadCreds(state);
+            state.creds.error = null;
+        }
+    } catch (e) {
+        state.creds.error = `Network error: ${e.message}`;
+    } finally {
+        rerenderCredBody(container, state, p);
+    }
+}
+
+async function reloadCreds(state) {
+    try {
+        const r = await fetch("/onboarding/credentials");
+        if (r.ok) {
+            const data = await r.json();
+            state.creds.files = data.files || [];
+            state.creds.activeCreds = data.google_application_credentials || null;
+        }
+    } catch (_) {
+        // Leave existing state on transient failure; error block will surface
+        // anything caller stuffed into state.creds.error.
+    }
 }
 
 // Wire either the configured-state Replace button OR the input-state form,

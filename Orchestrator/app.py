@@ -116,6 +116,9 @@ app.include_router(pairing_router)
 from Orchestrator.routes.onboarding_routes import router as onboarding_router
 app.include_router(onboarding_router)
 
+from Orchestrator.routes.credentials_routes import router as credentials_router
+app.include_router(credentials_router)
+
 # =============================================================================
 # First-run middleware: redirect /ui index → /onboarding/ when wizard incomplete
 # =============================================================================
