@@ -2726,369 +2726,165 @@ git add Portal/onboarding/onboarding.css
 git commit -m "style(portal-ob): apply BlackBox brand — dark glass, accent gradient, smooth transitions"
 ```
 
-## Phase 2.10: Manage-mode UI (NEW per audit 2026-05-10)
+## Phase 2.10: Manage-mode entry points (REVISED 2026-05-12)
 
-**Goal:** Re-entrant maintenance UI accessible from Portal System Menu and the Tauri desktop launcher. Same wizard codebase + `?mode=manage` URL parameter — each step component supports rendering its current state with reveal/edit/remove controls.
+**REVISION NOTE — REPLACES the original 8-task Phase 2.10 from the 2026-05-10 audit.**
 
-**Design reference (chose by Brandon during audit):**
-- Layout: step-grid landing page with status badges (✓/⚠/⊘) — clicking a step opens its edit UI
-- Sensitive values: full reveal with masking toggle (eye icon) — bullet-mask by default, reveal on click
-- Entry points: (a) Portal System Menu → "Manage Setup" button, (b) Tauri persistent desktop launcher (separate from autostart)
+The original Phase 2.10 designed a separate manage-mode UI: step-grid landing page (`manage_landing.js`), per-step "current state" headers, dedicated reveal-toggle component, separate re-validate / replace / remove handlers. That entire surface area is **dropped** in favor of a thin-client architecture.
 
-### Task 2.10.1: Mode parameter handling + manage landing page
+**Why dropped:** The Track 2 wizard plus the 2026-05-12 foundation refinements already do everything the original Phase 2.10 designed:
 
-**Files:**
-- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/onboarding.js`
-- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/manage_landing.js`
+- Each step rehydrates from `/onboarding/current-config` showing `Already configured ••••XXXX [Replace]` (T2.4.1 + T2.4.2)
+- Operator step has per-row [×] (T2.7.2)
+- Service-account JSON has Replace + Remove on its card (T2.5.2)
+- All 5 LLM keys (T2.4.2) + Gmail OAuth (T2.5.1) rehydrate
+- Backend endpoints `/onboarding/current-config`, `/onboarding/config/{key}?reveal=true`, `DELETE /onboarding/config/{key}`, `DELETE /operator/{name}` are all live
+- `?mode=manage` URL param parsing (`onboarding.js:26`) and the auto-redirect skip when `MODE === "manage"` (`onboarding.js:198`) are **already in place** — zero changes needed to the wizard itself
 
-**Step 1: Read `?mode=` from URL in `onboarding.js`:**
+**The wizard IS the manage UI.** It just needs entry points.
 
-```javascript
-const params = new URLSearchParams(location.search);
-const MODE = params.get("mode") === "manage" ? "manage" : "setup";
-```
+**Architectural decision LOCKED 2026-05-12 (Brandon):**
 
-**Step 2: In manage mode, replace linear flow with step-grid landing.** At the bottom of the IIFE in `onboarding.js`:
+> "We don't want to end up having to manage both portions. If we only manage and update and maintain the onboarding, that's it. We don't want the Android app to not get updated for a new onboarding step and then if there's friction there."
 
-```javascript
-(async () => {
-    if (MODE === "manage") {
-        const r = await fetch("/onboarding/current-config");
-        const config = await r.json();
-        const mod = await import("./manage_landing.js");
-        mod.render(document.getElementById("ob-step-container"), {config, openStep: (name) => {
-            currentStepIdx = STEPS.indexOf(name);
-            renderStep({mode: "manage"});  // step components see mode flag
-        }});
-        return;
-    }
-    // setup mode: existing flow
-    await fetchState();
-    if (state.is_complete) { location.href = "/ui"; return; }
-    await renderStep({mode: "setup"});
-})();
-```
+**The DRY-across-surfaces principle:** Both Portal Web and Portal Android become *thin clients* that just open `/onboarding/?mode=manage`. They never re-implement credential management. Any future onboarding step (new LLM provider, Twilio in v1.1, anything else) automatically appears in manage-mode on both platforms — there is only one UI to update.
 
-**Step 3: Write `manage_landing.js`:**
+**Goal:** Add "Manage Setup" entry points to Portal Web System Controls and Portal Android System Controls. The wizard's existing `?mode=manage` behavior handles the rest.
 
-```javascript
-export function render(container, {config, openStep}) {
-    const cards = [
-        {step: "tailscale", label: "Tailscale", state: config.tailscale.configured ? "✓" : "⊘",
-         summary: config.tailscale.detail.hostname || "Skipped"},
-        {step: "api_keys", label: "API Keys", state: countConfigured(config.providers, ["openai","anthropic","google"]) > 0 ? "✓" : "⊘",
-         summary: `${countConfigured(config.providers, ["openai","anthropic","google"])} of 3 providers`},
-        {step: "optional_integrations", label: "Gmail", state: config.providers.gmail.present ? "✓" : "⊘",
-         summary: config.providers.gmail.client_id ? "OAuth client configured" : "Skipped"},
-        {step: "pair_phone", label: "Paired Devices", state: config.paired_devices.length > 0 ? "✓" : "⊘",
-         summary: config.paired_devices.length ? config.paired_devices.map(d=>d.name).join(", ") : "None"},
-        {step: "operator", label: "Operators", state: config.operators.length > 0 ? "✓" : "⊘",
-         summary: config.operators.length ? config.operators.join(", ") : "None"},
-    ];
-    container.innerHTML = `
-        <section class="ob-step ob-manage-landing">
-            <h1 class="ob-step-title">Setup Status</h1>
-            <p class="ob-step-lede">Click any step to review or update.</p>
-            <div class="ob-manage-grid">
-                ${cards.map(c => `
-                    <button class="ob-manage-card ob-card-${c.state === '✓' ? 'ok' : c.state === '⚠' ? 'warn' : 'empty'}"
-                            data-step="${c.step}">
-                        <div class="ob-card-state">${c.state} ${c.label}</div>
-                        <div class="ob-card-summary">${c.summary}</div>
-                    </button>
-                `).join("")}
-            </div>
-            <button class="ob-btn ob-btn-secondary" id="ob-manage-close">Close</button>
-        </section>
-    `;
-    container.querySelectorAll(".ob-manage-card").forEach(btn => {
-        btn.addEventListener("click", e => openStep(e.currentTarget.dataset.step));
-    });
-    container.querySelector("#ob-manage-close").addEventListener("click", () => {
-        location.href = "/ui";
-    });
-}
+**Estimated effort:** 30-60 minutes total.
 
-function countConfigured(providers, keys) {
-    return keys.filter(k => providers[k]?.present).length;
-}
-```
+### Task 2.10.1: Portal Web — "Manage Setup" button in Advanced Settings
 
-**Step 4: Hide footer (back/next/skip) in manage mode** — `onboarding.js`:
-
-```javascript
-if (MODE === "manage") {
-    document.querySelector(".ob-footer").style.display = "none";
-    document.querySelector(".ob-progress").style.display = "none";
-}
-```
-
-**Step 5: Test**
-
-```bash
-# Visit /onboarding/?mode=manage in browser; confirm step grid renders with status badges
-# Click "API Keys" card; confirm individual step UI loads (edit mode)
-```
-
-**Step 6: Commit**
-
-```bash
-git add Portal/onboarding/onboarding.js Portal/onboarding/manage_landing.js
-git commit -m "feat(portal-ob): manage-mode landing page — step grid with status badges"
-```
-
-### Task 2.10.2: Per-step manage-mode rendering with current state header
+**Placement decision (Brandon, 2026-05-12):** mirror the Android position — directly after the existing pair-device button. On Android that button is in the top-level System Controls FlowRow; on Portal Web the equivalent (`ctlPair` "Pair Device") lives inside the Advanced Settings collapsible drawer at `Portal/index.html:732`. Place Manage Setup right after `ctlPair` in that drawer. Customers reach it via hamburger → System Menu → 🔧 Advanced Settings (expand) → ⚙️ Manage Setup.
 
 **Files:**
-- Modify: ALL of `Portal/onboarding/steps/*.js` (api_keys.js, tailscale.js, phone.js, optional_integrations.js, pair_phone.js, operator.js)
 
-**Step 1: Each step component's `render(container, {state, next, back, skip, mode, config})` checks `mode` and prepends a current-state header in manage mode.** Example for `api_keys.js`:
+- Modify: `Portal/index.html` (Advanced Settings grid — insert between `ctlPair` line 732 and `ctlMint` line 733)
+- Modify: `Portal/index-modular.html` (mirror Advanced Settings grid — insert between `ctlPair` line 452 and `ctlMint` line 453)
+- Modify: `Portal/modules/ui-setup.js` (existing System Menu click-handler module — uses `safeSetOnClick(id, fn)` helper; see existing wiring of `ctlClear` at line 824 for the pattern)
 
-```javascript
-export async function render(container, {next, mode = "setup", config}) {
-    const isManage = mode === "manage";
-    const header = isManage ? `
-        <div class="ob-manage-header">
-            <h2>API Keys</h2>
-            ${["openai","anthropic","google"].map(p => `
-                <div class="ob-current-row">
-                    <span class="ob-provider-name">${p.charAt(0).toUpperCase() + p.slice(1)}:</span>
-                    ${config.providers[p].present ? `
-                        <span class="ob-status">✓</span>
-                        <span class="ob-key-mask" data-provider="${p}" data-key-name="${p.toUpperCase()}_API_KEY">
-                            ${config.providers[p].last4 || "••••••••"}
-                        </span>
-                        <button class="ob-btn-icon ob-reveal" data-provider="${p}" data-key-name="${p.toUpperCase()}_API_KEY">👁</button>
-                        <span class="ob-validated">${formatValidated(config.providers[p].validated_at)}</span>
-                        <button class="ob-btn-text ob-revalidate" data-provider="${p}">Re-validate</button>
-                        <button class="ob-btn-text ob-replace" data-provider="${p}">Replace</button>
-                        <button class="ob-btn-text ob-remove" data-provider="${p}" data-key-name="${p.toUpperCase()}_API_KEY">Remove</button>
-                    ` : `
-                        <span class="ob-status">⊘ Not configured</span>
-                        <button class="ob-btn-text ob-add" data-provider="${p}">Add key</button>
-                    `}
-                </div>
-            `).join("")}
-        </div>
-    ` : "";
-    container.innerHTML = header + /* original setup-mode form */;
-    if (isManage) wireManageHandlers(container, config, /* refresh callback */);
-    // ... existing form-wiring
-}
-```
-
-**Step 2: Repeat the pattern for each step component.** Each step knows its own provider keys and current state. The "Replace" button shows the same paste field but pre-filled empty (just collects new value).
-
-**Step 3: Commit (one commit per step component to keep diffs small)**
-
-```bash
-git add Portal/onboarding/steps/api_keys.js
-git commit -m "feat(portal-ob): api_keys step manage-mode rendering with current state header"
-# repeat for tailscale.js, phone.js, etc.
-```
-
-### Task 2.10.3: Reveal/mask toggle component
-
-**Files:**
-- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/onboarding/components/reveal_toggle.js`
-
-**Step 1: Write the toggle helper:**
-
-```javascript
-/** Wire eye-icon toggles to fetch full secret on demand and swap mask ↔ cleartext.
- * Buttons must have data-key-name (env var name) and a sibling .ob-key-mask element.
- */
-export function wireRevealToggles(container) {
-    container.querySelectorAll(".ob-reveal").forEach(btn => {
-        btn.addEventListener("click", async () => {
-            const keyName = btn.dataset.keyName;
-            const maskEl = btn.parentElement.querySelector(".ob-key-mask");
-            const isRevealed = btn.dataset.revealed === "true";
-            if (isRevealed) {
-                // Re-mask
-                maskEl.textContent = maskEl.dataset.masked;
-                btn.textContent = "👁";
-                btn.dataset.revealed = "false";
-            } else {
-                // Reveal — fetch full value
-                const r = await fetch(`/onboarding/config/${keyName}?reveal=1`);
-                if (!r.ok) {
-                    console.error("reveal failed", await r.text());
-                    return;
-                }
-                const data = await r.json();
-                maskEl.dataset.masked = maskEl.textContent;  // remember mask for re-mask
-                maskEl.textContent = data.value;
-                btn.textContent = "🙈";
-                btn.dataset.revealed = "true";
-            }
-        });
-    });
-}
-```
-
-**Step 2: Import + call from each step's wireManageHandlers.**
-
-**Step 3: Test**
-
-```bash
-# In browser at /onboarding/?mode=manage → API Keys
-# Click eye next to OpenAI key — full key shows
-# Click again — mask returns
-```
-
-**Step 4: Commit**
-
-```bash
-git add Portal/onboarding/components/reveal_toggle.js
-git commit -m "feat(portal-ob): reveal toggle — eye icon swaps masked ↔ cleartext on demand"
-```
-
-### Task 2.10.4: Re-validate / Replace / Remove handlers
-
-**Files:**
-- Modify: each step component to wire the per-provider buttons
-
-**Step 1: Re-validate handler:**
-
-```javascript
-async function onRevalidate(provider) {
-    const r = await fetch("/onboarding/validate", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({provider, credentials: {}}),  // server reads from env
-    });
-    const result = await r.json();
-    showInlineToast(result.ok ? `${provider} ✓ ${result.latency_ms}ms` : `${provider} ✗ ${result.error}`);
-}
-```
-
-**Note:** /onboarding/validate currently expects credentials in the body. For manage-mode re-validation with existing-on-disk keys, either: (a) pre-fetch the cleartext via reveal endpoint and pass it; or (b) extend /validate to accept `{provider, use_existing: true}` and read from env on the server side. Option (b) is cleaner — add it as part of this task.
-
-**Step 2: Replace handler** — opens a small modal with the same paste/validate UI as setup mode, then on save POSTs `/onboarding/save` with just that one key.
-
-**Step 3: Remove handler:**
-
-```javascript
-async function onRemove(keyName) {
-    if (!confirm(`Remove ${keyName}? This won't delete the .env backup.`)) return;
-    const r = await fetch(`/onboarding/config/${keyName}`, {method: "DELETE"});
-    const result = await r.json();
-    if (result.ok) {
-        showInlineToast(`Removed ${keyName}`);
-        location.reload();  // refresh manage-landing card states
-    }
-}
-```
-
-**Step 4: Test all three button paths in browser.**
-
-**Step 5: Commit**
-
-```bash
-git add Portal/onboarding/steps/*.js Orchestrator/routes/onboarding_routes.py
-git commit -m "feat(portal-ob): manage-mode re-validate / replace / remove handlers"
-```
-
-### Task 2.10.5: Portal Web — Add "Manage Setup" button to System Menu
-
-**Files:**
-- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/index.html` (settings modal)
-- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Portal/modules/ui-setup.js` (settings menu wire-up)
-
-**Step 1: Add a button in the System section of the settings modal:**
+**Step 1: Add the button in `Portal/index.html` Advanced Settings drawer.** Insert after `ctlPair` (line 732) and before `ctlMint` (line 733):
 
 ```html
-<button id="settings-manage-setup" class="settings-btn">Manage Setup</button>
+<button id="btnManageSetup" class="btn" title="Manage API keys, operators, and integrations">⚙️ Manage Setup</button>
 ```
 
-**Step 2: Wire it in `ui-setup.js`:**
+Mirror the same insertion in `Portal/index-modular.html` between `ctlPair` (line 452) and `ctlMint` (line 453).
+
+**Step 2: Wire the click handler in `Portal/modules/ui-setup.js`.** Find the existing `safeSetOnClick("ctlClear", ...)` line (around line 824) and add a sibling call:
 
 ```javascript
-document.getElementById("settings-manage-setup").addEventListener("click", () => {
+safeSetOnClick("btnManageSetup", () => {
+    // Wizard is the single source of truth for credential management.
+    // ?mode=manage suppresses the auto-redirect-to-/ui that fires when sentinel exists
+    // (see onboarding.js:198).
     location.href = "/onboarding/?mode=manage";
 });
 ```
 
-**Step 3: Test in browser** — open Portal, hamburger → System → Manage Setup → confirms wizard opens in manage mode.
+**Step 3: Verify in browser** — open Portal at `http://localhost:9091/ui`, hamburger → System Menu → 🔧 Advanced Settings (expand) → "⚙️ Manage Setup". The wizard opens at `/onboarding/?mode=manage`. Confirm:
+
+- URL has `?mode=manage` query param
+- Wizard does NOT auto-redirect back to /ui (this is the manage-mode behavior already in `onboarding.js:198`)
+- Step components render with rehydrated current state ("Already configured ••••XXXX [Replace]" on configured providers)
 
 **Step 4: Commit**
 
 ```bash
-git add Portal/index.html Portal/modules/ui-setup.js
-git commit -m "feat(portal): System Menu 'Manage Setup' button opens onboarding ?mode=manage"
+git add Portal/index.html Portal/index-modular.html Portal/modules/ui-setup.js
+git commit -m "feat(portal): System Menu 'Manage Setup' button → /onboarding/?mode=manage"
 ```
 
-### Task 2.10.6: Portal Android — Add "Manage Setup" button to System Menu
+### Task 2.10.2: Portal Android — "Manage Setup" button in System Controls
 
 **Files:**
-- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/AI_BlackBox_Portal_Android_MVP (2)/AI_BlackBox_Portal_Android_MVP/AI_BlackBox_Portal/app/src/main/java/com/aiblackbox/portal/ui/settings/SettingsSheet.kt`
 
-**Step 1: Add a `MenuButton` to the System section:**
+- Modify: `AI_BlackBox_Portal_Android_MVP (2)/AI_BlackBox_Portal_Android_MVP/AI_BlackBox_Portal/app/src/main/java/com/aiblackbox/portal/ui/settings/SettingsSheet.kt`
+
+**Context:** System Controls FlowRow lives at lines 680-720. `MenuButton` helper at line 807. Existing buttons in this FlowRow: Checkpoint (686), Clear History (692), Cancel Tasks (698), Re-pair Device (704), Restart Service (710), Pair New Device (717). The `origin` String parameter is in scope (used by "Paired Server" Box at line 666).
+
+**Step 1: Add a `MenuButton` to the System Controls FlowRow** — append at the end (after "Pair New Device" / `showPairQr` block at line 717-720):
 
 ```kotlin
-MenuButton("Manage Setup") {
-    val origin = SettingsViewModel.currentOrigin.value ?: "http://localhost:9091"
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("$origin/onboarding/?mode=manage"))
+// Manage Setup — opens the onboarding wizard in manage mode for credential edits.
+// Single source of truth: same UI used at first-run setup, no Android-side reimplementation.
+MenuButton("⚙️ Manage Setup") {
+    view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+    val target = if (origin.isNotBlank()) "$origin/onboarding/?mode=manage"
+                 else "http://localhost:9091/onboarding/?mode=manage"
+    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(target))
+    intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
     context.startActivity(intent)
     onDismiss()
 }
 ```
 
-(Open in default browser since the wizard isn't yet a native Android view. Future enhancement: render in WebView inside the Portal app.)
+The `⚙️` is the gear emoji (⚙️) — matches Portal Web button label/iconography for cross-surface consistency.
 
-**Step 2: Test on Android** — System → Manage Setup → opens browser to wizard at maintenance landing page.
+**Step 2: Verify on Android** — install debug APK on Brandon's phone, open Portal app → hamburger → System Controls → "⚙️ Manage Setup". Default browser opens at `{paired_origin}/onboarding/?mode=manage`. Confirm:
+
+- Browser launches with correct URL (paired Tailscale origin, NOT localhost) when device is paired
+- Wizard renders, step components rehydrate
+- Customer can edit/replace/remove any credential through the wizard
 
 **Step 3: Commit**
 
 ```bash
-git add "AI_BlackBox_Portal_Android_MVP (2)/.../SettingsSheet.kt"
-git commit -m "feat(android): System Menu 'Manage Setup' button opens onboarding ?mode=manage"
+git add "AI_BlackBox_Portal_Android_MVP (2)/AI_BlackBox_Portal_Android_MVP/AI_BlackBox_Portal/app/src/main/java/com/aiblackbox/portal/ui/settings/SettingsSheet.kt"
+git commit -m "feat(android): System Controls 'Manage Setup' button → onboarding ?mode=manage"
 ```
 
-### Task 2.10.7: Phase 2.10 acceptance test
+### Task 2.10.3: End-to-end verification
 
-**Goal:** End-to-end verification of manage mode after onboarding has been completed (Scenarios 1+ from main verification suite).
+**Pre-conditions:** Onboarding fully complete (sentinel `Volume/.onboarding_complete` exists), at least one API key + one operator + Tailscale configured. (Brandon's box already satisfies all of these.)
 
-```bash
-# Pre-conditions: complete onboarding fully (Scenario 1 from verification)
-# Then:
+**Browser path (Portal Web):**
 
-# (a) Manage UI accessible from /onboarding/?mode=manage
-curl -sI http://localhost:9091/onboarding/?mode=manage | grep "200" || { echo "FAIL: manage URL 404s"; exit 1; }
+1. Open `http://localhost:9091/ui` (or paired Tailscale URL)
+2. Hamburger menu → System Menu → 🔧 Advanced Settings (expand) → "⚙️ Manage Setup"
+3. Confirm wizard loads at `/onboarding/?mode=manage`
+4. Confirm NO redirect back to /ui (this is the manage-mode behavior — already in `onboarding.js:198`)
+5. Click into the API Keys step → verify all 5 LLM cards show "Already configured ••••XXXX [Replace]"
+6. Click [Replace] on a provider → form swaps to paste UI → cancel → returns to configured state
+7. Click into the Operator step → verify all existing operators shown as read-only rows with [×]
+8. Click into the Extras step → verify Gmail and service-account JSON cards rehydrated
+9. Close wizard via standard wizard nav (or browser back) → return to Portal
 
-# (b) /current-config returns expected JSON shape
-curl -s http://localhost:9091/onboarding/current-config | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-assert 'providers' in d
-assert 'operators' in d
-assert d['providers']['openai']['present']
-assert 'last4' in d['providers']['openai']
-print('OK: /current-config shape valid')
-"
+**Android path:**
 
-# (c) Reveal endpoint returns full key (loopback OK)
-curl -s "http://localhost:9091/onboarding/config/OPENAI_API_KEY?reveal=1" | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-assert len(d['value']) > 20, 'reveal returned masked value'
-print('OK: reveal works on loopback')
-"
+1. Open Portal app on phone, ensure paired to BlackBox
+2. Hamburger → System Controls → "⚙️ Manage Setup"
+3. Default browser opens at `{paired_origin}/onboarding/?mode=manage`
+4. Repeat steps 4-9 above (the browser is now the wizard host)
+5. Returning to the Portal app via the back button → Portal state preserved
 
-# (d) Manual: Portal Web System → Manage Setup → opens manage landing
-# (e) Manual: Android System → Manage Setup → opens browser to manage landing
-# (f) Manual: Click each card; confirm step UI shows current state header + reveal/edit/remove buttons
-# (g) Manual: Click eye icon; full key reveals. Click again; mask returns.
-# (h) Manual: Click Remove on a non-essential provider (e.g. Perplexity if configured); confirm DELETE works + .env.backup created
-```
+**Acceptance criteria:**
 
-### Task 2.10.8: Track 2 final checkpoint
+- [ ] Both buttons visible in System Menu / System Controls
+- [ ] Both open `/onboarding/?mode=manage` correctly (Web stays in tab; Android opens default browser)
+- [ ] Wizard does NOT auto-redirect to /ui in manage mode
+- [ ] All step components rehydrate with current credential state
+- [ ] Customer can edit / replace / remove any credential through the same UI used for setup
+- [ ] No new step components, no new endpoints required (verifies thin-client architecture)
+
+### Task 2.10.4: Track 2 final checkpoint
 
 ```bash
-git tag -a track2-portal-ui-complete -m "Portal onboarding wizard complete — all 7 steps + branding + manage mode"
+git tag -a track2-portal-ui-complete -m "Portal onboarding wizard complete — 7 steps + foundation refinements + manage-mode entry points (Web + Android)"
 git push origin track2-portal-ui-complete
 ```
+
+### Deferred to v1.1 — "Control Panel" layout option
+
+Brandon raised the idea of eventually collapsing the wizard's linear flow into a single-page "control panel" view for manage-mode (since 99% of returning users just want to tweak one setting, not walk through a 7-step flow).
+
+This is **NOT a v1 task** — the current wizard works fine for both setup and manage. When v1.1 picks it up:
+
+- Same step components, just reorganized into a single-page grid
+- Could be a third URL mode (`?mode=panel`) sibling of `setup` and `manage`
+- Preserves the DRY-across-surfaces principle (Web + Android both point at the panel URL)
+
+Tracked here so future-you doesn't reinvent the original step-grid landing page idea.
 
 ---
 
