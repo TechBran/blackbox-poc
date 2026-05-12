@@ -47,6 +47,20 @@ def _redact(value: str | None, keep: int = 4) -> str | None:
 _state = get_state()
 
 
+def _advance_current_to_next(completed_step: str) -> None:
+    """After step X completes/skips, move current_step to the next step in ALL_STEPS.
+
+    No-op if X is unknown OR if X is the final step (no next).
+    """
+    try:
+        idx = ALL_STEPS.index(completed_step)
+    except ValueError:
+        logger.warning("auto-advance skipped: %r not in ALL_STEPS", completed_step)
+        return
+    if idx + 1 < len(ALL_STEPS):
+        _state.set_current(ALL_STEPS[idx + 1])
+
+
 class StateResponse(BaseModel):
     is_complete: bool
     completed_steps: list[str]
@@ -256,12 +270,14 @@ def save_secrets(req: SaveRequest) -> dict:
 @router.post("/step/complete")
 def step_complete(req: StepActionRequest) -> dict:
     _state.mark_step_complete(req.step)
+    _advance_current_to_next(req.step)
     return _state.snapshot()
 
 
 @router.post("/step/skip")
 def step_skip(req: StepActionRequest) -> dict:
     _state.mark_step_skipped(req.step)
+    _advance_current_to_next(req.step)
     return _state.snapshot()
 
 
