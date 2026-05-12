@@ -2896,6 +2896,74 @@ Tracked here so future-you doesn't reinvent the original step-grid landing page 
 **Dependencies:** Track 2 (or can mock against placeholder)
 **Outcome:** A standalone app `blackbox-setup` that launches the wizard in a polished native window.
 
+## Phase 3.0: System prerequisites (NEW per audit 2026-05-12)
+
+**Goal:** Install Rust toolchain and all Tauri 2.x system dependencies on the build machine. Standalone task so the implementer can verify environment readiness before any Cargo/Tauri work.
+
+**Estimated effort:** 5-15 minutes (apt ~2-5 min; Rust install ~3-8 min on first install).
+
+**See also:** `docs/plans/2026-05-12-track3-audit.md` for the audit findings that motivated this task.
+
+### Task 3.0.1: Install + verify Rust toolchain and Tauri build deps
+
+**Files:** none (system-state operations only).
+
+**Step 1: Install Rust toolchain (if not already present):**
+
+```bash
+# Skip if `cargo --version` already prints rustc 1.x
+which cargo && cargo --version || {
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+    source $HOME/.cargo/env
+}
+```
+
+**Step 2: Install Tauri 2.x system dependencies for Ubuntu 24.04:**
+
+```bash
+sudo apt update
+sudo apt install -y \
+    libwebkit2gtk-4.1-dev \
+    libsoup-3.0-dev \
+    build-essential \
+    curl \
+    wget \
+    file \
+    libxdo-dev \
+    libssl-dev \
+    libayatana-appindicator3-dev \
+    librsvg2-dev
+```
+
+**Why `libsoup-3.0-dev` is critical:** Tauri 2.x on Ubuntu 24.04 builds against `webkit2gtk-4.1`, which transitively requires `libsoup-3.0`. Without the `-dev` headers, `pkg-config` fails on the webkit-gtk discovery step and `cargo build` errors with "package soup-3.0 not found".
+
+**Step 3: Install pinned `create-tauri-app` scaffolding tool:**
+
+```bash
+cargo install create-tauri-app --version "^4" --locked
+```
+
+The `^4` constraint ensures we get a v4.x scaffolder, which generates Tauri 2.x apps. Future v5+ may change scaffolding shapes.
+
+**Step 4: Verify everything is in place:**
+
+```bash
+# Should print rustc 1.x
+cargo --version
+
+# Should print create-tauri-app 4.x
+cargo create-tauri-app --version
+
+# All 7 -dev packages should print "ii" status
+for p in libwebkit2gtk-4.1-dev libsoup-3.0-dev build-essential libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev; do
+    dpkg -l "$p" 2>/dev/null | grep -q "^ii" && echo "  ok $p" || echo "  MISSING $p (re-run Step 2)"
+done
+```
+
+All 7 should print "ok". If any prints "MISSING", the apt install in Step 2 didn't complete — check apt logs and retry.
+
+**Step 5:** No commit (system-state operations don't produce file changes).
+
 ## Phase 3.1: Cargo project skeleton
 
 ### Task 3.1.1: Initialize the Tauri project
@@ -2909,18 +2977,9 @@ Tracked here so future-you doesn't reinvent the original step-grid landing page 
 - `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/installer/src-tauri/icons/` (set of icon PNGs)
 - Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/.gitignore` (add `installer/src-tauri/target/`)
 
-**Step 1: Install Tauri prerequisites** (system + cargo):
+**Step 1: Verify Phase 3.0 prerequisites are installed.**
 
-```bash
-# System deps for Tauri on Ubuntu
-sudo apt install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
-  libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-
-# Rust toolchain (if not already)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
-cargo install create-tauri-app --locked
-```
+If Phase 3.0 (sysprep) is complete, this step is a no-op. If you are in a fresh shell or skipped Phase 3.0, re-run Task 3.0.1 Step 4 — all 7 system `-dev` packages and the Rust toolchain must report "ok" before proceeding. **Do not** start Step 2 (scaffold) without Phase 3.0 verification — `cargo create-tauri-app` will hard-fail without the `-dev` packages.
 
 **Step 2: Scaffold the project**
 
@@ -2931,13 +2990,13 @@ cd installer
 npm install   # Tauri scaffolding requires this even for vanilla
 ```
 
-**Step 3: Update `installer/src-tauri/tauri.conf.json`** — set the dev URL to point at our running Orchestrator:
+**Step 3: Update `installer/src-tauri/tauri.conf.json`** — Tauri 2.x schema, no static `url` (we build the webview programmatically in Phase 3.5.2), no `frontendDist` since we point at an external Orchestrator URL (no bundled frontend assets):
 
 ```json
 {
   "build": {
     "devUrl": "http://localhost:9091/onboarding/",
-    "frontendDist": "../dist",
+    "frontendDist": "",
     "beforeDevCommand": "",
     "beforeBuildCommand": ""
   },
@@ -2949,8 +3008,7 @@ npm install   # Tauri scaffolding requires this even for vanilla
       "fullscreen": false,
       "resizable": true,
       "decorations": true,
-      "transparent": false,
-      "url": "http://localhost:9091/onboarding/"
+      "transparent": false
     }],
     "security": {"csp": null}
   },
@@ -2969,14 +3027,36 @@ npm install   # Tauri scaffolding requires this even for vanilla
 }
 ```
 
-**Step 4: Smoke test build**
+**Why no static `url` in `windows[]`:** Tauri 2.x's static window URL is intended for built-in frontend assets bundled via `frontendDist`. For external HTTP URLs we use the programmatic `WebviewWindowBuilder` (Phase 3.5.2) which gives us mode-aware URL construction (`?mode=setup` vs `?mode=manage`).
+
+**Why `frontendDist: ""`:** We don't bundle any frontend — the wizard lives at the Orchestrator URL. An empty string suppresses Tauri's "frontendDist not found" warnings during build.
+
+**Step 4: Add Cargo dependencies that downstream tasks need** (NEW per audit 2026-05-12).
+
+The scaffolded `installer/src-tauri/Cargo.toml` from `create-tauri-app` includes only `tauri` itself. Downstream tasks (T3.2.1's `wait_for_server`, T3.5.1's autostart-removal, T3.5.2's mode detection) require three extra crates. Add them upfront so the build doesn't fail mid-Phase-3.5:
+
+```toml
+# Append to installer/src-tauri/Cargo.toml [dependencies]:
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+dirs    = "5"
+serde_json = "1"
+```
+
+**Why these specifically:**
+- `reqwest` blocking client → `wait_for_server` HTTP probe + `/onboarding/state` JSON fetch (T3.2.1, T3.5.1, T3.5.2)
+- `dirs` → cross-platform `~/.config/autostart/` resolution (T3.5.1)
+- `serde_json` → parse `/onboarding/state` response (T3.5.1, T3.5.2). Tauri 2.x bundles serde_json transitively, but declaring it explicitly avoids version-skew surprises.
+
+**Binary-size note:** `reqwest` with `blocking` feature pulls tokio's blocking runtime (~2-3 MB). Acceptable for a setup-shell app. If the bundled binary size is a concern later, consider switching to `ureq` (much smaller, blocking-only).
+
+**Step 5: Smoke test build**
 
 ```bash
 cd installer
-cargo build --manifest-path src-tauri/Cargo.toml --release  # ~5-10 min first time
+cargo build --manifest-path src-tauri/Cargo.toml --release  # ~15-25 min first time (cold cargo cache + 200+ transitive crates), ~3-5 min on subsequent builds
 ```
 
-**Step 5: Commit**
+**Step 6: Commit**
 
 ```bash
 git add installer/ .gitignore
@@ -3023,8 +3103,8 @@ fn wait_for_server(url: &str, timeout_secs: u64) -> bool {
 }
 
 fn main() {
-    if !wait_for_server("http://localhost:9091/health", 90) {
-        eprintln!("Orchestrator failed to come up within 90s");
+    if !wait_for_server("http://localhost:9091/health", 180) {
+        eprintln!("Orchestrator failed to come up within 180s");
         std::process::exit(1);
     }
     tauri::Builder::default()
@@ -3033,6 +3113,8 @@ fn main() {
 }
 ```
 
+**Why 180s and not 90s:** BlackBox warmup (snapshot index rebuild on startup) takes 60-90s on warm cache, but cold-boot-after-install can exceed 90s. 180s gives margin without UX impact (user sees splash/wait UI either way; no harm in extra headroom).
+
 **Step 3: Commit**
 
 ```bash
@@ -3040,9 +3122,9 @@ git add installer/src-tauri/tauri.conf.json installer/src-tauri/src/main.rs
 git commit -m "feat(installer): wait-for-orchestrator + fullscreen no-decoration window"
 ```
 
-## Phase 3.3: Branding (icons + splash)
+## Phase 3.3: Branding (icons)
 
-### Task 3.3.1: Generate icon set + splash
+### Task 3.3.1: Generate icon set
 
 **Files (Create):** `installer/src-tauri/icons/` set: `32x32.png`, `128x128.png`, `128x128@2x.png`, `icon.icns` (mac, optional), `icon.ico` (win, optional), `icon.png` (Linux primary).
 
@@ -3080,7 +3162,7 @@ git commit -m "chore(installer): icon set — 32, 128, 128@2x for Linux + Mac + 
 [Desktop Entry]
 Type=Application
 Name=AI BlackBox Setup
-Exec=/usr/local/bin/blackbox-setup --first-run
+Exec=/usr/bin/blackbox-setup --first-run
 Icon=blackbox-setup
 Comment=First-run setup wizard for AI BlackBox
 Categories=Utility;
@@ -3110,7 +3192,7 @@ git commit -m "chore(installer): autostart .desktop for first-boot launch (remov
 Type=Application
 Name=BlackBox Setup
 GenericName=AI BlackBox Configuration
-Exec=/usr/local/bin/blackbox-setup
+Exec=/usr/bin/blackbox-setup
 Icon=blackbox-setup
 Comment=Configure or update your AI BlackBox setup
 Categories=Utility;Settings;
@@ -3213,10 +3295,12 @@ fn main() {
 
     tauri::Builder::default()
         .setup(move |app| {
-            let window = tauri::WindowBuilder::new(
+            // Tauri 2.x: WebviewWindowBuilder + WebviewUrl::External
+            // (NOT v1's WindowBuilder + WindowUrl — those are removed in v2)
+            let window = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
-                tauri::WindowUrl::External(url.parse().unwrap()),
+                tauri::WebviewUrl::External(url.parse().unwrap()),
             )
             .title("AI BlackBox Setup")
             .inner_size(1280.0, 800.0)
@@ -3233,14 +3317,17 @@ fn main() {
 **Step 2: Test both invocations:**
 
 ```bash
-# Simulate autostart (first-run)
-/usr/local/bin/blackbox-setup --first-run
+# Simulate autostart (first-run) — post-install path
+/usr/bin/blackbox-setup --first-run
 # Expect: fullscreen window, no decorations, opens at /onboarding/?mode=setup
 
-# Simulate manual launch from desktop applications menu
-/usr/local/bin/blackbox-setup
+# Simulate manual launch from desktop applications menu — post-install path
+/usr/bin/blackbox-setup
 # Expect: windowed (1280x800), decorations on, opens at /onboarding/?mode=manage
 # (assuming onboarding has been completed; otherwise opens setup)
+
+# Dev test (no install needed) — see Task 3.5.3
+cd installer && cargo tauri dev -- --first-run
 ```
 
 **Step 3: Commit**
@@ -3253,6 +3340,77 @@ Autostart invocation passes --first-run (fullscreen setup mode).
 Persistent launcher invocation reads /onboarding/state and opens
 in setup or manage mode automatically (windowed with decorations)."
 ```
+
+### Task 3.5.3: End-to-end dev test (NEW per audit 2026-05-12)
+
+**Goal:** Validate the full Phase 3.1-3.5 wiring (wait-for-server + mode detection + WebviewWindowBuilder + autostart-removal) using `cargo tauri dev` BEFORE spending the time/cost of building the .deb in Phase 3.6.
+
+**Why before Phase 3.6:** A `.deb` build takes 5-10 minutes and the .deb can only be tested by installing it (system-state mutation). Catching wiring bugs in dev mode (instant rebuild loop) is much cheaper. If Phase 3.5 logic has a defect, you want to know now, not after .deb installation.
+
+**Files:** none (test-only).
+
+**Step 1: Confirm BlackBox is running and onboarding sentinel exists** (so `?mode=manage` is the default mode):
+
+```bash
+curl -sS http://localhost:9091/health  # expect 200
+curl -sS http://localhost:9091/onboarding/state | python3 -c "import json,sys; print(json.load(sys.stdin).get('is_complete'))"
+# expect: True (means manage-mode will be selected by main.rs)
+```
+
+If `is_complete` is False (sentinel absent), the dev-test still works but routes to setup mode — both modes are worth exercising.
+
+**Step 2: Run dev mode without `--first-run` flag (manual launch path):**
+
+```bash
+cd installer
+cargo tauri dev
+```
+
+Tauri dev loop opens a window. Verify:
+- Window opens at `http://localhost:9091/onboarding/?mode=manage` (visible in window title bar / log output)
+- Decorations are present (windowed, not fullscreen)
+- Wizard renders with rehydrated current state
+- Click into 1-2 steps to confirm the manage-mode UX behavior we built in Phase 2.10
+
+Close the window with the X button (or Cmd+W). Verify in stderr that the autostart-removal logic logs the "removed autostart entry" message **only if** `is_complete` was true. Verify the autostart .desktop in `~/.config/autostart/` is NOT present (because we never installed it via Track 4 yet).
+
+**Step 3: Run dev mode with `--first-run` flag (autostart simulation):**
+
+```bash
+cd installer
+cargo tauri dev -- --first-run
+```
+
+Verify:
+- Window opens at `http://localhost:9091/onboarding/?mode=setup` (note `mode=setup` in URL)
+- Window is fullscreen, no decorations
+- `wait_for_server` log message appears (proves the health check ran)
+
+Close the window. Confirm autostart-removal triggers as before.
+
+**Step 4: Test wait-for-server failure path** (optional but valuable):
+
+Stop BlackBox: `sudo systemctl stop blackbox.service`. Run `cargo tauri dev` again. Expect:
+- stderr prints "Orchestrator failed to come up within 180s" after 180 seconds
+- Tauri exits with non-zero status (no window opens)
+
+Restart BlackBox: `sudo systemctl restart blackbox.service`.
+
+**Step 5: Commit (no file changes — record completion in commit message only)**
+
+```bash
+git commit --allow-empty -m "test(installer): T3.5.3 — dev-test all Phase 3.5 wiring verified
+
+cargo tauri dev confirmed:
+- mode=manage default when sentinel exists, mode=setup when --first-run flag passed
+- WebviewWindowBuilder + WebviewUrl correct API for Tauri 2.x
+- wait_for_server health check fires + 180s timeout enforced
+- autostart-removal logic conditional on is_complete from /onboarding/state
+
+Pre-flight clear for Phase 3.6 .deb build."
+```
+
+The empty commit serves as a verification checkpoint in the git log — useful for auditors.
 
 ## Phase 3.6: Build + package
 

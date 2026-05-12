@@ -204,7 +204,7 @@ Could be DRYed into a single template + sed substitution, but two distinct files
 
 **Commit:** None (system-state, not file changes).
 
-### Task 3.6.3: End-to-end dev test (NEW)
+### Task 3.5.3: End-to-end dev test (NEW — landed as T3.5.3 not T3.6.3 to avoid renumbering Phase 3.6)
 
 **Currently:** Plan jumps from T3.5.2 (mode-aware launch logic) to T3.6.1 (build .deb). No interim dev-test step. Without an end-to-end dev-mode smoke test, the implementer doesn't know if the wait-for-server + mode-detection + WebviewWindowBuilder all wire correctly until they've already built the .deb.
 
@@ -231,7 +231,7 @@ If approved, apply these to `docs/plans/2026-05-10-onboarding-flow.md` in this o
 6. **Edit Phase 3.3 section title (line 3043):** drop "+ splash" since we're not implementing splash in v1 (M5).
 7. **Edit Phase 3.4.1 Step 1 (line 3083) + Phase 3.4.2 Step 1 (line 3113):** change `Exec=/usr/local/bin/blackbox-setup` to `Exec=/usr/bin/blackbox-setup` (M3).
 8. **Edit Phase 3.5.2 main.rs example (lines 3214-3225):** replace `WindowBuilder` with `WebviewWindowBuilder` and `WindowUrl` with `WebviewUrl` (C1).
-9. **Insert new Task 3.6.3 "End-to-end dev test" between T3.6.1 and T3.6.2** (around line 3271) — covers the new dev-test task above.
+9. **Insert new Task 3.5.3 "End-to-end dev test" after T3.5.2** (in Phase 3.5, not Phase 3.6 — avoids renumbering existing T3.6.1/T3.6.2 and keeps dev-test logically before .deb build). Covers the new dev-test task above.
 
 Net effect: adds ~80 lines, fixes 3 critical + 5 major issues, makes the plan implementer-ready.
 
