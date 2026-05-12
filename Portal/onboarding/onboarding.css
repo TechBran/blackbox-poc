@@ -1529,3 +1529,76 @@ body::after {
     font-family: var(--ob-font-body);
     font-size: var(--ob-text-sm);
 }
+
+/* ════════════════════════════════════════════════════════════════
+ * Done / handoff step (T2.8.1) — summary list + large CTA
+ * ════════════════════════════════════════════════════════════════ */
+
+.ob-done-summary {
+    margin: var(--ob-space-8) 0;
+}
+
+.ob-summary-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.ob-summary-row {
+    display: grid;
+    grid-template-columns: 2.5rem auto 1fr;
+    gap: var(--ob-space-4);
+    align-items: baseline;
+    padding: var(--ob-space-4) 0;
+    border-top: 1px solid var(--ob-surface-border);
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-sm);
+}
+
+.ob-summary-row:last-child {
+    border-bottom: 1px solid var(--ob-surface-border);
+}
+
+.ob-summary-glyph {
+    font-family: var(--ob-font-display);
+    font-size: var(--ob-text-xl);
+    line-height: 1;
+    text-align: center;
+    font-weight: var(--ob-display-weight-light);
+}
+
+.ob-summary-ok .ob-summary-glyph {
+    color: var(--ob-success);
+}
+
+.ob-summary-skip .ob-summary-glyph {
+    color: var(--ob-text-tertiary);
+}
+
+.ob-summary-warn .ob-summary-glyph {
+    color: var(--ob-accent);
+}
+
+.ob-summary-label {
+    color: var(--ob-text-primary);
+    font-weight: 600;
+}
+
+.ob-summary-detail {
+    color: var(--ob-text-tertiary);
+    font-size: var(--ob-text-xs);
+}
+
+.ob-summary-error {
+    color: var(--ob-accent);
+    margin-top: var(--ob-space-3);
+}
+
+/* Large CTA variant for the handoff moment */
+.ob-cta-large {
+    padding: var(--ob-space-5) var(--ob-space-12);
+    font-size: var(--ob-text-lg);
+    margin-top: var(--ob-space-4);
+}
