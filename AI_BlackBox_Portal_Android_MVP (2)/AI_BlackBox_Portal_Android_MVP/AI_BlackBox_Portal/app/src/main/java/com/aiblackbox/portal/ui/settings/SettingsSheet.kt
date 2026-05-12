@@ -733,9 +733,11 @@ fun SettingsSheet(
                     view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
                     val target = if (origin.isNotBlank()) "$origin/onboarding/?mode=manage"
                                  else "http://localhost:9091/onboarding/?mode=manage"
-                    val intent = Intent(Intent.ACTION_VIEW, target.toUri())
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    context.startActivity(intent)
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, target.toUri())
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        context.startActivity(intent)
+                    } catch (_: Exception) {}
                     onDismiss()
                 }
             }
