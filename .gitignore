@@ -194,3 +194,11 @@ AI_BlackBox_Portal_Android_MVP*/AI_BlackBox_Portal_Android_MVP/AI_BlackBox_Porta
 # 4. If you add new generated-output directories (e.g. a new feature that
 #    writes media to /Outputs/), add them to the "Generated media" section
 #    above before doing the next commit.
+
+# ============================================================================
+# Tauri build artifacts (installer/ — Track 3 setup wrapper)
+# ============================================================================
+
+installer/src-tauri/target/
+installer/node_modules/
+installer/dist/.cache/
