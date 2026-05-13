@@ -207,3 +207,12 @@ installer/dist/.cache/
 .onboarding_state.json
 .onboarding_complete
 .env.backup.*
+
+# ============================================================================
+# Per-customer state files (bootstrapped from .template at install time)
+# ============================================================================
+# config.ini holds operator roster + tailnet pairing — populated by wizard.
+# Customer install bootstraps from config.ini.template via Scripts/install.sh.
+config.ini
+# Contacts directory holds personal contact data — never ship in customer ZIPs.
+Contacts/contacts.json

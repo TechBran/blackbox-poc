@@ -45,6 +45,15 @@ if [[ ! -f "$BLACKBOX_ROOT/.env" ]]; then
     echo "[install] Created .env from template (mode 0600)"
 fi
 
+# ── Step 3b: config.ini from template (per-customer state — operators + pairing) ──
+# Customer ZIP doesn't ship config.ini (gitignored to prevent shipping the
+# author's operator roster + tailnet hostname). Wizard's operator + tailscale
+# steps populate [users] + [pairing] sections via /onboarding/config writes.
+if [[ ! -f "$BLACKBOX_ROOT/config.ini" ]]; then
+    sudo -u "$REAL_USER" cp "$BLACKBOX_ROOT/config.ini.template" "$BLACKBOX_ROOT/config.ini"
+    echo "[install] Created config.ini from template"
+fi
+
 # ── Step 4: systemd unit (audit M2 + M3 + Q3 + Q4) ──
 echo "[install] Installing blackbox.service..."
 sudo tee /etc/systemd/system/blackbox.service > /dev/null <<EOF

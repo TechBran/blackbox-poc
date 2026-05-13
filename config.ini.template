@@ -23,9 +23,13 @@ context_tokens_max = 120000
 recent_turns_tokens = 60000
 reply_buffer_tokens = 60000
 
+# === Per-customer state — populated by onboarding wizard ===
+# `list` is the operator roster shown in the Portal dropdown.
+# `default` is the operator selected on Portal first-load.
+# Wizard's "operator" step writes to these via /onboarding/config/users.
 [users]
-list = Brandon, Anna, Anna 2, B2 Tester, Brandon-DEV, Brandon-FA Tech, Brandon-Research, test, test 2
-default = Brandon
+list = Default
+default = Default
 
 [context]
 recent_fossils_per_user = 5
@@ -54,12 +58,16 @@ pitch = 1.0
 volume = 1.3
 timeout_ms = 120000
 
+# === Per-customer state — populated by onboarding wizard ===
+# `default_origin` is the URL the phone-pairing QR code targets (typically
+# the Tailscale https://hostname.ts.net URL once Tailscale step completes).
+# `default_operator` mirrors [users].default — the operator paired devices
+# bind to by default.
 [pairing]
-default_origin = https://ai-black-box-fc-a620ai-wifi.tail401fb3.ts.net/ui/
-default_operator = Brandon
+default_origin =
+default_operator = Default
 
 [models]
 google_tts_synthesize = https://texttospeech.googleapis.com/v1/text:synthesize
 google_tts_voices = https://texttospeech.googleapis.com/v1/voices
 google_veo = veo-3.1-generate-preview
-

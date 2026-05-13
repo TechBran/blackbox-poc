@@ -44,9 +44,13 @@ pub fn run_with_url(url: &str, mode: &str) {
             )
             .title("AI BlackBox Setup")
             .inner_size(1280.0, 800.0)
-            .fullscreen(is_setup_mode)       // fullscreen for first-run, windowed for manage
-            .decorations(!is_setup_mode)     // no decorations for first-run, decorated for manage
-            .always_on_top(is_setup_mode)    // always-on-top only for first-run
+            // Drop fullscreen + always_on_top + no-decorations kiosk mode:
+            // Computer Use agent needs full PC access (full screen + taskbar +
+            // ability to bring other windows to front), and customer needs an
+            // escape hatch (X button, Alt+F4) which decorations provide.
+            // Setup mode opens MAXIMIZED so the wizard still feels prominent
+            // on first-run, but is escapable. Manage mode opens default-sized.
+            .maximized(is_setup_mode)
             .build()?;
             Ok(())
         })
