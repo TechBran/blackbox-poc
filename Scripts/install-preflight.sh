@@ -28,7 +28,13 @@ fi
 ok "${MEM_GB} GB RAM"
 
 # 4. Network — github.com reachable
-if ! curl -fsS --max-time 10 https://api.github.com/zen > /dev/null; then
+# Use python3 (guaranteed by ubuntu-minimal) instead of curl, since curl is in
+# our MUST_HAVE list and gets installed AFTER preflight — chicken-and-egg on
+# fresh Ubuntu Server / minimal installs that don't ship curl by default.
+if ! command -v python3 >/dev/null 2>&1; then
+    fail "python3 not found — install with: sudo apt install -y python3"
+fi
+if ! python3 -c "import urllib.request; urllib.request.urlopen('https://api.github.com/zen', timeout=10).read()" 2>/dev/null; then
     fail "Cannot reach github.com — check network"
 fi
 ok "github.com reachable"
