@@ -8,6 +8,7 @@ python3-pip              # MUST_HAVE # pip
 build-essential          # MUST_HAVE # cffi/cryptography source builds
 git                      # MUST_HAVE # repo updates
 curl                     # MUST_HAVE # health checks, tailscale install
+desktop-file-utils       # MUST_HAVE # update-desktop-database for menu launcher refresh
 ca-certificates          # MUST_HAVE # TLS
 tmux                     # MUST_HAVE # CLI Agent session manager hardcodes
 sudo                     # MUST_HAVE # privileged operations
