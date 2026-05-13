@@ -53,6 +53,11 @@ Description=AI BlackBox Orchestrator
 Documentation=https://github.com/TechBran/blackbox-poc
 After=network-online.target
 Wants=network-online.target
+# Restart rate limiting (audit empirical fix: these belong in [Unit], not [Service]
+# — systemd silently ignores them in [Service] and warns. Without them, Restart=always
+# loops forever on a broken install at ~6 attempts/min instead of bounding to 5 per 600s.)
+StartLimitBurst=5
+StartLimitIntervalSec=600
 
 [Service]
 Type=simple
@@ -66,17 +71,20 @@ ExecStart=$BLACKBOX_ROOT/Orchestrator/venv/bin/python -m uvicorn Orchestrator.ap
     --timeout-keep-alive 120 --limit-max-requests 10000 --loop uvloop
 Restart=always
 RestartSec=10
-StartLimitBurst=5
-StartLimitIntervalSec=600
 
 # Memory pressure (audit Q4) — soft cap at 70 % of system RAM
 MemoryHigh=70%
 
 # Security hardening (audit M2 — preserved from existing unit)
+# NOTE: ProtectHome=read-only (NOT true) because BLACKBOX_ROOT lives in /home
+# (audit Q2=A install location). ProtectHome=true masks /home entirely so the
+# sandboxed process cannot exec \$BLACKBOX_ROOT/Orchestrator/venv/bin/python
+# → status=203/EXEC. read-only allows visibility; ReadWritePaths punches through
+# for the install dir's write needs (Volume/, Manifest/, Fossils/, etc.).
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 ReadWritePaths=$BLACKBOX_ROOT
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 
