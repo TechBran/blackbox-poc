@@ -114,6 +114,8 @@ sudo apt install -y libwebkit2gtk-4.1-dev libsoup-3.0-dev build-essential curl w
 1. **Preferred:** Move `.desktop` files to `installer/desktop-entries/` (separate dir, won't conflict with anything Tauri owns). Update Phase 3.4.1 + 3.4.2 paths and Track 4's install script reference accordingly.
 2. **Alternative:** Set `"frontendDist": ""` in `tauri.conf.json` since we're pointing at an external URL (`http://localhost:9091/onboarding/`) and don't bundle any frontend. Then `.desktop` files in `installer/dist/` are harmless. **Recommended over option 1** — less file churn, more accurate semantics.
 
+> **POST-IMPLEMENTATION CORRECTION (2026-05-12, T3.6.1):** Option 2 (`frontendDist: ""`) **does not work for `cargo tauri build`** — only for `cargo tauri dev`. Build mode resolves `""` to `installer/src-tauri/` itself and errors with "Unable to find your web assets, did you forget to build your web app?" Empirical fix landed in commit `bab6940`: point `frontendDist` at `"../src"` (the scaffold's leftover frontend dir, never loaded at runtime since `WebviewUrl::External` overrides). The leftover scaffold files become harmless bundle bloat. Future v1.1 polish: delete `installer/src/` scaffold artifacts and use a 1-line placeholder `index.html`. The `installer/dist/` collision concern from M1 above is irrelevant since `frontendDist` no longer points there.
+
 #### M2. Window `url` field in tauri.conf.json may be unused/redundant
 
 **Where:** Plan T3.1.1 Step 3 (line 2953) sets `"url": "http://localhost:9091/onboarding/"` inside the static window config.
