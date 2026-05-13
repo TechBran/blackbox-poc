@@ -64,7 +64,7 @@ These are reasonable defaults baked into this plan. **The audit session may over
 - **Tasks reference existing files to reuse** rather than inventing new patterns.
 - **Symbols:** `[skippable]` = task can be deferred without breaking later tasks; `[blocking]` = next task depends on this; `[parallel-safe]` = can be done concurrently with siblings.
 
-> **Track 4 sequencing correction (audit 2026-05-10):** Earlier text called Track 4 "parallelizable with Tracks 1+2." That is wrong. Track 4's `install.sh` Step 5 installs `installer/dist/blackbox-setup.deb` which is built in Track 3 (T3.6.1), and Step 4 (systemd unit) is the deferred Bucket B1 work from T0.3.7. Track 4 is the LAST execution track, not parallel.
+> **Track 4 sequencing correction (audit 2026-05-10, refined 2026-05-12):** Earlier text called Track 4 "parallelizable with Tracks 1+2." That is wrong. Track 4's `install.sh` builds the Tauri setup `.deb` from sources in `installer/src-tauri/` (Track 3 deliverable; bundles are gitignored under `target/`), and the systemd unit work is the deferred Bucket B1 from T0.3.7. Track 4 is the LAST execution track, not parallel. **Audit Q1=A:** customer machine builds .deb from source (no GitHub release asset path in v1). See `docs/plans/2026-05-12-track4-audit.md` for the full Track 4 audit.
 
 ---
 
@@ -3435,119 +3435,557 @@ git push origin track3-tauri-shell-complete
 
 ---
 
-# TRACK 4 — INSTALL SCRIPTS
+# TRACK 4 — INSTALL SCRIPTS + FACTORY IMAGE
 
-**Goal:** Modernized `Scripts/install.sh` that template-substitutes paths, installs systemd unit, and is idempotent on re-run. Plus a factory-image build script (skeletal — fills in once hardware spec is locked).
+> **Track 4 audit applied 2026-05-12.** See `docs/plans/2026-05-12-track4-audit.md` for the 3 critical + 6 major + 8 minor findings + 4 architectural decisions Brandon locked. Plan structure below reflects the post-audit shape.
 
-**Estimated effort:** 1 week
-**Dependencies:** Track 0 (paths), Track 3 (Tauri binary to install)
-**Outcome:** A single command bootstraps a fresh Ubuntu 24.04 mini-PC into a working BlackBox.
+**Goal:** Modernized `Scripts/install.sh` that template-substitutes paths, builds the Tauri setup `.deb` from source on the customer machine, installs a hardened systemd unit (Type=notify + WatchdogSec + MemoryHigh=70% + security hardening), wires logrotate + override.conf scaffold + autostart launchers, and is idempotent on re-run. Plus a factory-image build script (skeletal — fills in once hardware spec is locked).
+
+**Estimated effort:** 1 week (post-audit)
+
+**Dependencies:**
+- Track 0 — `Orchestrator/utils/paths.py` resolver (✓ landed)
+- Track 3 — Tauri sources at `installer/src-tauri/` (✓ landed; `.deb` is gitignored under `target/release/`, install.sh builds from source per audit Q1=A)
+- `Scripts/onboarding/system-packages.txt` (✓ landed) — bucketed apt manifest
+- `requirements.txt` (✓ landed) — Python dep manifest
+
+**Outcome:** A single command bootstraps a fresh Ubuntu 24.04 mini-PC into a working BlackBox with the Tauri setup wizard auto-launching on next boot.
+
+**Audit decisions locked 2026-05-12:**
+- **Q1:** Build `.deb` from source on customer machine (no GitHub release asset path for v1)
+- **Q2:** Install location is `~/blackbox-poc` (matches dev box; per-user state model)
+- **Q3:** Carry forward audit-recommended self-healing set — Type=notify + WatchdogSec=120 + logrotate + override.conf scaffold + helper scripts; drop ExecStopPost crash-cleanup + separate watchdog .timer + IO bandwidth caps
+- **Q4:** `MemoryHigh=70%` soft pressure (no hard `MemoryMax` cap)
+
+## Phase 4.0: System pre-flight
+
+### Task 4.0.1: Pre-install validation script
+
+**Files:**
+- Create: `<BLACKBOX_ROOT>/Scripts/install-preflight.sh`
+- Sourced by: `Scripts/install.sh` Step 0
+
+**Goal:** Catch unsupported environments early with clear errors, before any apt/sudo work begins.
+
+**Step 1: Write `Scripts/install-preflight.sh`:**
+
+```bash
+#!/usr/bin/env bash
+# Pre-install validation — run before main install.sh begins
+set -euo pipefail
+
+fail() { echo "[preflight] FAIL: $*" >&2; exit 1; }
+warn() { echo "[preflight] WARN: $*" >&2; }
+ok()   { echo "[preflight] OK: $*"; }
+
+# 1. Ubuntu 24.04 only
+if ! grep -q 'VERSION_ID="24.04"' /etc/os-release 2>/dev/null; then
+    VERSION="$(grep '^PRETTY_NAME' /etc/os-release | cut -d= -f2 | tr -d '"')"
+    fail "Ubuntu 24.04 LTS required. Detected: ${VERSION:-unknown}"
+fi
+ok "Ubuntu 24.04 detected"
+
+# 2. Disk free — 10 GB minimum on /
+AVAIL_GB=$(df -BG / | awk 'NR==2 {print $4}' | tr -d 'G')
+if (( AVAIL_GB < 10 )); then
+    fail "Need 10 GB free on /, only ${AVAIL_GB} GB available"
+fi
+ok "${AVAIL_GB} GB free on /"
+
+# 3. Memory — 4 GB minimum
+MEM_GB=$(awk '/MemTotal/ {printf "%d\n", $2/1048576}' /proc/meminfo)
+if (( MEM_GB < 4 )); then
+    fail "Need 4 GB RAM minimum, only ${MEM_GB} GB detected"
+fi
+ok "${MEM_GB} GB RAM"
+
+# 4. Network — github.com reachable
+if ! curl -fsS --max-time 10 https://api.github.com/zen > /dev/null; then
+    fail "Cannot reach github.com — check network"
+fi
+ok "github.com reachable"
+
+# 5. Sudo access
+if ! sudo -n true 2>/dev/null; then
+    warn "sudo will prompt for password during install"
+else
+    ok "sudo passwordless"
+fi
+
+# 6. Existing BlackBox install detection
+if systemctl is-active --quiet blackbox.service 2>/dev/null; then
+    warn "blackbox.service is currently running — install.sh will restart it"
+fi
+
+# 7. Refuse direct root invocation (audit M6)
+if [[ $EUID -eq 0 ]] && [[ -z "${SUDO_USER:-}" ]]; then
+    fail "Do not run as direct root. Run as your user; sudo will be invoked when needed."
+fi
+
+echo "[preflight] All checks passed."
+```
+
+**Step 2: Make executable + commit:**
+
+```bash
+chmod +x Scripts/install-preflight.sh
+git add Scripts/install-preflight.sh
+git commit -m "feat(install): pre-flight validator (Ubuntu 24.04 + disk + RAM + network + sudo)"
+```
+
+---
 
 ## Phase 4.1: Modern install.sh
 
-### Task 4.1.1: Modernized installer
+### Task 4.1.0: Build Tauri .deb from source on customer machine
+
+**Why:** Per audit Q1=A, the Tauri `.deb` is gitignored under `installer/src-tauri/target/release/bundle/deb/`. A customer who clones the repo gets no `.deb`. install.sh apt-installs Tauri build deps + cargo + tauri-cli, then runs `cargo tauri build`.
 
 **Files:**
-- Modify: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/setup.sh`
-- Create: `/home/ai-black-box-fc/Desktop/blackbox_poc./blackbox_poc/Scripts/install.sh` (replaces)
+- The function below is folded into `Scripts/install.sh` Step 5; not standalone.
 
-**Step 1: Write the new install.sh:**
+**Implementation (called from T4.1.1 Step 5):**
+
+```bash
+build_tauri_setup() {
+    echo "[install] Building BlackBox Setup (Tauri .deb)..."
+
+    # Tauri build dependencies for Ubuntu 24.04
+    sudo apt install -y \
+        libwebkit2gtk-4.1-dev libsoup-3.0-dev librsvg2-dev libxdo-dev \
+        libssl-dev libayatana-appindicator3-dev pkg-config build-essential
+
+    # Rust toolchain (only if cargo is missing)
+    if ! command -v cargo > /dev/null; then
+        echo "[install] Installing Rust toolchain via rustup..."
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable
+        # shellcheck disable=SC1091
+        source "$HOME/.cargo/env"
+    fi
+
+    # tauri-cli v2.x (~5 min if not cached)
+    if ! cargo tauri --version 2>/dev/null | grep -q "^tauri-cli"; then
+        cargo install tauri-cli --locked --version "^2.0"
+    fi
+
+    # Build .deb only (skip .AppImage to save 79 MB / ~5 min)
+    cd "$BLACKBOX_ROOT/installer"
+    npm install --no-audit --no-fund > /dev/null 2>&1 || true   # scaffold front-end deps; harmless if absent
+    cargo tauri build --bundles deb
+
+    # Resolve produced .deb (version-independent glob)
+    DEB_FILE=$(ls "$BLACKBOX_ROOT/installer/src-tauri/target/release/bundle/deb/"*.deb | head -1)
+    if [[ ! -f "$DEB_FILE" ]]; then
+        echo "[install] ERROR: cargo tauri build did not produce a .deb" >&2
+        exit 1
+    fi
+    echo "[install] Built: $DEB_FILE"
+    cd "$BLACKBOX_ROOT"
+}
+```
+
+**Notes:**
+- Builds `--bundles deb` only. Skipping `appimage` saves ~5 min build + 79 MB output. install.sh consumers don't need AppImage.
+- Tauri build deps are NOT added to `system-packages.txt` MUST_HAVE bucket (would pollute non-Tauri customers). Hardcoded inline here.
+- `npm install` runs because Tauri scaffold has `package.json`; the scaffold front-end is never loaded at runtime (we point `WebviewUrl::External` at `/onboarding/`).
+- Post-install: dpkg package name is `black-box-setup`; binary lives at `/usr/bin/blackbox-setup` (per Track 3 audit closeout).
+
+---
+
+### Task 4.1.1: Modernized Scripts/install.sh
+
+**Files:**
+- Create: `<BLACKBOX_ROOT>/Scripts/install.sh` (replaces legacy `setup.sh`; T4.1.5 cleans up)
+
+**Audit fixes baked in:** C1 (apt pipeline), C2 (.deb build path), C3 (binary path), M1 (install location), M2 (security hardening + uvicorn flags), M3 (self-healing carry-forward), M5 (restart on upgrade), M6 (sudo detection), N7 (`apt install` of local .deb).
+
+**Step 1: Write `Scripts/install.sh`:**
 
 ```bash
 #!/usr/bin/env bash
 # AI BlackBox installer — Ubuntu 24.04
 set -euo pipefail
 
+# ── Step 0: detect sudo, resolve real user/home (audit M6) ──
+if [[ $EUID -eq 0 ]]; then
+    if [[ -z "${SUDO_USER:-}" ]]; then
+        echo "[install] ERROR: do not run as direct root. Run as your user (sudo invoked as needed)."
+        exit 1
+    fi
+    REAL_USER="$SUDO_USER"
+    REAL_HOME="$(getent passwd "$SUDO_USER" | cut -d: -f6)"
+else
+    REAL_USER="$USER"
+    REAL_HOME="$HOME"
+fi
+
 # Determine BLACKBOX_ROOT: parent of the directory holding this script
 BLACKBOX_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 echo "[install] BLACKBOX_ROOT=$BLACKBOX_ROOT"
+echo "[install] REAL_USER=$REAL_USER  REAL_HOME=$REAL_HOME"
 
-# 1. apt deps
+# ── Pre-flight (Phase 4.0) ──
+"$BLACKBOX_ROOT/Scripts/install-preflight.sh"
+
+# ── Step 1: apt deps (audit C1 — corrected pipeline) ──
 echo "[install] Installing system packages..."
 sudo apt update
-xargs -a "$BLACKBOX_ROOT/Scripts/onboarding/system-packages.txt" -d '\n' \
-    grep -vE '^#|^$' \
-    | grep '# MUST_HAVE' | awk '{print $1}' \
-    | sudo xargs apt install -y
+grep -E '^[a-zA-Z0-9._+-]+\s+#\s+MUST_HAVE' \
+    "$BLACKBOX_ROOT/Scripts/onboarding/system-packages.txt" \
+  | awk '{print $1}' \
+  | xargs sudo apt install -y
 
-# 2. venv
+# ── Step 2: Python venv ──
 echo "[install] Creating Python venv..."
 python3.12 -m venv "$BLACKBOX_ROOT/Orchestrator/venv"
 "$BLACKBOX_ROOT/Orchestrator/venv/bin/pip" install --upgrade pip
 "$BLACKBOX_ROOT/Orchestrator/venv/bin/pip" install -r "$BLACKBOX_ROOT/requirements.txt"
 
-# 3. .env from template
+# ── Step 3: .env from template (see T4.1.4) ──
 if [[ ! -f "$BLACKBOX_ROOT/.env" ]]; then
     cp "$BLACKBOX_ROOT/.env.template" "$BLACKBOX_ROOT/.env"
     echo "BLACKBOX_ROOT=$BLACKBOX_ROOT" >> "$BLACKBOX_ROOT/.env"
     echo "[install] Created .env from template"
 fi
 
-# 4. systemd unit (template-substituted)
+# ── Step 4: systemd unit (audit M2 + M3 + Q3 + Q4) ──
 echo "[install] Installing blackbox.service..."
 sudo tee /etc/systemd/system/blackbox.service > /dev/null <<EOF
 [Unit]
 Description=AI BlackBox Orchestrator
+Documentation=https://github.com/TechBran/blackbox-poc
 After=network-online.target
 Wants=network-online.target
 
 [Service]
-Type=simple
-User=$USER
+Type=notify
+User=$REAL_USER
 WorkingDirectory=$BLACKBOX_ROOT
 EnvironmentFile=$BLACKBOX_ROOT/.env
-ExecStart=$BLACKBOX_ROOT/Orchestrator/venv/bin/python -m uvicorn Orchestrator.app:app --host 0.0.0.0 --port 9091
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=$BLACKBOX_ROOT/Orchestrator/venv/bin/python -m uvicorn Orchestrator.app:app \\
+    --host 0.0.0.0 --port 9091 \\
+    --timeout-keep-alive 120 --limit-max-requests 10000 --loop uvloop
 Restart=always
 RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=600
+
+# Watchdog (audit M3) — service must heartbeat /watchdog within 120 s
+WatchdogSec=120
+KillSignal=SIGTERM
+KillMode=mixed
+TimeoutStopSec=30
+
+# Memory pressure (audit Q4) — soft cap at 70 % of system RAM
+MemoryHigh=70%
+
+# Security hardening (audit M2 — preserved from existing unit)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=$BLACKBOX_ROOT
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=blackbox
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# ── Step 4b: override.conf scaffold (audit M3 carry-forward) ──
+sudo mkdir -p /etc/systemd/system/blackbox.service.d
+sudo tee /etc/systemd/system/blackbox.service.d/override.conf > /dev/null <<EOF
+# BlackBox service override — customize without modifying the main unit.
+# Uncomment + edit, then run:
+#   sudo systemctl daemon-reload && sudo systemctl restart blackbox
+
+[Service]
+# Change port (default 9091):
+# ExecStart=
+# ExecStart=$BLACKBOX_ROOT/Orchestrator/venv/bin/python -m uvicorn Orchestrator.app:app --host 0.0.0.0 --port 8000
+
+# Override memory pressure (default 70 %):
+# MemoryHigh=50%
+
+# Override CPU priority:
+# Nice=-5
+EOF
+
+# ── Step 4c: log rotation (audit M3 carry-forward) ──
+sudo tee /etc/logrotate.d/blackbox > /dev/null <<EOF
+/var/log/blackbox/*.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 $REAL_USER $REAL_USER
+    sharedscripts
+}
+EOF
+
+# ── Step 4d: helper script (audit M3 carry-forward) ──
+cat > "$BLACKBOX_ROOT/blackbox-status.sh" <<'STATUSEOF'
+#!/usr/bin/env bash
+echo "=== BlackBox Service ==="
+systemctl status blackbox.service --no-pager | head -15
+echo
+echo "=== Recent Logs ==="
+journalctl -u blackbox.service -n 20 --no-pager
+echo
+echo "=== Health ==="
+curl -fsS http://localhost:9091/health 2>&1 | head -5
+STATUSEOF
+chmod +x "$BLACKBOX_ROOT/blackbox-status.sh"
+
+# ── Step 5: Build + install Tauri setup app (audit C2 / Q1=A) ──
+build_tauri_setup() {
+    echo "[install] Building BlackBox Setup (Tauri .deb)..."
+    sudo apt install -y \
+        libwebkit2gtk-4.1-dev libsoup-3.0-dev librsvg2-dev libxdo-dev \
+        libssl-dev libayatana-appindicator3-dev pkg-config build-essential
+    if ! command -v cargo > /dev/null; then
+        echo "[install] Installing Rust toolchain via rustup..."
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+            | sh -s -- -y --default-toolchain stable
+        # shellcheck disable=SC1091
+        source "$HOME/.cargo/env"
+    fi
+    if ! cargo tauri --version 2>/dev/null | grep -q "^tauri-cli"; then
+        cargo install tauri-cli --locked --version "^2.0"
+    fi
+    cd "$BLACKBOX_ROOT/installer"
+    npm install --no-audit --no-fund > /dev/null 2>&1 || true
+    cargo tauri build --bundles deb
+    DEB_FILE=$(ls "$BLACKBOX_ROOT/installer/src-tauri/target/release/bundle/deb/"*.deb | head -1)
+    if [[ ! -f "$DEB_FILE" ]]; then
+        echo "[install] ERROR: cargo tauri build did not produce a .deb" >&2
+        exit 1
+    fi
+    echo "[install] Built: $DEB_FILE"
+    cd "$BLACKBOX_ROOT"
+}
+build_tauri_setup
+DEB_FILE=$(ls "$BLACKBOX_ROOT/installer/src-tauri/target/release/bundle/deb/"*.deb | head -1)
+echo "[install] Installing $DEB_FILE..."
+sudo apt install -y "$DEB_FILE"   # apt 1.1+ resolves deps + installs in one step (audit N7)
+
+# ── Step 6a: autostart .desktop — first-boot wizard launch (audit M6) ──
+sudo -u "$REAL_USER" mkdir -p "$REAL_HOME/.config/autostart"
+sudo -u "$REAL_USER" cp "$BLACKBOX_ROOT/installer/dist/blackbox-setup-autostart.desktop" \
+    "$REAL_HOME/.config/autostart/blackbox-setup.desktop"
+
+# ── Step 6b: persistent .desktop — manage-mode launcher (audit M6) ──
+sudo -u "$REAL_USER" mkdir -p "$REAL_HOME/.local/share/applications"
+sudo -u "$REAL_USER" cp "$BLACKBOX_ROOT/installer/dist/blackbox-setup.desktop" \
+    "$REAL_HOME/.local/share/applications/blackbox-setup.desktop"
+sudo -u "$REAL_USER" update-desktop-database "$REAL_HOME/.local/share/applications" 2>/dev/null || true
+
+# ── Step 7: enable + restart (audit M5 — restart works whether running or stopped) ──
 sudo systemctl daemon-reload
-sudo systemctl enable --now blackbox.service
+sudo systemctl enable blackbox.service
+sudo systemctl restart blackbox.service
 
-# 5. Tauri setup app (if .deb is bundled here)
-if [[ -f "$BLACKBOX_ROOT/installer/dist/blackbox-setup.deb" ]]; then
-    echo "[install] Installing BlackBox Setup app..."
-    sudo dpkg -i "$BLACKBOX_ROOT/installer/dist/blackbox-setup.deb" || sudo apt install -fy
-fi
-
-# 6a. Autostart .desktop (first-boot launch — removed when onboarding completes)
-mkdir -p "$HOME/.config/autostart"
-cp "$BLACKBOX_ROOT/installer/dist/blackbox-setup-autostart.desktop" \
-   "$HOME/.config/autostart/blackbox-setup.desktop"
-
-# 6b. Persistent desktop launcher (stays forever for re-launch into manage mode)
-mkdir -p "$HOME/.local/share/applications"
-cp "$BLACKBOX_ROOT/installer/dist/blackbox-setup.desktop" \
-   "$HOME/.local/share/applications/blackbox-setup.desktop"
-# Refresh the desktop database so the entry appears in the application menu immediately
-update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
-
-echo "[install] Done. Reboot to launch BlackBox Setup, or run /usr/local/bin/blackbox-setup now."
-echo "[install] After first-run, find 'BlackBox Setup' in your applications menu to re-open for maintenance."
+# ── Step 8: Final user message (audit C3 — /usr/bin not /usr/local/bin) ──
+echo
+echo "[install] Done. Reboot to launch BlackBox Setup, or run /usr/bin/blackbox-setup --first-run now."
+echo "[install] Find 'BlackBox Setup' in your applications menu later for maintenance/manage mode."
 ```
 
-**Step 2: Test in a clean Ubuntu 24.04 VM** (via vagrant or virt-manager):
+**Step 2: Audit `Type=notify` compatibility (BLOCKING — verify before commit):**
+
+`Type=notify` requires `Orchestrator/app.py` to call `sd_notify("READY=1")` after startup AND periodic heartbeat for `WatchdogSec=120`.
 
 ```bash
-# In a fresh Ubuntu 24.04 box:
-git clone https://github.com/TechBran/blackbox-poc.git
+grep -n "sd_notify\|systemd.daemon\|WATCHDOG=1\|READY=1" \
+    Orchestrator/app.py Orchestrator/startup.py 2>/dev/null
+```
+
+**If `sd_notify` is NOT wired** (likely the case as of 2026-05-12), implementer must downgrade in the systemd unit:
+
+- `Type=notify` → `Type=simple`
+- DROP the `WatchdogSec=120` block (silently ignored without notify support, but cleaner to remove)
+
+Document the chosen path in the commit message ("Type=notify wired" vs "Type=simple — sd_notify not present").
+
+**Step 3: Make executable + commit:**
+
+```bash
+chmod +x Scripts/install.sh
+git add Scripts/install.sh
+git commit -m "feat(install): modernized installer — apt deps, venv, .env, systemd, Tauri build, autostart
+
+Builds Tauri setup .deb from source on customer machine (audit Q1=A).
+Hardened systemd unit with watchdog/notify (or simple — see Step 2 audit),
+MemoryHigh=70%, security hardening, logrotate + override.conf scaffold,
+blackbox-status helper.
+
+Audit-fix bundle: C1 apt pipeline / C2 .deb build path / C3 binary path /
+M1 install location / M2 hardening + uvicorn flags / M3 self-healing
+carry-forward / M5 restart on upgrade / M6 sudo detection / N7 apt-install
+local .deb. Replaces stale setup.sh from Oct 2025 (T4.1.5 removes it)."
+```
+
+---
+
+### Task 4.1.2: Verification recipe (Brandon-owned manual smoke test)
+
+**Why:** Per audit N5 — VM smoke test is verification, not implementer work. Document the recipe; Brandon runs it after T4.1.5 lands.
+
+**Recipe:**
+
+```bash
+# In a fresh Ubuntu 24.04 VM (virt-manager, vagrant, or LXD container with X session):
+git clone <repo-url-or-tarball-extract> blackbox-poc
 cd blackbox-poc
 ./Scripts/install.sh
 # Reboot
 # Confirm Tauri setup app autostarts and shows the wizard
+# Walk through onboarding: tailscale → keys → optional integrations → operator
+# Verify Portal opens; autostart .desktop self-removed (per Track 3 T3.5.1)
+# Find "BlackBox Setup" in applications menu, click → opens /onboarding/?mode=manage
 ```
 
-**Step 3: Commit**
+**Pass criteria:**
+
+- Total time fresh-OS → working chat: **< 30 minutes** (including ~15 min Tauri build)
+- No terminal needed after `./Scripts/install.sh`
+- Setup wizard auto-launches on first reboot
+- Setup wizard does NOT relaunch on second reboot
+- "BlackBox Setup" persistent launcher available in apps menu
+- `systemctl status blackbox.service` shows `active (running)`
+- `systemctl show blackbox.service | grep MemoryHigh` returns `MemoryHigh=70%` (or post-deflate equivalent)
+
+---
+
+### Task 4.1.3: .gitignore hygiene (audit N3)
+
+**Files:**
+- Modify: `<BLACKBOX_ROOT>/.gitignore`
+
+**Step 1: Append:**
+
+```gitignore
+# Onboarding state (per-install, never commit)
+.onboarding_state.json
+.onboarding_complete
+.env.backup.*
+```
+
+**Step 2: Commit:**
 
 ```bash
-git add Scripts/install.sh
-git rm setup.sh   # delete old, stale installer
-git commit -m "feat(install): modernized installer — apt deps, venv, .env, systemd, Tauri app, autostart
+git add .gitignore
+git commit -m "chore(gitignore): exclude per-install onboarding state + .env backups"
+```
 
-Single command bootstraps a fresh Ubuntu 24.04 mini-PC into a working BlackBox.
-Replaces the stale setup.sh from Oct 2025."
+---
+
+### Task 4.1.4: Canonical .env.template (audit M4)
+
+**Files:**
+- Modify: `<BLACKBOX_ROOT>/.env.template`
+
+**Goal:** Single source of truth for all wizard-managed env vars. Restores the `BLACKBOX_ROOT=` commented block deleted in pending uncommitted change. Documents Tier-1 + Tier-2 providers + integrations even when commented out.
+
+**Step 1: Rewrite `.env.template`:**
+
+```bash
+# AI BlackBox Flight Recorder — environment template
+# Copy this file to .env and fill in your keys, OR run the onboarding wizard.
+
+# === Project Root ===
+# Absolute path to the BlackBox project root.
+# Auto-detected if unset (sentinel walk-up via Orchestrator/utils/paths.py).
+# Set explicitly in production for reliability across install layouts.
+# BLACKBOX_ROOT=/home/your-user/blackbox-poc
+
+# === Operator Identity ===
+# Default operator displayed in the Portal on first load.
+# Set by onboarding wizard step "operator".
+# DEFAULT_OPERATOR=Your Name
+
+# === Tailscale ===
+# Hostname assigned by Tailscale (https://your-host.your-tailnet.ts.net).
+# Optional — leave blank for LAN-only mode.
+# Set by onboarding wizard step "tailscale".
+# BLACKBOX_TAILNET_HOSTNAME=
+
+# === LLM Providers (Tier 1 — validated by wizard) ===
+# OpenAI — GPT, DALL-E, Whisper, TTS. https://platform.openai.com/api-keys
+OPENAI_API_KEY=
+
+# Anthropic — Claude. https://console.anthropic.com/settings/keys
+ANTHROPIC_API_KEY=
+
+# Google — Gemini, Imagen, Veo, TTS. https://aistudio.google.com/app/apikey
+GOOGLE_API_KEY=
+
+# === Optional LLM Providers (Tier 2 — not in v1 wizard) ===
+# xAI — Grok. https://console.x.ai
+# XAI_API_KEY=
+
+# Perplexity. https://www.perplexity.ai/settings/api
+# PERPLEXITY_API_KEY=
+
+# === Integrations (Tier 1 — set by onboarding wizard "integrations" step) ===
+# Gmail OAuth client (https://console.cloud.google.com/apis/credentials).
+# GMAIL_CLIENT_ID=
+# GMAIL_CLIENT_SECRET=
+
+# === Phone / Telephony (deferred to v1.1) ===
+# TG200 cellular gateway, Drachtio + FreeSWITCH passwords use weak defaults
+# in v1; rotation deferred per audit decision. See docs/TROUBLESHOOTING.md.
+
+# === Add new wizard-managed vars above this line ===
+```
+
+**Step 2: Commit:**
+
+```bash
+git add .env.template
+git commit -m "docs(env): canonical wizard-managed env inventory + restore BLACKBOX_ROOT block
+
+Single source of truth for what the wizard configures. Includes Tier-1
+providers (validated), Tier-2 providers (commented), Tier-1 integrations
+(commented), and the BLACKBOX_ROOT block that was deleted in a pending
+change. Per Track 4 audit M4."
+```
+
+---
+
+### Task 4.1.5: Cleanup legacy install files (audit N6)
+
+**Files:**
+- Delete: `setup.sh`, `install_enhanced_service.sh`, `blackbox-enhanced.service`, `cleanup_crash.sh`
+
+**Step 1: Verify no remaining references (besides this audit doc):**
+
+```bash
+grep -rn "setup\.sh\|install_enhanced_service\|blackbox-enhanced\.service\|cleanup_crash\.sh" \
+    --include="*.sh" --include="*.md" --include="*.py" .
+```
+
+If anything points at these (besides `docs/plans/2026-05-12-track4-audit.md`), update those references first.
+
+**Step 2: Remove + commit:**
+
+```bash
+git rm setup.sh install_enhanced_service.sh blackbox-enhanced.service cleanup_crash.sh
+git commit -m "chore(install): drop legacy install scripts — superseded by Scripts/install.sh
+
+setup.sh:                       superseded by Scripts/install.sh (T4.1.1)
+install_enhanced_service.sh:    self-healing features carried forward into T4.1.1 inline systemd unit
+blackbox-enhanced.service:      template superseded by inline unit in install.sh
+cleanup_crash.sh:               dropped per audit M3 (logs + journalctl sufficient)"
 ```
 
 ## Phase 4.2: Factory image build (skeletal)
@@ -3581,6 +4019,35 @@ exit 1
 git add Scripts/build-factory-image.sh
 git commit -m "chore(install): factory image build skeleton — fills in when hardware spec lands"
 ```
+
+---
+
+## Phase 4.3: Milestone tag
+
+### Task 4.3.1: Tag track4-installer-complete
+
+After Brandon completes T4.1.2 (VM smoke test passes), tag the milestone.
+
+**Step 1:** Verify all Track 4 sub-tasks are committed and pushed (`git log --oneline | head -10`).
+
+**Step 2:** Annotated tag + push:
+
+```bash
+git tag -a track4-installer-complete -m "Track 4 — installer + factory image complete
+
+Modernized Scripts/install.sh with audit-Q1=A build-from-source path,
+hardened systemd unit (Type=notify or simple per Step 2 audit; WatchdogSec
+when notify; MemoryHigh=70%; security hardening), logrotate +
+override.conf scaffold + blackbox-status helper, autostart + persistent
+.desktop launchers, gitignore hygiene, canonical .env.template, legacy
+file cleanup. Factory image build script stubbed (T4.2.1) until hardware
+spec lands.
+
+Audit doc: docs/plans/2026-05-12-track4-audit.md (3 critical + 6 major + 8 minor)."
+git push origin main --tags
+```
+
+This becomes the **7th milestone tag** after track0 / track1 / track2-linear / track2-portal / wizard-foundation / track3.
 
 ---
 
