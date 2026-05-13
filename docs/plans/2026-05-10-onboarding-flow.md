@@ -3327,7 +3327,7 @@ fn main() {
 # (assuming onboarding has been completed; otherwise opens setup)
 
 # Dev test (no install needed) — see Task 3.5.3
-cd installer && cargo tauri dev -- --first-run
+cd installer && cargo tauri dev -- -- --first-run
 ```
 
 **Step 3: Commit**
@@ -3378,7 +3378,7 @@ Close the window with the X button (or Cmd+W). Verify in stderr that the autosta
 
 ```bash
 cd installer
-cargo tauri dev -- --first-run
+cargo tauri dev -- -- --first-run
 ```
 
 Verify:
