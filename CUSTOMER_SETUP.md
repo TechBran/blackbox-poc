@@ -23,8 +23,8 @@ Open a terminal and navigate to the installation directory:
 
 ```bash
 cd /path/to/blackbox_poc
-chmod +x setup.sh
-./setup.sh
+chmod +x Scripts/install.sh
+./Scripts/install.sh
 ```
 
 The setup script will:
@@ -172,7 +172,7 @@ sudo systemctl start blackbox.service
 2. Common issues:
    - **Missing API keys**: Edit `.env` and add your keys
    - **Port 8000 in use**: Check with `sudo netstat -tulpn | grep 8000`
-   - **Python environment issues**: Re-run `./setup.sh`
+   - **Python environment issues**: Re-run `./Scripts/install.sh`
 
 ### Portal Not Loading
 
