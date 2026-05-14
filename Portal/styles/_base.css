@@ -21,13 +21,26 @@ html, body {
 
 /* Explicit html background — defeats WebKit/WebKitGTK (Tauri on Linux)
  * default white compositor backdrop. body has position:fixed, which on
- * WebKit creates a separate compositor layer; without an html bg, the
- * frosted-glass bubbles (backdrop-filter: blur over rgba(...,0.88))
- * blur over white instead of black, producing pale "white box" zones
- * around top bar + composer that don't appear on Chromium dev boxes.
+ * WebKit creates a separate compositor layer; without an html bg, any
+ * transparent areas would blur over white instead of black on Tauri.
  * Caught during Brandon's Tauri-on-MSO5 hardware test 2026-05-13. */
 html {
   background-color: #000;
+}
+
+/* Strip GTK native form-control rendering on WebKitGTK (Tauri on Linux).
+ * Without this, <select> elements render with the OS GTK theme by default
+ * — solid white boxes regardless of CSS background rules — because WebKit
+ * uses native widget rendering for form controls. appearance:none disables
+ * the native render so component CSS (_topbar, _composer, _cron, etc.) can
+ * paint the dark bubble backgrounds correctly. Note: the popup OPTION list
+ * that opens on click is still OS-themed (full styling requires replacing
+ * <select> with a custom <div> dropdown — deferred to v1.1 polish).
+ * Caught 2026-05-13 on MSO5 hardware test. */
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
 }
 
 body{
