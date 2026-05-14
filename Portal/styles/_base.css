@@ -19,6 +19,17 @@ html, body {
   width: 100%;
 }
 
+/* Explicit html background — defeats WebKit/WebKitGTK (Tauri on Linux)
+ * default white compositor backdrop. body has position:fixed, which on
+ * WebKit creates a separate compositor layer; without an html bg, the
+ * frosted-glass bubbles (backdrop-filter: blur over rgba(...,0.88))
+ * blur over white instead of black, producing pale "white box" zones
+ * around top bar + composer that don't appear on Chromium dev boxes.
+ * Caught during Brandon's Tauri-on-MSO5 hardware test 2026-05-13. */
+html {
+  background-color: #000;
+}
+
 body{
   margin:0;
   font-family: ui-sans-serif, system-ui, Segoe UI, Arial, Helvetica, sans-serif;
