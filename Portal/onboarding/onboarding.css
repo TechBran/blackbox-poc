@@ -2025,3 +2025,39 @@ body::after {
     font-size: 0.9em;
 }
 .ob-auth-link-secondary:hover { color: rgba(255,255,255,0.85); }
+
+/* ── E1 reversal: install stream box + installed-badge green variant ── */
+.ob-install-stream {
+    margin-top: 1rem;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius-md, 8px);
+    background: rgba(0,0,0,0.4);
+    overflow: hidden;
+}
+.ob-install-stream-header {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85em;
+    background: rgba(255,255,255,0.04);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.ob-install-stream-log {
+    margin: 0;
+    padding: 0.75rem;
+    max-height: 240px;
+    overflow-y: auto;
+    font-family: ui-monospace, monospace;
+    font-size: 0.78em;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    color: rgba(255,255,255,0.85);
+}
+.ob-status-badge-installed {
+    background: rgba(80, 200, 100, 0.10);
+    border-left: 3px solid rgba(80, 200, 100, 0.6);
+    color: rgba(180, 240, 200, 0.95);
+    margin-bottom: 0.5rem;
+}
+.ob-action-card-prose {
+    margin: 0 0 1rem;
+    color: rgba(255,255,255,0.75);
+}

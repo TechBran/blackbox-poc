@@ -392,3 +392,19 @@ async def tailscale_accept_dns():
     """Set device-side --accept-dns=true (idempotent). Tailnet-level MagicDNS
     toggle is separate — see UI banner (M3 / I4 deep-link)."""
     return await ts_act.set_accept_dns()
+
+
+from fastapi.responses import StreamingResponse
+
+@router.post("/tailscale/install/stream")
+async def tailscale_install_stream():
+    """SSE stream of Tailscale install progress (E1-reversal: re-uses apt
+    repo configured by install.sh Step 1b). 409 if already in progress."""
+    try:
+        async def gen():
+            async with ts_act.operation_lock(ts_act._install_lock, "install"):
+                async for chunk in ts_act.stream_install():
+                    yield chunk
+        return StreamingResponse(gen(), media_type="text/event-stream")
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))

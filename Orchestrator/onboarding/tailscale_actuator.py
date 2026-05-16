@@ -267,3 +267,36 @@ async def set_accept_dns() -> dict:
     if proc.returncode == 0:
         return {"ok": True}
     return {"ok": False, "error": stderr.decode("utf-8", errors="replace").strip()}
+
+
+# ── E1-reversal: install button resurrected with apt-get (apt repo
+#   was configured by install.sh Step 1b's root-context curl|sh) ──
+
+async def stream_install():
+    """Yield SSE-formatted progress events while apt-get installs tailscale.
+    Caller must hold _install_lock per audit C3."""
+    cmd = ["sudo", "-n", "/usr/bin/apt-get", "install", "-y", "tailscale"]
+    yield b"event: start\ndata: Installing Tailscale...\n\n"
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    try:
+        while True:
+            line = await proc.stdout.readline()
+            if not line:
+                break
+            text = line.decode("utf-8", errors="replace").rstrip("\r\n")
+            yield f"data: {text}\n\n".encode("utf-8")
+        rc = await proc.wait()
+        if rc == 0:
+            yield b"event: done\ndata: installed\n\n"
+        else:
+            yield f"event: error\ndata: install exited rc={rc}\n\n".encode("utf-8")
+    except asyncio.CancelledError:
+        try:
+            proc.terminate()
+        except ProcessLookupError:
+            pass  # E3: subprocess may have died
+        raise

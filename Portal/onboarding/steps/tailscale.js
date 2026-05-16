@@ -317,57 +317,117 @@ function wireRecheckBtn(scope, navCallbacks) {
     });
 }
 
-// ── Branch B: binary not found ──
+// ── Branch B: binary not found — fallback install button (E1 reversal) ──
 // Per E1, Tailscale is pre-installed by install.sh Step 1b, so this branch
-// is effectively unreachable on a fresh BlackBox. If it DOES fire, customer
-// must have manually uninstalled — surface clear recovery instructions
-// rather than a full install button flow (T6 was skipped per E1).
+// is normally unreachable. But if a customer manually removed tailscale OR
+// install.sh Step 1b failed silently, Branch B gives them a recovery path
+// WITHOUT needing a terminal. Uses apt-get install (apt repo + signing key
+// were already added during Step 1b's curl|sh root-context run, so this
+// works without sudoers metacharacter issues).
 function renderBranchB(statusEl, result, { back, skip, recheck }) {
     statusEl.innerHTML = `
         <div class="ob-status-badge ob-status-badge-error" role="status">
             <span class="ob-status-badge-pip" aria-hidden="true">!</span>
-            <span class="ob-status-badge-label">Tailscale binary not found on device</span>
+            <span class="ob-status-badge-label">Tailscale not installed</span>
         </div>
         <div class="ob-action-card">
             <p class="ob-action-card-prose">
-                Tailscale should have been installed during BlackBox setup, but
-                it appears to be missing. This is unusual &mdash; it may have been
-                manually removed.
-            </p>
-            <p class="ob-action-card-prose">
-                To recover, open a terminal on this device, change into the
-                BlackBox install directory, and re-run the installer:
-            </p>
-            <div class="ob-code-block">
-                <span class="ob-code-prompt" aria-hidden="true">$</span>
-                <code class="ob-code-cmd">sudo ./Scripts/install.sh</code>
-            </div>
-            <p class="ob-action-card-prose">
-                (If you're not sure where you extracted the BlackBox installer,
-                check your Downloads or Desktop folder.) Then return to this
-                wizard and click <strong>Re-check</strong> below.
+                Click below to install Tailscale on this device. Installation
+                takes about 30 to 60 seconds.
             </p>
             <div class="ob-cta-row">
-                <button type="button" class="ob-cta" id="ob-recheck-btn">
-                    Re-check status <span class="ob-cta-arrow" aria-hidden="true">&#x21bb;</span>
+                <button type="button" class="ob-cta" id="ob-install-btn">
+                    Install Tailscale Now <span class="ob-cta-arrow" aria-hidden="true">&rarr;</span>
                 </button>
+            </div>
+            <div id="ob-install-stream" class="ob-install-stream" hidden>
+                <div class="ob-install-stream-header">Installing Tailscale&hellip;</div>
+                <pre id="ob-install-stream-log" class="ob-install-stream-log"></pre>
             </div>
         </div>
         ${renderDisclosure(true)}
         ${renderStepNav({ showSkip: true })}
     `;
-    document.getElementById("ob-recheck-btn").addEventListener("click", recheck);
+    document.getElementById("ob-install-btn").addEventListener("click", () => {
+        startInstall(statusEl, { back, skip, recheck });
+    });
     wireStepNav(statusEl, { back, skip });
+}
+
+async function startInstall(statusEl, { back, skip, recheck }) {
+    const btn = document.getElementById("ob-install-btn");
+    const streamBox = document.getElementById("ob-install-stream");
+    const log = document.getElementById("ob-install-stream-log");
+    btn.disabled = true;
+    btn.textContent = "Installing...";
+    streamBox.hidden = false;
+
+    try {
+        const resp = await fetch("/onboarding/tailscale/install/stream", { method: "POST" });
+        if (resp.status === 409) {
+            log.textContent = "Install already in progress — please wait...";
+            return;
+        }
+        if (!resp.ok) {
+            log.textContent = `Install failed to start (HTTP ${resp.status})`;
+            btn.disabled = false;
+            btn.textContent = "Try again";
+            return;
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        let done = false;
+        while (!done) {
+            const { value, done: isDone } = await reader.read();
+            done = isDone;
+            if (value) {
+                buffer += decoder.decode(value, { stream: true });
+                const events = buffer.split("\n\n");
+                buffer = events.pop() || "";
+                for (const evt of events) {
+                    const lines = evt.split("\n");
+                    let event = "message", data = "";
+                    for (const ln of lines) {
+                        if (ln.startsWith("event:")) event = ln.slice(6).trim();
+                        else if (ln.startsWith("data:")) data += ln.slice(5).trim() + "\n";
+                    }
+                    if (event === "done") {
+                        log.textContent += "\nInstall complete.\n";
+                        setTimeout(recheck, 1000);
+                        return;
+                    }
+                    if (event === "error") {
+                        log.textContent += "\nError: " + data;
+                        btn.disabled = false;
+                        btn.textContent = "Try again";
+                        return;
+                    }
+                    log.textContent += data;
+                    log.scrollTop = log.scrollHeight;
+                }
+            }
+        }
+    } catch (e) {
+        log.textContent += "\nNetwork error: " + e.message;
+        btn.disabled = false;
+        btn.textContent = "Try again";
+    }
 }
 
 // ── Branch C: installed but not authenticated (also re-auth after 180-day expiry) ──
 function renderBranchC(statusEl, result, { back, skip, recheck }) {
     const errMsg = (result.error || "needs authentication").replace(/^RuntimeError:\s*/, "");
     statusEl.innerHTML = `
+        <div class="ob-status-badge ob-status-badge-installed" role="status">
+            <span class="ob-status-badge-pip" aria-hidden="true">&check;</span>
+            <span class="ob-status-badge-label">Tailscale installed</span>
+        </div>
         <div class="ob-status-badge" role="status">
             <span class="ob-status-badge-pip" aria-hidden="true">!</span>
             <span class="ob-status-badge-label">
-                Tailscale needs authentication
+                Authentication needed
             </span>
             <span class="ob-status-badge-version">${escapeHtml(errMsg)}</span>
         </div>
