@@ -78,9 +78,24 @@ pub fn run_with_url(url: &str, mode: &str) {
                     return true;  // allow in-webview load
                 }
                 let url_str = url.as_str();
-                // Try firefox first (Ubuntu Desktop default; E7 workaround)
+                // E7 enhanced: explicitly set DBUS_SESSION_BUS_ADDRESS +
+                // XDG_RUNTIME_DIR before spawning firefox. The wizard's
+                // inherited env from desktop launch may be minimal (Tauri
+                // appears to filter it down to DISPLAY+XAUTHORITY only),
+                // but the snap-confined firefox needs DBUS to negotiate
+                // with snapd's confinement layer. Computing these from
+                // the current UID is portable across customer setups —
+                // /run/user/<uid>/{bus,*} is the systemd-user-session
+                // convention on all modern Linux distros.
+                let uid = unsafe { libc::getuid() };
+                let xdg_runtime = std::env::var("XDG_RUNTIME_DIR")
+                    .unwrap_or_else(|_| format!("/run/user/{}", uid));
+                let dbus_addr = std::env::var("DBUS_SESSION_BUS_ADDRESS")
+                    .unwrap_or_else(|_| format!("unix:path={}/bus", xdg_runtime));
                 let firefox_ok = std::process::Command::new("firefox")
                     .arg(url_str)
+                    .env("DBUS_SESSION_BUS_ADDRESS", &dbus_addr)
+                    .env("XDG_RUNTIME_DIR", &xdg_runtime)
                     .stdout(std::process::Stdio::null())
                     .stderr(std::process::Stdio::null())
                     .spawn()
