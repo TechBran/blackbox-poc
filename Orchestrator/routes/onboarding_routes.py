@@ -434,9 +434,18 @@ class OpenUrlRequest(BaseModel):
 
 @router.post("/open-url")
 async def open_external_url(req: OpenUrlRequest) -> dict:
-    """Spawn the user's default browser (firefox preferred) with the given URL.
-    Wired up by Portal/onboarding/onboarding.js's document-level click handler
-    that intercepts <a target=_blank> clicks. See E7 audit row."""
+    """Open a URL in the user's browser. Uses XDG Desktop Portal as the
+    canonical cross-session URI dispatch mechanism (org.freedesktop.portal
+    .OpenURI). System services like blackbox.service run in a separate
+    systemd cgroup/namespace from the user's GNOME session — directly
+    spawning firefox doesn't render because snap confinement + GUI
+    session integration require user-session-managed processes. The
+    portal IS in the user session and handles the handoff. Falls back
+    to direct firefox spawn (with stderr capture for diagnostics) if
+    portal is unavailable.
+
+    Wired up by Portal/onboarding/onboarding.js's document-level click
+    handler intercepting <a target=_blank> clicks."""
     import subprocess
     import glob
 
@@ -449,8 +458,6 @@ async def open_external_url(req: OpenUrlRequest) -> dict:
     env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path=/run/user/{uid}/bus"
     env["XDG_RUNTIME_DIR"] = f"/run/user/{uid}"
     env.setdefault("DISPLAY", ":0")
-    # Discover XAUTHORITY: Mutter Xwayland file changes per session;
-    # also fall back to GDM-managed location.
     if "XAUTHORITY" not in env:
         candidates = (
             glob.glob(f"/run/user/{uid}/.mutter-Xwaylandauth.*")
@@ -461,30 +468,64 @@ async def open_external_url(req: OpenUrlRequest) -> dict:
                 env["XAUTHORITY"] = cand
                 break
 
-    logger.info("open-url: spawning firefox for %s (DISPLAY=%s, XAUTHORITY=%s)",
-                url, env.get("DISPLAY"), env.get("XAUTHORITY"))
+    # Attempt 1: XDG Desktop Portal via gdbus (canonical cross-session dispatch)
+    logger.info("open-url: trying portal for %s", url)
     try:
-        subprocess.Popen(
-            ["firefox", url],
-            env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
+        portal = subprocess.run(
+            ["gdbus", "call", "--session",
+             "--dest", "org.freedesktop.portal.Desktop",
+             "--object-path", "/org/freedesktop/portal/desktop",
+             "--method", "org.freedesktop.portal.OpenURI.OpenURI",
+             "", url, "{}"],
+            env=env, capture_output=True, text=True, timeout=10,
         )
-        return {"ok": True}
-    except FileNotFoundError:
-        logger.warning("open-url: firefox not on PATH, falling back to xdg-open")
+        if portal.returncode == 0:
+            logger.info("open-url: portal SUCCESS for %s (%s)", url, portal.stdout.strip())
+            return {"ok": True, "via": "portal"}
+        logger.warning("open-url: portal failed rc=%d stderr=%r stdout=%r",
+                       portal.returncode, portal.stderr.strip()[:300], portal.stdout.strip()[:300])
+    except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+        logger.warning("open-url: portal call errored: %r", e)
+
+    # Attempt 2: gio launch on the firefox .desktop file (handles session
+    # integration better than bare firefox spawn for snap apps).
+    firefox_desktop = "/var/lib/snapd/desktop/applications/firefox_firefox.desktop"
+    if os.path.exists(firefox_desktop):
+        logger.info("open-url: trying gio launch for %s", url)
         try:
-            subprocess.Popen(
-                ["xdg-open", url],
-                env=env,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
+            gio = subprocess.run(
+                ["gio", "launch", firefox_desktop, url],
+                env=env, capture_output=True, text=True, timeout=10,
             )
-            return {"ok": True, "via": "xdg-open"}
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
+            if gio.returncode == 0:
+                logger.info("open-url: gio launch SUCCESS")
+                return {"ok": True, "via": "gio"}
+            logger.warning("open-url: gio launch failed rc=%d stderr=%r",
+                           gio.returncode, gio.stderr.strip()[:300])
+        except (FileNotFoundError, subprocess.TimeoutExpired) as e:
+            logger.warning("open-url: gio launch errored: %r", e)
+
+    # Attempt 3: direct firefox spawn (with stderr capture for diagnostics)
+    logger.info("open-url: trying direct firefox spawn")
+    try:
+        # Run with timeout — if firefox is still alive after 5s, treat as success
+        result = subprocess.run(
+            ["firefox", url],
+            env=env, capture_output=True, text=True, timeout=5,
+        )
+        # Exited within 5s = failure (firefox should keep running on success)
+        logger.warning("open-url: firefox exited rc=%d stderr=%r",
+                       result.returncode, result.stderr[:500])
+        return {"ok": False, "via": "firefox-direct",
+                "error": f"firefox exited rc={result.returncode}",
+                "stderr": result.stderr[:500]}
+    except subprocess.TimeoutExpired:
+        # Still running after 5s = success (firefox stays alive)
+        logger.info("open-url: firefox-direct SUCCESS (still running after 5s)")
+        return {"ok": True, "via": "firefox-direct"}
+    except FileNotFoundError:
+        logger.error("open-url: firefox not on PATH; all methods exhausted")
+        return {"ok": False, "error": "no browser available"}
     except Exception as e:
-        logger.exception("open-url: firefox spawn failed")
+        logger.exception("open-url: unexpected error")
         return {"ok": False, "error": str(e)}
