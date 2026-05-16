@@ -113,7 +113,15 @@ MemoryHigh=70%
 # sandboxed process cannot exec \$BLACKBOX_ROOT/Orchestrator/venv/bin/python
 # → status=203/EXEC. read-only allows visibility; ReadWritePaths punches through
 # for the install dir's write needs (Volume/, Manifest/, Fossils/, etc.).
-NoNewPrivileges=true
+#
+# NoNewPrivileges=false (audit empirical T4 finding): the Tailscale wizard
+# actuator invokes \`sudo -n /usr/bin/tailscale up\` via the NOPASSWD grant
+# from Step 4e. NoNewPrivileges=true would block sudo's setuid escalation
+# regardless of sudoers config ("sudo: The 'no new privileges' flag is set,
+# which prevents sudo from running as root"). The bounded NOPASSWD sudoers
+# entry remains the security boundary — only specific tailscale subcommands
+# with literal-arg matching are permitted.
+NoNewPrivileges=false
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only

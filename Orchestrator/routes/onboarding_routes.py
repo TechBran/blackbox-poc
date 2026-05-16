@@ -312,3 +312,49 @@ def reset() -> dict:
     logger.info("onboarding /reset: clearing state")
     _state.reset()
     return _state.snapshot()
+
+
+# ── Tailscale wizard actuator (T4) ──
+from Orchestrator.onboarding import tailscale_actuator as ts_act
+
+
+class TailscaleUpResponse(BaseModel):
+    login_url: str
+
+
+@router.post("/tailscale/up", response_model=TailscaleUpResponse)
+async def tailscale_up():
+    """Start `tailscale up` and return login URL for browser launch."""
+    try:
+        if ts_act._up_lock.locked():
+            # Already in progress — return existing URL
+            if ts_act._active_up_login_url:
+                return TailscaleUpResponse(login_url=ts_act._active_up_login_url)
+            raise HTTPException(status_code=409, detail="up already in progress")
+        await ts_act._up_lock.acquire()
+        try:
+            url = await ts_act.start_up()
+            return TailscaleUpResponse(login_url=url)
+        except Exception:
+            ts_act._up_lock.release()
+            raise
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/tailscale/poll")
+async def tailscale_poll():
+    """Check authentication progress."""
+    result = await ts_act.poll_up()
+    if result.get("state") == "running" and ts_act._up_lock.locked():
+        ts_act._up_lock.release()
+    return result
+
+
+@router.post("/tailscale/cancel")
+async def tailscale_cancel():
+    """User aborted auth flow."""
+    await ts_act.cancel_up()
+    if ts_act._up_lock.locked():
+        ts_act._up_lock.release()
+    return {"ok": True}
