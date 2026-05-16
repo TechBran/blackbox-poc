@@ -51,6 +51,26 @@ pub fn run_with_url(url: &str, mode: &str) {
             // Setup mode opens MAXIMIZED so the wizard still feels prominent
             // on first-run, but is escapable. Manage mode opens default-sized.
             .maximized(is_setup_mode)
+            // External-link interception (Brandon's E6 ask 2026-05-16): WebKitGTK
+            // doesn't auto-delegate target=_blank to system browser. on_navigation
+            // fires on every navigation attempt; we allow same-origin (the wizard
+            // itself) and delegate everything else to the system default browser
+            // via tauri-plugin-opener. Single point of control — every future
+            // wizard step's external links "just work" with bare <a target=_blank>,
+            // no JS-side wiring needed. Maintainer-blessed pattern per Tauri
+            // GitHub #11479 + #14113.
+            .on_navigation(|url| {
+                let is_internal = url.scheme() == "http"
+                    && url.host_str() == Some("localhost")
+                    && url.port() == Some(9091);
+                if is_internal {
+                    return true;  // allow in-webview load
+                }
+                if let Err(e) = tauri_plugin_opener::open_url(url.as_str(), None::<&str>) {
+                    eprintln!("[blackbox-setup] failed to open external URL {url}: {e}");
+                }
+                false  // cancel in-webview load; system browser handles it
+            })
             .build()?;
             Ok(())
         })
