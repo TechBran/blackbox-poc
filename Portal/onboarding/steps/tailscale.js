@@ -426,19 +426,38 @@ async function startAuth(statusEl, { back, skip, recheck }) {
         return;
     }
 
-    // I1: always render clickable fallback in case xdg-open didn't work
-    // (e.g., user accessing wizard from a remote browser, not on device)
+    // E4 (empirical): Tauri WebKitGTK doesn't auto-open target="_blank"
+    // to system browser, AND backend xdg-open fails because systemd-
+    // launched service has stripped env (no DISPLAY/DBUS). So we present
+    // the URL prominently with a copy button — same UX as Tailscale's
+    // own headless CLI flow. User copies, opens browser, signs in.
+    // Best-effort window.open is tried first (works in real browsers /
+    // remote-wizard access where Tauri's not in the way).
+    try {
+        window.open(loginUrl, "_blank", "noopener,noreferrer");
+    } catch (_) { /* fine — manual copy works */ }
+
     statusBox.innerHTML = `
         <p class="ob-auth-prompt">
-            Your browser should open automatically. If not:
+            <strong>Sign in to Tailscale</strong> &mdash; copy the URL below and
+            open it in any browser. We'll auto-detect when you're done.
         </p>
-        <p class="ob-auth-link-row">
-            <a href="${escapeHtml(loginUrl)}" target="_blank" rel="noopener" class="ob-auth-link">
-                Open Tailscale login &rarr;
-            </a>
-        </p>
-        <p class="ob-auth-waiting">Waiting for authentication...</p>
+        <div class="ob-auth-url-card">
+            <code class="ob-auth-url-code">${escapeHtml(loginUrl)}</code>
+            <div class="ob-auth-url-actions">
+                <button type="button" class="ob-copy-btn ob-copy-btn-primary"
+                        data-copy="${escapeHtml(loginUrl)}">
+                    <span aria-hidden="true">&#9112;</span> Copy URL
+                </button>
+                <a href="${escapeHtml(loginUrl)}" target="_blank" rel="noopener"
+                   class="ob-auth-link-secondary">
+                    Try to open here &rarr;
+                </a>
+            </div>
+        </div>
+        <p class="ob-auth-waiting">Waiting for sign-in&hellip;</p>
     `;
+    wireCopyBtn(statusBox);
     btn.textContent = "Waiting...";
 
     // Poll every 2s. Audit I5: 5 min total, "still waiting?" hint at 3 min.

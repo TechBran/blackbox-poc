@@ -1976,3 +1976,52 @@ body::after {
     font-size: 0.88em;
 }
 @keyframes ob-spin { to { transform: rotate(360deg); } }
+
+/* ── E4: auth URL card — prominent copy-and-paste path because Tauri
+   WebKitGTK doesn't auto-open target=_blank to system browser and
+   systemd-launched xdg-open has no DISPLAY/DBUS. Same UX as Tailscale's
+   own headless CLI flow. ── */
+.ob-auth-url-card {
+    margin: 0.75rem 0 1rem;
+    padding: 0.75rem 1rem;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: var(--radius-md, 8px);
+}
+.ob-auth-url-code {
+    display: block;
+    padding: 0.5rem 0.6rem;
+    background: rgba(0,0,0,0.45);
+    border-radius: var(--radius-sm, 6px);
+    font-family: ui-monospace, monospace;
+    font-size: 0.85em;
+    color: rgba(255,255,255,0.9);
+    word-break: break-all;
+    line-height: 1.4;
+    user-select: all;
+    margin-bottom: 0.6rem;
+}
+.ob-auth-url-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    flex-wrap: wrap;
+}
+.ob-copy-btn-primary {
+    background: var(--accent, #4a9eff);
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: var(--radius-sm, 6px);
+    font-weight: 500;
+    cursor: pointer;
+    font-size: inherit;
+    font-family: inherit;
+}
+.ob-copy-btn-primary:hover { opacity: 0.92; }
+.ob-auth-link-secondary {
+    color: rgba(255,255,255,0.65);
+    text-decoration: underline;
+    font-size: 0.9em;
+}
+.ob-auth-link-secondary:hover { color: rgba(255,255,255,0.85); }
