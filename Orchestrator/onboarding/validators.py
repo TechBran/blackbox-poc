@@ -146,10 +146,13 @@ def validate_tailscale() -> ValidationResult:
         if backend != "Running":
             raise RuntimeError(f"tailscale not running (BackendState={backend})")
         self_node = data.get("Self", {})
+        magicdns_suffix = data.get("MagicDNSSuffix") or ""  # empty string if MagicDNS off for tailnet
         return {
             "hostname": self_node.get("DNSName", "").rstrip("."),
             "ip": (self_node.get("TailscaleIPs") or ["unknown"])[0],
             "online": self_node.get("Online", False),
+            "magicdns_suffix": magicdns_suffix,
+            "magicdns_enabled": bool(magicdns_suffix),
         }
     return _measure(_fn)
 
