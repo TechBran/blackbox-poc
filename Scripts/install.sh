@@ -31,6 +31,16 @@ grep -E '^[a-zA-Z0-9._+-]+\s+#\s+MUST_HAVE' \
   | awk '{print $1}' \
   | xargs sudo apt install -y
 
+# ── Step 1b: Tailscale install (audit E1 — official installer adds apt repo + signing key + package) ──
+# Pre-installs Tailscale on every BlackBox. Wizard onboarding step then only
+# needs to handle authentication (not install). Idempotent on re-run.
+if ! command -v tailscale > /dev/null 2>&1; then
+    echo "[install] Installing Tailscale..."
+    curl -fsSL https://tailscale.com/install.sh | sh
+else
+    echo "[install] Tailscale already installed (skipping)"
+fi
+
 # ── Step 2: Python venv (audit I1 — run as $REAL_USER so files are user-owned, not root-owned) ──
 echo "[install] Creating Python venv..."
 sudo -u "$REAL_USER" python3.12 -m venv "$BLACKBOX_ROOT/Orchestrator/venv"
@@ -152,6 +162,20 @@ echo "=== Health ==="
 curl -fsS http://localhost:9091/health 2>&1 | head -5
 STATUSEOF
 chmod +x "$BLACKBOX_ROOT/blackbox-status.sh"
+
+# ── Step 4e: sudoers grant for runtime tailscale operations ──
+# (Tailscale wizard actuator: bounded NOPASSWD for the specific commands
+# the onboarding step needs. install -m 0440 atomic-replaces existing
+# file; visudo-check aborts if syntax broken.)
+sed "s/REAL_USER_PLACEHOLDER/$REAL_USER/g" \
+    "$BLACKBOX_ROOT/installer/templates/sudoers-blackbox-tailscale" \
+    | sudo install -m 0440 -o root -g root /dev/stdin /etc/sudoers.d/blackbox-tailscale
+if ! sudo visudo -c -f /etc/sudoers.d/blackbox-tailscale > /dev/null 2>&1; then
+    echo "[install] ERROR: sudoers file syntax check failed" >&2
+    sudo rm -f /etc/sudoers.d/blackbox-tailscale
+    exit 1
+fi
+echo "[install] Sudoers grant written for $REAL_USER (tailscale operations)"
 
 # ── Step 5: Build + install Tauri setup app (audit C2 / Q1=A) ──
 build_tauri_setup() {
