@@ -20,6 +20,12 @@ BLACKBOX_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 echo "[install] BLACKBOX_ROOT=$BLACKBOX_ROOT"
 echo "[install] REAL_USER=$REAL_USER  REAL_HOME=$REAL_HOME"
 
+# Audit: REAL_USER drives sudoers grants — defend against weird envvar injection
+if ! [[ "$REAL_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+    echo "[install] ERROR: REAL_USER='$REAL_USER' contains invalid characters (POSIX usernames only)" >&2
+    exit 1
+fi
+
 # ── Pre-flight (Phase 4.0) ──
 "$BLACKBOX_ROOT/Scripts/install-preflight.sh"
 
@@ -34,11 +40,18 @@ grep -E '^[a-zA-Z0-9._+-]+\s+#\s+MUST_HAVE' \
 # ── Step 1b: Tailscale install (audit E1 — official installer adds apt repo + signing key + package) ──
 # Pre-installs Tailscale on every BlackBox. Wizard onboarding step then only
 # needs to handle authentication (not install). Idempotent on re-run.
-if ! command -v tailscale > /dev/null 2>&1; then
+if [[ ! -x /usr/bin/tailscale ]]; then
     echo "[install] Installing Tailscale..."
     curl -fsSL https://tailscale.com/install.sh | sh
 else
     echo "[install] Tailscale already installed (skipping)"
+fi
+
+# Audit: fail fast if tailscale binary not at the path sudoers grants
+if ! [[ -x /usr/bin/tailscale ]]; then
+    echo "[install] ERROR: tailscale binary not at /usr/bin/tailscale after install" >&2
+    echo "[install] Found at: $(command -v tailscale 2>/dev/null || echo 'nowhere on PATH')" >&2
+    exit 1
 fi
 
 # ── Step 2: Python venv (audit I1 — run as $REAL_USER so files are user-owned, not root-owned) ──
@@ -167,10 +180,10 @@ chmod +x "$BLACKBOX_ROOT/blackbox-status.sh"
 # (Tailscale wizard actuator: bounded NOPASSWD for the specific commands
 # the onboarding step needs. install -m 0440 atomic-replaces existing
 # file; visudo-check aborts if syntax broken.)
-sed "s/REAL_USER_PLACEHOLDER/$REAL_USER/g" \
+sed "s|REAL_USER_PLACEHOLDER|$REAL_USER|g" \
     "$BLACKBOX_ROOT/installer/templates/sudoers-blackbox-tailscale" \
     | sudo install -m 0440 -o root -g root /dev/stdin /etc/sudoers.d/blackbox-tailscale
-if ! sudo visudo -c -f /etc/sudoers.d/blackbox-tailscale > /dev/null 2>&1; then
+if ! sudo visudo -c -f /etc/sudoers.d/blackbox-tailscale > /dev/null; then
     echo "[install] ERROR: sudoers file syntax check failed" >&2
     sudo rm -f /etc/sudoers.d/blackbox-tailscale
     exit 1
