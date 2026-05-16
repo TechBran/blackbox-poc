@@ -184,3 +184,62 @@ async def cancel_up() -> None:
             _active_up_process.kill()
         _active_up_process = None
     _active_up_login_url = None
+
+
+# ── T5: cert + accept-dns ──
+
+HTTPS_DISABLED_PATTERN = re.compile(r"HTTPS is disabled|HTTPS.*not enabled", re.IGNORECASE)
+
+
+async def request_cert() -> dict:
+    """Run `tailscale cert <hostname>`. Returns:
+       - {ok: true, cert_path, key_path, hostname} on success
+       - {ok: false, https_disabled: true, admin_url} if tailnet HTTPS toggle off
+       - {ok: false, error: <msg>} otherwise"""
+    # Get current hostname from status (must match what Tailscale assigned).
+    # subprocess.run wrapped in to_thread per T4's I1 fix (event-loop non-blocking).
+    try:
+        status = await asyncio.to_thread(
+            subprocess.run,
+            ["tailscale", "status", "--json"],
+            capture_output=True, text=True, timeout=3,
+        )
+        data = json.loads(status.stdout)
+        hostname = (data.get("Self") or {}).get("DNSName", "").rstrip(".")
+        if not hostname:
+            return {"ok": False, "error": "no hostname assigned by Tailscale"}
+    except Exception as e:
+        return {"ok": False, "error": f"status probe failed: {e}"}
+
+    proc = await asyncio.create_subprocess_exec(
+        "sudo", "-n", "/usr/bin/tailscale", "cert", hostname,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await proc.communicate()
+    out = (stdout + stderr).decode("utf-8", errors="replace")
+
+    if proc.returncode == 0:
+        return {
+            "ok": True,
+            "cert_path": f"/var/lib/tailscale/certs/{hostname}.crt",
+            "key_path": f"/var/lib/tailscale/certs/{hostname}.key",
+            "hostname": hostname,
+        }
+    if HTTPS_DISABLED_PATTERN.search(out):
+        return {"ok": False, "https_disabled": True,
+                "admin_url": "https://login.tailscale.com/admin/dns"}
+    return {"ok": False, "error": out.strip()[:500]}
+
+
+async def set_accept_dns() -> dict:
+    """Run `tailscale set --accept-dns=true`. Idempotent."""
+    proc = await asyncio.create_subprocess_exec(
+        "sudo", "-n", "/usr/bin/tailscale", "set", "--accept-dns=true",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await proc.communicate()
+    if proc.returncode == 0:
+        return {"ok": True}
+    return {"ok": False, "error": stderr.decode("utf-8", errors="replace").strip()}

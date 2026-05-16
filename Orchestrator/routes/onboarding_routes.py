@@ -379,3 +379,16 @@ async def tailscale_cancel():
     if ts_act._up_lock.locked():
         ts_act._up_lock.release()
     return {"ok": True}
+
+
+@router.post("/tailscale/cert")
+async def tailscale_cert():
+    """Request HTTPS cert from Tailscale (M2 — detects HTTPS-disabled state)."""
+    return await ts_act.request_cert()
+
+
+@router.post("/tailscale/accept-dns")
+async def tailscale_accept_dns():
+    """Set device-side --accept-dns=true (idempotent). Tailnet-level MagicDNS
+    toggle is separate — see UI banner (M3 / I4 deep-link)."""
+    return await ts_act.set_accept_dns()
