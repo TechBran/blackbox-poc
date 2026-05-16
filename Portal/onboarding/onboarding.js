@@ -29,6 +29,30 @@ let state = null;
 let currentStepIdx = 0;
 let busy = false;
 
+// E7 (Brandon's MSO2 Ultra testing 2026-05-16): target="_blank" links don't
+// trigger Tauri's on_navigation callback because WebKitGTK fires a different
+// signal (decide-policy::new-window-policy vs ::navigation-policy). The
+// on_navigation Rust handler in installer/src-tauri/src/lib.rs DOES fire for
+// current-window navigations. So we intercept target=_blank clicks here at
+// the document level, prevent default, and redirect via location.assign —
+// converting new-window navigation to current-window navigation. The Rust
+// handler then catches it, spawns firefox externally, and returns false
+// (cancels in-webview nav, wizard stays put). One global handler, works for
+// every wizard step. In a plain browser (remote-wizard access via Tailscale),
+// location.assign navigates the current tab — acceptable because the wizard
+// IS the active tab.
+document.addEventListener("click", function (e) {
+    const a = e.target.closest && e.target.closest("a[target=\"_blank\"]");
+    if (!a || !a.href) return;
+    // Only intercept external links — leave any localhost target=_blank alone.
+    try {
+        const u = new URL(a.href);
+        if (u.host === "localhost" || u.host === "127.0.0.1") return;
+    } catch (_) { return; }
+    e.preventDefault();
+    window.location.assign(a.href);
+}, true);  // capture phase — fires before any per-anchor handlers
+
 function escapeHtml(s) {
     if (s == null) return "";
     return String(s)
