@@ -1893,3 +1893,81 @@ body::after {
     color: var(--accent, #4a9eff);
     margin-left: 0.25rem;
 }
+
+/* ── T8: Branch A banner system (cert + magicdns + https) ── */
+.ob-banner {
+    margin-top: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: var(--radius-md, 8px);
+    font-size: 0.9em;
+}
+.ob-banner-warn {
+    background: rgba(255, 180, 50, 0.08);
+    border-left: 3px solid rgba(255, 180, 50, 0.6);
+}
+.ob-banner-info {
+    background: rgba(120, 200, 255, 0.06);
+    border-left: 3px solid rgba(120, 200, 255, 0.4);
+    color: rgba(255,255,255,0.75);
+}
+.ob-banner strong { display: block; margin-bottom: 0.25rem; }
+.ob-banner p { margin: 0.25rem 0; color: rgba(255,255,255,0.7); }
+.ob-banner-link {
+    display: inline-block;
+    margin-top: 0.5rem;
+    color: var(--accent, #4a9eff);
+    text-decoration: none;
+    font-weight: 500;
+}
+.ob-banner-link:hover { text-decoration: underline; }
+
+/* I4: rich-instruction banner additions (numbered steps, action row, code chips) */
+.ob-banner-steps {
+    margin: 0.25rem 0 0.75rem 1.25rem;
+    padding: 0;
+    color: rgba(255,255,255,0.8);
+}
+.ob-banner-steps li {
+    margin-bottom: 0.35rem;
+    line-height: 1.4;
+}
+.ob-banner-actions {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+.ob-banner-link-primary {
+    background: var(--accent, #4a9eff);
+    color: white;
+    padding: 0.4rem 0.85rem;
+    border-radius: var(--radius-sm, 6px);
+    margin-top: 0;
+}
+.ob-banner-link-primary:hover { text-decoration: none; opacity: 0.92; }
+.ob-banner-recheck {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.85);
+    padding: 0.4rem 0.85rem;
+    border-radius: var(--radius-sm, 6px);
+    cursor: pointer;
+    font-size: inherit;
+    font-family: inherit;
+}
+.ob-banner-recheck:hover { background: rgba(255,255,255,0.06); }
+.ob-banner-recheck:disabled { opacity: 0.5; cursor: default; }
+.ob-banner code {
+    background: rgba(0,0,0,0.3);
+    padding: 0.05rem 0.35rem;
+    border-radius: 3px;
+    font-family: ui-monospace, monospace;
+    font-size: 0.92em;
+}
+.ob-banner-spinner {
+    display: inline-block;
+    margin-right: 0.4rem;
+    animation: ob-spin 1.2s linear infinite;
+}
+@keyframes ob-spin { to { transform: rotate(360deg); } }

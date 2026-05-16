@@ -101,10 +101,9 @@ export async function render(container, { next, back, skip }) {
 async function renderBranchA(statusEl, result, { next, back, skip }) {
     const hostname = (result.detail && result.detail.hostname) || "unknown";
     const ip = (result.detail && result.detail.ip) || "unknown";
+    const magicdnsEnabled = !!(result.detail && result.detail.magicdns_enabled);
 
-    // Persist hostname so other code can find the tailnet name. Non-fatal:
-    // if /save fails (disk full, permissions, etc.), the customer can still
-    // continue; the hostname just won't be in .env.
+    // Persist hostname to .env (unchanged)
     try {
         await fetch("/onboarding/save", {
             method: "POST",
@@ -113,6 +112,29 @@ async function renderBranchA(statusEl, result, { next, back, skip }) {
         });
     } catch (e) {
         console.warn("Couldn't persist BLACKBOX_TAILNET_HOSTNAME:", e);
+    }
+
+    // N4: Guard against re-firing on Branch A re-render (page nav back-forth)
+    if (!window.__ob_tailscale_cert_attempted) {
+        window.__ob_tailscale_cert_attempted = true;
+        // Fire-and-forget: set --accept-dns=true (device-side, idempotent)
+        fetch("/onboarding/tailscale/accept-dns", { method: "POST" }).catch(() => {});
+    }
+
+    // M7: Cert flow — render PENDING banner first, swap on resolve.
+    // Promise + 60s client-side timeout (cert can be slow on first ACME run).
+    let certPromise = null;
+    if (!window.__ob_tailscale_cert_done) {
+        const certTimeout = new Promise(r => setTimeout(() => r({
+            ok: false, error: "timeout", timed_out: true,
+        }), 60_000));
+        const certFetch = fetch("/onboarding/tailscale/cert", { method: "POST" })
+            .then(r => r.json())
+            .catch(() => ({ ok: false, error: "network" }));
+        certPromise = Promise.race([certFetch, certTimeout]).then(result => {
+            window.__ob_tailscale_cert_done = true;
+            return result;
+        });
     }
 
     const portalUrl = `https://${hostname}`;
@@ -137,6 +159,7 @@ async function renderBranchA(statusEl, result, { next, back, skip }) {
                 your tailnet &mdash; pair the Android app, or just use desktop.
             </p>
         </div>
+        <div id="ob-tailscale-banners"></div>
         <div class="ob-cta-row">
             <button type="button" class="ob-cta" id="ob-tailscale-continue">
                 Continue <span class="ob-cta-arrow" aria-hidden="true">&rarr;</span>
@@ -145,10 +168,146 @@ async function renderBranchA(statusEl, result, { next, back, skip }) {
         ${renderDisclosure(false)}
         ${renderStepNav({ showSkip: false })}
     `;
-
     wireCopyBtn(statusEl);
     document.getElementById("ob-tailscale-continue").addEventListener("click", next);
     wireStepNav(statusEl, { back, skip });
+
+    // Render banners as cert + magicdns results land
+    const banners = document.getElementById("ob-tailscale-banners");
+    if (!magicdnsEnabled) {
+        banners.insertAdjacentHTML("beforeend", magicdnsBanner());
+        wireRecheckBtn(banners);
+    }
+
+    // Cert pending banner while ACME flow runs (M7)
+    if (certPromise) {
+        const pendingId = "ob-cert-pending";
+        banners.insertAdjacentHTML("beforeend", certPendingBanner(pendingId));
+        const result = await certPromise;
+        const pendingEl = document.getElementById(pendingId);
+        if (pendingEl) pendingEl.remove();
+        if (result.ok) {
+            banners.insertAdjacentHTML("beforeend", certInfoBanner());
+        } else if (result.https_disabled) {
+            banners.insertAdjacentHTML("beforeend",
+                httpsDisabledBanner(result.admin_url));
+            wireRecheckBtn(banners);
+        } else if (result.timed_out) {
+            banners.insertAdjacentHTML("beforeend",
+                certTimeoutBanner());
+            wireRecheckBtn(banners);
+        }
+        // Other errors are silent — cert is non-fatal for v1
+    }
+}
+
+// I4: MagicDNS banner — Android-app-gate framing + step-by-step.
+// Customers see "10 seconds" and "Android app won't pair without this" and ACT.
+function magicdnsBanner() {
+    return `
+        <div class="ob-banner ob-banner-warn">
+            <strong>Enable MagicDNS to use the Android app</strong>
+            <p>
+                Your Android app reaches the BlackBox at a friendly hostname like
+                <code>blackbox.<em>your-tailnet</em>.ts.net</code> &mdash; that name
+                only resolves when MagicDNS is on for your tailnet. Without it,
+                pairing won't work.
+            </p>
+            <p><strong>Takes about 10 seconds:</strong></p>
+            <ol class="ob-banner-steps">
+                <li>Click the <strong>Open admin console</strong> button below
+                    (opens in your browser).</li>
+                <li>Find the <strong>MagicDNS</strong> section near the top of
+                    the page.</li>
+                <li>Click the toggle to turn it <strong>On</strong>.</li>
+                <li>Come back here and click <strong>Re-check</strong>.</li>
+            </ol>
+            <div class="ob-banner-actions">
+                <a href="https://login.tailscale.com/admin/dns" target="_blank" rel="noopener"
+                   class="ob-banner-link ob-banner-link-primary">Open admin console &rarr;</a>
+                <button type="button" class="ob-banner-link ob-banner-recheck"
+                        data-recheck="magicdns">Re-check &#x21bb;</button>
+            </div>
+        </div>
+    `;
+}
+
+// I4: Same treatment for HTTPS toggle. Less urgent for v1 (Portal is HTTP-only
+// until v1.1) but worth flipping since cert obtain works automatically once on.
+function httpsDisabledBanner(adminUrl) {
+    return `
+        <div class="ob-banner ob-banner-warn">
+            <strong>Enable HTTPS certs for your tailnet</strong>
+            <p>
+                Tailscale can issue an HTTPS certificate for your BlackBox &mdash;
+                useful once your Portal supports it (v1.1+). The toggle is on
+                the same admin page as MagicDNS.
+            </p>
+            <p><strong>Takes about 10 seconds:</strong></p>
+            <ol class="ob-banner-steps">
+                <li>Click the <strong>Open admin console</strong> button.</li>
+                <li>Find the <strong>HTTPS Certificates</strong> section.</li>
+                <li>Click <strong>Enable HTTPS</strong> and confirm.</li>
+                <li>Come back here and click <strong>Re-check</strong>.</li>
+            </ol>
+            <div class="ob-banner-actions">
+                <a href="${escapeHtml(adminUrl)}" target="_blank" rel="noopener"
+                   class="ob-banner-link ob-banner-link-primary">Open admin console &rarr;</a>
+                <button type="button" class="ob-banner-link ob-banner-recheck"
+                        data-recheck="cert">Re-check &#x21bb;</button>
+            </div>
+        </div>
+    `;
+}
+
+function certPendingBanner(id) {
+    return `
+        <div class="ob-banner ob-banner-info" id="${escapeHtml(id)}">
+            <span class="ob-banner-spinner" aria-hidden="true">&#9696;</span>
+            Requesting HTTPS certificate from Let's Encrypt&hellip;
+        </div>
+    `;
+}
+
+function certInfoBanner() {
+    return `
+        <div class="ob-banner ob-banner-info">
+            HTTPS certificate obtained &mdash; ready for full HTTPS Portal in v1.1.
+        </div>
+    `;
+}
+
+function certTimeoutBanner() {
+    return `
+        <div class="ob-banner ob-banner-warn">
+            <strong>HTTPS cert request took too long.</strong>
+            <p>This usually clears up on its own. Click Re-check to try again.</p>
+            <div class="ob-banner-actions">
+                <button type="button" class="ob-banner-link ob-banner-recheck"
+                        data-recheck="cert">Re-check &#x21bb;</button>
+            </div>
+        </div>
+    `;
+}
+
+// Re-check wiring: each "Re-check" button re-runs the appropriate probe and
+// re-renders Branch A so banners refresh based on new state.
+function wireRecheckBtn(scope) {
+    scope.querySelectorAll(".ob-banner-recheck").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+            e.preventDefault();
+            const which = btn.dataset.recheck;
+            btn.disabled = true;
+            btn.textContent = "Checking...";
+            // Reset cert-attempted guard so it can re-fire
+            if (which === "cert") window.__ob_tailscale_cert_done = false;
+            // Force full step re-render via top-level render
+            const container = scope.closest(".ob-step")?.parentElement || document.body;
+            await render(container, {
+                next: () => {}, back: () => {}, skip: () => {},
+            });
+        });
+    });
 }
 
 // ── Branch B: binary not found ──
