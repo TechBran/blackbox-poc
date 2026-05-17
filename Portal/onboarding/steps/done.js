@@ -249,7 +249,8 @@ function renderRestartState(btn, statusEl, data) {
         btn.hidden = false;
         btn.disabled = false;
         btn.classList.remove("ob-cta-restart-done");
-        btn.querySelector(".ob-cta-restart-label").textContent = "Restart Service";
+        const label = btn.querySelector(".ob-cta-restart-label");
+        if (label) label.textContent = "Restart Service";
         statusEl.hidden = false;
         statusEl.classList.remove("ob-restart-status-passive", "ob-restart-status-done");
         statusEl.classList.add("ob-restart-status-warn");
@@ -271,14 +272,24 @@ async function doRestart(btn, statusEl) {
     if (restartBusy) return;
     restartBusy = true;
 
-    // State C: restarting
-    btn.disabled = true;
-    btn.querySelector(".ob-cta-restart-label").textContent = "Restarting service…";
-    statusEl.classList.remove("ob-restart-status-warn", "ob-restart-status-done");
-    statusEl.classList.add("ob-restart-status-passive");
-    statusEl.textContent = "This takes about 60 to 90 seconds. The page will reconnect automatically.";
+    // E9 followup (Brandon's MSO2 Ultra report 2026-05-17): customer clicked
+    // button, nothing happened. Journal confirmed /onboarding/restart was
+    // never hit. Suspected root cause: if any State-C UI mutation threw
+    // BEFORE the fetch (e.g., btn.querySelector returns null in some render
+    // state, .textContent on null throws TypeError), the function would
+    // exit early WITHOUT entering try/finally, leaving restartBusy=true
+    // permanently. All subsequent clicks then no-op silently. Defensive fix:
+    // wrap ALL state mutations inside the try block so finally always runs.
 
     try {
+        // State C: restarting (mutations inside try so finally always runs)
+        btn.disabled = true;
+        const label = btn.querySelector(".ob-cta-restart-label");
+        if (label) label.textContent = "Restarting service…";
+        statusEl.classList.remove("ob-restart-status-warn", "ob-restart-status-done");
+        statusEl.classList.add("ob-restart-status-passive");
+        statusEl.textContent = "This takes about 60 to 90 seconds. The page will reconnect automatically.";
+
         // Fire-and-forget — the response may not arrive (server SIGTERMs mid-flight)
         try {
             await fetch("/onboarding/restart", { method: "POST" });
@@ -300,7 +311,8 @@ async function doRestart(btn, statusEl) {
         const clearedDrift = await pollRestartCleared(15_000, 1_500);
 
         // State "done": show "Restarted ✓" briefly, then fade to State A
-        btn.querySelector(".ob-cta-restart-label").textContent = "Restarted";
+        const doneLabel = btn.querySelector(".ob-cta-restart-label");
+        if (doneLabel) doneLabel.textContent = "Restarted";
         btn.classList.add("ob-cta-restart-done");
         statusEl.classList.remove("ob-restart-status-warn", "ob-restart-status-passive");
         statusEl.classList.add("ob-restart-status-done");
@@ -321,7 +333,8 @@ async function doRestart(btn, statusEl) {
     } catch (e) {
         // Surface error inline. Customer can still click Open Portal — chat just won't pick up new keys.
         btn.disabled = false;
-        btn.querySelector(".ob-cta-restart-label").textContent = "Retry Restart";
+        const retryLabel = btn.querySelector(".ob-cta-restart-label");
+        if (retryLabel) retryLabel.textContent = "Retry Restart";
         statusEl.classList.remove("ob-restart-status-passive", "ob-restart-status-done");
         statusEl.classList.add("ob-restart-status-warn");
         statusEl.textContent = `Restart didn't complete: ${e.message}. Try again or open Portal anyway.`;
