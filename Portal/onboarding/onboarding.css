@@ -2074,3 +2074,62 @@ body::after {
 }
 .ob-banner-success strong { display: block; margin-bottom: 0.25rem; }
 .ob-banner-success p { margin: 0.25rem 0; color: rgba(255,255,255,0.7); }
+
+/* ── E9: Restart Service button on done step ──────────────────────────────
+ * Sits next to the primary Open Portal CTA. Status-aware: visible only
+ * when /onboarding/restart-status reports needs_restart=true. Uses an
+ * amber accent to signal "needs attention" without being alarming.
+ */
+.ob-cta-restart {
+    background: rgba(255, 180, 50, 0.95);
+    color: #1a0f00;
+    box-shadow:
+        4px 4px 0 var(--ob-text-primary),
+        0 0 24px rgba(255, 180, 50, 0.25);
+}
+.ob-cta-restart:hover {
+    box-shadow:
+        6px 6px 0 var(--ob-text-primary),
+        0 0 32px rgba(255, 180, 50, 0.45);
+}
+.ob-cta-restart:disabled,
+.ob-cta-restart[disabled] {
+    background: var(--ob-surface-elevated);
+    color: var(--ob-text-tertiary);
+    box-shadow: none;
+}
+.ob-cta-restart .ob-cta-arrow {
+    display: inline-block;
+}
+/* Rotate the ↻ glyph on hover when actionable */
+.ob-cta-restart:not(:disabled):hover .ob-cta-arrow {
+    transform: rotate(120deg);
+}
+/* "Restarted" success state — green accent */
+.ob-cta-restart.ob-cta-restart-done {
+    background: rgba(80, 200, 100, 0.95);
+    color: #001a05;
+}
+
+/* Status text adjacent to the buttons. Three flavors:
+ *  - passive: muted grey (default "up to date" or transitional)
+ *  - warn:    amber hint ("API keys changed — restart so they take effect")
+ *  - done:    green confirmation ("Service restarted ✓")
+ */
+.ob-restart-status {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--ob-font-body);
+    font-size: var(--ob-text-sm);
+    letter-spacing: 0.02em;
+    margin-left: 0.25rem;
+}
+.ob-restart-status-passive {
+    color: var(--ob-text-tertiary);
+}
+.ob-restart-status-warn {
+    color: rgba(255, 180, 50, 0.9);
+}
+.ob-restart-status-done {
+    color: rgba(120, 220, 140, 0.9);
+}

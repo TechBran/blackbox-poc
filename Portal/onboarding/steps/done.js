@@ -37,6 +37,11 @@ export async function render(container, { next, back, skip }) {
                     <button type="button" class="ob-cta ob-cta-large" id="ob-done-open" disabled>
                         Open Portal <span class="ob-cta-arrow" aria-hidden="true">&rarr;</span>
                     </button>
+                    <button type="button" class="ob-cta ob-cta-restart" id="ob-done-restart" hidden>
+                        <span class="ob-cta-restart-label">Restart Service</span>
+                        <span class="ob-cta-arrow" aria-hidden="true">&#x21bb;</span>
+                    </button>
+                    <span class="ob-restart-status" id="ob-done-restart-status" hidden></span>
                 </div>
                 <nav class="ob-step-nav" aria-label="Step navigation">
                     <button type="button" class="ob-back" id="ob-done-back">
@@ -57,6 +62,13 @@ export async function render(container, { next, back, skip }) {
     const openBtn = document.getElementById("ob-done-open");
     openBtn.disabled = false;  // enable once summary loaded
     openBtn.addEventListener("click", () => completeAndOpen(openBtn));
+
+    // E9: status-aware Restart Service button. Probe drift detection — if
+    // any .env value differs from the running process's in-memory constant,
+    // the customer's wizard changes haven't taken effect yet for chat
+    // handlers. Show the actionable restart button in that case; otherwise
+    // show the passive "up to date" indicator.
+    initRestartButton();
 }
 
 async function loadSummary() {
@@ -187,6 +199,161 @@ async function completeAndOpen(btn) {
     } finally {
         busy = false;
     }
+}
+
+// ── E9: status-aware Restart Service button ─────────────────────────────
+// Three states:
+//   A — up to date: passive "Service up to date ✓" text, no button
+//   B — needs restart: visible amber button + helper text
+//   C — restarting: disabled spinner button, polling /health
+//
+// On click: POST /onboarding/restart (fire-and-forget — the restart will
+// SIGTERM the service mid-response). Wait 5s, then poll /health every 2s
+// for up to 120s. When it returns 200, poll /restart-status until drift
+// clears, show "Restarted ✓" briefly, then fade back to State A.
+
+let restartBusy = false;
+
+async function initRestartButton() {
+    const btn = document.getElementById("ob-done-restart");
+    const statusEl = document.getElementById("ob-done-restart-status");
+    if (!btn || !statusEl) return;
+
+    try {
+        const r = await fetch("/onboarding/restart-status");
+        if (!r.ok) {
+            // Endpoint missing or errored — silently hide the button.
+            // Don't block the customer from clicking Open Portal.
+            return;
+        }
+        const data = await r.json();
+        renderRestartState(btn, statusEl, data);
+    } catch (e) {
+        // Network error — silently skip. Wizard finalize still works.
+        console.warn("restart-status probe failed:", e);
+    }
+}
+
+function renderRestartState(btn, statusEl, data) {
+    if (data && data.needs_restart) {
+        // State B: actionable
+        btn.hidden = false;
+        btn.disabled = false;
+        btn.classList.remove("ob-cta-restart-done");
+        btn.querySelector(".ob-cta-restart-label").textContent = "Restart Service";
+        statusEl.hidden = false;
+        statusEl.classList.remove("ob-restart-status-passive", "ob-restart-status-done");
+        statusEl.classList.add("ob-restart-status-warn");
+        statusEl.textContent = "API keys changed — restart so they take effect";
+        // Wire (idempotent — replace any prior handler)
+        btn.onclick = () => doRestart(btn, statusEl);
+    } else {
+        // State A: passive
+        btn.hidden = true;
+        btn.disabled = true;
+        statusEl.hidden = false;
+        statusEl.classList.remove("ob-restart-status-warn", "ob-restart-status-done");
+        statusEl.classList.add("ob-restart-status-passive");
+        statusEl.innerHTML = "Service up to date &check;";
+    }
+}
+
+async function doRestart(btn, statusEl) {
+    if (restartBusy) return;
+    restartBusy = true;
+
+    // State C: restarting
+    btn.disabled = true;
+    btn.querySelector(".ob-cta-restart-label").textContent = "Restarting service…";
+    statusEl.classList.remove("ob-restart-status-warn", "ob-restart-status-done");
+    statusEl.classList.add("ob-restart-status-passive");
+    statusEl.textContent = "This takes about 60 to 90 seconds. The page will reconnect automatically.";
+
+    try {
+        // Fire-and-forget — the response may not arrive (server SIGTERMs mid-flight)
+        try {
+            await fetch("/onboarding/restart", { method: "POST" });
+        } catch (e) {
+            // Expected: server disconnects before responding. Continue with health poll.
+            console.log("restart POST disconnected (expected):", e.message);
+        }
+
+        // Wait 5s for service to start shutting down
+        await sleep(5000);
+
+        // Poll /health every 2s for up to 120s
+        const healthy = await pollHealth(120_000, 2_000);
+        if (!healthy) {
+            throw new Error("Service did not come back within 120 seconds");
+        }
+
+        // Confirm drift cleared via /restart-status
+        const clearedDrift = await pollRestartCleared(15_000, 1_500);
+
+        // State "done": show "Restarted ✓" briefly, then fade to State A
+        btn.querySelector(".ob-cta-restart-label").textContent = "Restarted";
+        btn.classList.add("ob-cta-restart-done");
+        statusEl.classList.remove("ob-restart-status-warn", "ob-restart-status-passive");
+        statusEl.classList.add("ob-restart-status-done");
+        statusEl.innerHTML = clearedDrift
+            ? "Service restarted &check;"
+            : "Service is back online &check;";
+
+        await sleep(3000);
+        // Re-probe and render whatever state we're in now (typically State A)
+        const r = await fetch("/onboarding/restart-status");
+        if (r.ok) {
+            const data = await r.json();
+            renderRestartState(btn, statusEl, data);
+        } else {
+            // Fall back to passive
+            renderRestartState(btn, statusEl, { needs_restart: false });
+        }
+    } catch (e) {
+        // Surface error inline. Customer can still click Open Portal — chat just won't pick up new keys.
+        btn.disabled = false;
+        btn.querySelector(".ob-cta-restart-label").textContent = "Retry Restart";
+        statusEl.classList.remove("ob-restart-status-passive", "ob-restart-status-done");
+        statusEl.classList.add("ob-restart-status-warn");
+        statusEl.textContent = `Restart didn't complete: ${e.message}. Try again or open Portal anyway.`;
+    } finally {
+        restartBusy = false;
+    }
+}
+
+async function pollHealth(timeoutMs, intervalMs) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        try {
+            const r = await fetch("/health", { cache: "no-store" });
+            if (r.ok) return true;
+        } catch (e) {
+            // Service still down — keep polling
+        }
+        await sleep(intervalMs);
+    }
+    return false;
+}
+
+async function pollRestartCleared(timeoutMs, intervalMs) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+        try {
+            const r = await fetch("/onboarding/restart-status", { cache: "no-store" });
+            if (r.ok) {
+                const data = await r.json();
+                if (!data.needs_restart) return true;
+            }
+        } catch (e) {
+            // Try again
+        }
+        await sleep(intervalMs);
+    }
+    return false;
+}
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 function escapeHtml(s) {

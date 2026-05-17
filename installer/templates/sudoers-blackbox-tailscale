@@ -14,3 +14,4 @@ REAL_USER_PLACEHOLDER ALL=(root) NOPASSWD: /usr/bin/tailscale serve reset
 REAL_USER_PLACEHOLDER ALL=(root) NOPASSWD: /usr/bin/tailscale logout
 REAL_USER_PLACEHOLDER ALL=(root) NOPASSWD: /usr/bin/systemctl start tailscaled
 REAL_USER_PLACEHOLDER ALL=(root) NOPASSWD: /usr/bin/systemctl enable tailscaled
+REAL_USER_PLACEHOLDER ALL=(root) NOPASSWD: /usr/bin/systemctl restart blackbox.service

@@ -430,6 +430,82 @@ async def tailscale_serve_setup():
     return await ts_act.setup_serve()
 
 
+# ── E9 (Brandon's MSO2 Ultra testing 2026-05-17): status-aware Restart
+#   Service button. E8 fixed the wizard's DISPLAY layer (/current-config
+#   reads .env fresh), but chat handlers still hold stale
+#   Orchestrator.config.* module-level constants until service restart.
+#   Customer adds keys via wizard, sees them displayed, then chat fails.
+#   These two endpoints back the done-step's status-aware restart button:
+#   /restart-status detects drift, /restart triggers the restart. ──
+
+class RestartStatusResponse(BaseModel):
+    needs_restart: bool
+    drifted_keys: list[str]
+    reason: str | None
+
+
+@router.get("/restart-status", response_model=RestartStatusResponse)
+def restart_status() -> RestartStatusResponse:
+    """Detect whether the running process's in-memory config has drifted from
+    the .env file on disk. If yes, the customer changed settings (typically
+    API keys) via the wizard that the running service hasn't picked up — chat
+    handlers will use stale values until restart. Wizard's done step uses
+    this to decide whether to surface the 'Restart Service' button as
+    actionable vs passive 'up to date'.
+
+    E8 follow-up — pairs with the /current-config fresh-read fix."""
+    from dotenv import dotenv_values
+    from Orchestrator.onboarding.secrets_writer import ENV_FILE
+    from Orchestrator import config as cfg
+
+    env = dotenv_values(str(ENV_FILE))
+    # Keys whose stale-constant-vs-fresh-disk-value mismatch is customer-visible
+    checks = {
+        "OPENAI_API_KEY": cfg.OPENAI_API_KEY,
+        "ANTHROPIC_API_KEY": cfg.ANTHROPIC_API_KEY,
+        "GOOGLE_API_KEY": cfg.GOOGLE_API_KEY,
+        "XAI_API_KEY": cfg.XAI_API_KEY,
+        "PERPLEXITY_API_KEY": cfg.PERPLEXITY_API_KEY,
+        "BLACKBOX_TAILNET_HOSTNAME": cfg.BLACKBOX_TAILNET_HOSTNAME,
+    }
+    drifted = []
+    for key, running_val in checks.items():
+        disk_val = env.get(key, "") or ""
+        if (running_val or "") != disk_val:
+            drifted.append(key)
+
+    if not drifted:
+        return RestartStatusResponse(
+            needs_restart=False, drifted_keys=[],
+            reason=None,
+        )
+    return RestartStatusResponse(
+        needs_restart=True, drifted_keys=drifted,
+        reason=f"{len(drifted)} setting(s) changed since service start: {', '.join(drifted)}",
+    )
+
+
+@router.post("/restart")
+async def restart_blackbox_service() -> dict:
+    """Trigger a service restart. Wizard's done step calls this after the
+    customer clicks the 'Restart Service' button. Sudoers grant from T2 +
+    this addition allows passwordless systemctl restart blackbox.service.
+
+    Fire-and-forget — the restart kills THIS process so the HTTP response
+    may not actually be returned. Wizard JS handles by polling /health
+    after a short delay to detect when the service comes back."""
+    import subprocess
+    logger.info("restart: customer triggered service restart from wizard")
+    # Use Popen so we don't await — the restart will SIGTERM us mid-Popen.wait
+    subprocess.Popen(
+        ["sudo", "-n", "/usr/bin/systemctl", "restart", "blackbox.service"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    return {"ok": True, "message": "restart triggered — service will be back in ~60-90s"}
+
+
 # ── E7 final (Brandon's MSO2 Ultra testing 2026-05-16): backend-spawned
 #   browser open. Tauri's on_navigation doesn't fire for target=_blank,
 #   xdg-open delegates to broken gio, Tauri shell can't reliably spawn
