@@ -2133,3 +2133,130 @@ body::after {
 .ob-restart-status-done {
     color: rgba(120, 220, 140, 0.9);
 }
+
+/* E10: View Logs button + modal overlay */
+.ob-cta-secondary {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.85);
+    padding: 0.6rem 1.2rem;
+    border-radius: var(--radius-md, 8px);
+    cursor: pointer;
+    font-size: 0.9em;
+    font-weight: 500;
+    font-family: inherit;
+    transition: background 0.15s, border-color 0.15s;
+}
+.ob-cta-secondary:hover {
+    background: rgba(255,255,255,0.08);
+    border-color: rgba(255,255,255,0.35);
+}
+
+.ob-logs-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 8000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+.ob-logs-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+}
+.ob-logs-modal-panel {
+    position: relative;
+    width: 100%;
+    max-width: 1100px;
+    height: 100%;
+    max-height: 80vh;
+    background: #0a0a0a;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: var(--radius-lg, 12px);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+.ob-logs-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.03);
+}
+.ob-logs-modal-title {
+    color: rgba(255,255,255,0.9);
+    font-weight: 600;
+    font-size: 0.95em;
+}
+.ob-logs-modal-close {
+    background: transparent;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    font-size: 1.6em;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.4rem;
+}
+.ob-logs-modal-close:hover { color: rgba(255,255,255,0.95); }
+.ob-logs-modal-body {
+    flex: 1;
+    margin: 0;
+    padding: 0.75rem 1rem;
+    overflow-y: auto;
+    overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+    font-size: 0.78em;
+    line-height: 1.45;
+    color: rgba(220,235,220,0.92);
+    background: #000;
+    white-space: pre;
+}
+.ob-logs-modal-footer {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.5rem 1rem;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.02);
+    font-size: 0.82em;
+}
+.ob-logs-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.ob-logs-status::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.ob-logs-status-connecting { color: rgba(255,200,80,0.85); }
+.ob-logs-status-connecting::before { background: rgba(255,200,80,0.85); animation: ob-pulse 1.2s ease-in-out infinite; }
+.ob-logs-status-connected { color: rgba(120,255,155,0.85); }
+.ob-logs-status-connected::before { background: rgba(120,255,155,0.85); }
+.ob-logs-status-disconnected { color: rgba(255,120,120,0.85); }
+.ob-logs-status-disconnected::before { background: rgba(255,120,120,0.85); }
+.ob-logs-count { color: rgba(255,255,255,0.55); margin-left: auto; }
+.ob-logs-copy {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.15);
+    color: rgba(255,255,255,0.85);
+    padding: 0.35rem 0.85rem;
+    border-radius: var(--radius-sm, 6px);
+    cursor: pointer;
+    font-size: inherit;
+    font-family: inherit;
+}
+.ob-logs-copy:hover { background: rgba(255,255,255,0.1); }
+@keyframes ob-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}

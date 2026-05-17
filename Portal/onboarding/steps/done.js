@@ -41,6 +41,9 @@ export async function render(container, { next, back, skip }) {
                         <span class="ob-cta-restart-label">Restart Service</span>
                         <span class="ob-cta-arrow" aria-hidden="true">&#x21bb;</span>
                     </button>
+                    <button type="button" class="ob-cta-secondary" id="ob-view-logs-btn">
+                        View Logs
+                    </button>
                     <span class="ob-restart-status" id="ob-done-restart-status" hidden></span>
                 </div>
                 <nav class="ob-step-nav" aria-label="Step navigation">
@@ -69,6 +72,12 @@ export async function render(container, { next, back, skip }) {
     // handlers. Show the actionable restart button in that case; otherwise
     // show the passive "up to date" indicator.
     initRestartButton();
+
+    // E10: View Logs button — opens a console-style modal streaming live
+    // blackbox.service logs via SSE. Advanced users + customer-support
+    // diagnostic affordance.
+    const logsBtn = document.getElementById("ob-view-logs-btn");
+    if (logsBtn) logsBtn.addEventListener("click", openLogsModal);
 }
 
 async function loadSummary() {
@@ -350,6 +359,98 @@ async function pollRestartCleared(timeoutMs, intervalMs) {
         await sleep(intervalMs);
     }
     return false;
+}
+
+// ── E10: View Logs modal — live SSE journalctl stream ───────────────────
+// Opens a full-screen modal with a dark console-style log area that
+// consumes /onboarding/logs/stream via EventSource. Auto-scrolls to
+// bottom on each new line UNLESS the user has scrolled up (they're
+// inspecting history — don't yank them back). Close via X / Esc /
+// click-outside closes the EventSource, which triggers the backend's
+// CancelledError handler killing the journalctl process — no orphan
+// tail subprocesses.
+
+function openLogsModal() {
+    // Create modal if not present
+    let modal = document.getElementById("ob-logs-modal");
+    if (modal) {
+        modal.hidden = false;
+        return;  // already open; just reveal
+    }
+    modal = document.createElement("div");
+    modal.id = "ob-logs-modal";
+    modal.className = "ob-logs-modal";
+    modal.innerHTML = `
+        <div class="ob-logs-modal-backdrop"></div>
+        <div class="ob-logs-modal-panel" role="dialog" aria-label="BlackBox service logs">
+            <div class="ob-logs-modal-header">
+                <span class="ob-logs-modal-title">BlackBox Service Logs</span>
+                <button type="button" class="ob-logs-modal-close" aria-label="Close">&times;</button>
+            </div>
+            <pre id="ob-logs-modal-body" class="ob-logs-modal-body"></pre>
+            <div class="ob-logs-modal-footer">
+                <span id="ob-logs-modal-status" class="ob-logs-status ob-logs-status-connecting">Connecting&hellip;</span>
+                <span id="ob-logs-modal-count" class="ob-logs-count">0 lines</span>
+                <button type="button" id="ob-logs-modal-copy" class="ob-logs-copy">Copy all</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    const body = modal.querySelector("#ob-logs-modal-body");
+    const status = modal.querySelector("#ob-logs-modal-status");
+    const count = modal.querySelector("#ob-logs-modal-count");
+    const copy = modal.querySelector("#ob-logs-modal-copy");
+    const closeBtn = modal.querySelector(".ob-logs-modal-close");
+    const backdrop = modal.querySelector(".ob-logs-modal-backdrop");
+
+    let lineCount = 0;
+    let autoScroll = true;
+
+    // Detect user-scrolled-up (don't auto-yank if they're reading history)
+    body.addEventListener("scroll", () => {
+        const distFromBottom = body.scrollHeight - body.scrollTop - body.clientHeight;
+        autoScroll = distFromBottom < 50;  // within 50px of bottom = stay pinned
+    });
+
+    // SSE connection
+    const eventSource = new EventSource("/onboarding/logs/stream?lines=200");
+    eventSource.addEventListener("start", () => {
+        status.textContent = "Connected";
+        status.className = "ob-logs-status ob-logs-status-connected";
+    });
+    eventSource.onmessage = (e) => {
+        body.textContent += e.data + "\n";
+        lineCount++;
+        count.textContent = lineCount + " lines";
+        if (autoScroll) {
+            body.scrollTop = body.scrollHeight;
+        }
+    };
+    eventSource.onerror = () => {
+        status.textContent = "Disconnected";
+        status.className = "ob-logs-status ob-logs-status-disconnected";
+    };
+
+    function closeModal() {
+        eventSource.close();
+        modal.remove();
+        document.removeEventListener("keydown", escHandler);
+    }
+
+    closeBtn.addEventListener("click", closeModal);
+    backdrop.addEventListener("click", closeModal);
+    const escHandler = (e) => { if (e.key === "Escape") closeModal(); };
+    document.addEventListener("keydown", escHandler);
+
+    copy.addEventListener("click", async () => {
+        try {
+            await navigator.clipboard.writeText(body.textContent);
+            copy.textContent = "Copied ✓";
+            setTimeout(() => { copy.textContent = "Copy all"; }, 1500);
+        } catch {
+            copy.textContent = "Copy failed";
+        }
+    });
 }
 
 function sleep(ms) {

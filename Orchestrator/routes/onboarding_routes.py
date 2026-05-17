@@ -506,6 +506,64 @@ async def restart_blackbox_service() -> dict:
     return {"ok": True, "message": "restart triggered — service will be back in ~60-90s"}
 
 
+@router.get("/logs/stream")
+async def logs_stream(lines: int = 200):
+    """Stream blackbox.service logs as Server-Sent Events for the wizard's
+    'View Logs' modal. Initial backfill of N lines + follow forward.
+
+    The journalctl -u blackbox.service * sudoers grant allows passwordless
+    invocation. The lines parameter is bounded server-side (max 1000) to
+    prevent runaway backfill on a long-running service.
+
+    E10 (Brandon's MSO2 Ultra design 2026-05-17): pairs with E9's Restart
+    Service button on the done step. Advanced users + customer-support
+    scenarios need live log visibility for diagnosis."""
+    import asyncio
+
+    safe_lines = max(10, min(int(lines), 1000))
+
+    async def gen():
+        # Initial backfill: last N lines, then follow forward
+        cmd = [
+            "sudo", "-n", "/usr/bin/journalctl",
+            "-u", "blackbox.service",
+            "--lines", str(safe_lines),
+            "--no-pager",
+            "--output", "short-iso",
+            "--follow",
+        ]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+        )
+        try:
+            yield b"event: start\ndata: streaming logs\n\n"
+            while True:
+                line = await proc.stdout.readline()
+                if not line:
+                    # journalctl --follow exited (rare)
+                    break
+                text = line.decode("utf-8", errors="replace").rstrip("\r\n")
+                # SSE format requires data: prefix per line; escape any embedded
+                # newlines (shouldn't happen for journalctl single-line records).
+                yield f"data: {text}\n\n".encode("utf-8")
+        except asyncio.CancelledError:
+            # Client disconnected (modal closed) — terminate journalctl
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                pass
+            raise
+        finally:
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                pass
+
+    return StreamingResponse(gen(), media_type="text/event-stream")
+
+
 # ── E7 final (Brandon's MSO2 Ultra testing 2026-05-16): backend-spawned
 #   browser open. Tauri's on_navigation doesn't fire for target=_blank,
 #   xdg-open delegates to broken gio, Tauri shell can't reliably spawn
