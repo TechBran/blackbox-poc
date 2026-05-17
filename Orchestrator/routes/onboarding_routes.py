@@ -182,7 +182,15 @@ def current_config() -> CurrentConfigResponse:
     except Exception:
         logger.exception("current-config operator list import failed")
         operators = []
-    paired_devices: list[dict] = []  # TODO(Phase 2.10): replace with pairing_routes.list_claims() — expected shape [{token, device_kind, claimed_at, hostname}]
+    # Paired devices — read from the persistent registry (E13). Fail-soft to
+    # empty list so a malformed/missing paired_devices.json never bricks
+    # wizard re-entry; pairing_routes already logs the read failure.
+    try:
+        from Orchestrator.routes.pairing_routes import list_paired_devices
+        paired_devices = list_paired_devices()
+    except Exception:
+        logger.exception("current-config paired_devices load failed")
+        paired_devices = []
     return CurrentConfigResponse(
         providers=providers,
         operators=operators,

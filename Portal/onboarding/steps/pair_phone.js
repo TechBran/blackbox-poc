@@ -1,5 +1,10 @@
 // Phone pairing step — fifth screen of the onboarding wizard.
 // On mount:
+//   0. GET /onboarding/current-config — if paired_devices already exists,
+//      skip directly to renderAlreadyPaired (E13). This is the fix for
+//      "wizard shows QR forever after the phone is already paired" — the
+//      phone won't re-claim a fresh token once it has stored credentials,
+//      so polling alone never observes claimed=true on subsequent visits.
 //   1. POST /pair/start → {token, exp}
 //   2. Render QR pointing at /pair/qr/${token}
 //   3. Poll /pair/status?token=${token} every 2s
@@ -70,7 +75,33 @@ export async function render(container, { next, back, skip }) {
         skip();
     });
 
-    // Mint the first token + start the cycle
+    // E13: pre-mount check — if any device is already paired (persistent
+    // registry survives service restart), short-circuit to the success view.
+    // The phone won't re-claim a fresh token once it has stored credentials,
+    // so polling alone would loop forever on the QR view. Fail-soft: any
+    // error from /current-config falls through to the normal mint flow.
+    const stage = container.querySelector("#ob-pair-stage");
+    let pairedDevices = [];
+    try {
+        const r = await fetch("/onboarding/current-config");
+        if (r.ok) {
+            const cfg = await r.json();
+            if (Array.isArray(cfg.paired_devices)) {
+                pairedDevices = cfg.paired_devices;
+            }
+        }
+    } catch (_e) {
+        // Fall through to mint flow — no toast, no surface error
+    }
+    if (pairedDevices.length > 0) {
+        renderAlreadyPaired(stage, pairedDevices, {
+            next,
+            pairAnother: () => mintAndPoll(container, { next }),
+        });
+        return;
+    }
+
+    // No devices in registry — mint the first token + start the cycle
     await mintAndPoll(container, { next });
 }
 
@@ -188,6 +219,61 @@ function renderClaimed(stage, status, next) {
         </div>
     `;
     document.getElementById("ob-pair-continue").addEventListener("click", next);
+}
+
+// E13: success view for wizard re-entry when one or more devices already
+// paired (from persistent Manifest/paired_devices.json registry). Highlights
+// the most recently paired device + lists prior pairings (if >1) + offers
+// "Pair another device" link which falls through to the normal mint/poll
+// flow. Identical Continue CTA semantics to renderClaimed.
+function renderAlreadyPaired(stage, devices, { next, pairAnother }) {
+    // Sort newest-first by claimed_at; coerce missing to 0 so undefined never
+    // crashes the comparator.
+    const sorted = [...devices].sort(
+        (a, b) => (b.claimed_at || 0) - (a.claimed_at || 0),
+    );
+    const latest = sorted[0];
+    const latestName = latest.device_name || "your phone";
+    const latestKind = latest.device_kind || "device";
+    const others = sorted.slice(1);
+    const othersHtml = others.length
+        ? `<ul class="ob-pair-others-list">${others
+              .map(
+                  (d) =>
+                      `<li class="ob-pair-others-item"><span class="ob-pair-others-name">${escapeHtml(
+                          d.device_name || "unnamed",
+                      )}</span><span class="ob-pair-others-kind">${escapeHtml(
+                          d.device_kind || "device",
+                      )}</span></li>`,
+              )
+              .join("")}</ul>`
+        : "";
+    const othersSection = others.length
+        ? `<div class="ob-pair-others">
+            <div class="ob-pair-others-label">Also paired (${others.length}):</div>
+            ${othersHtml}
+        </div>`
+        : "";
+    stage.innerHTML = `
+        <div class="ob-pair-claimed">
+            <div class="ob-pair-claimed-glyph" aria-hidden="true">&check;</div>
+            <h2 class="ob-pair-claimed-title">Paired with <em>${escapeHtml(latestName)}</em></h2>
+            <p class="ob-pair-claimed-meta">${escapeHtml(latestKind)} &middot; ready</p>
+            ${othersSection}
+            <div class="ob-cta-row">
+                <button type="button" class="ob-cta" id="ob-pair-continue">
+                    Continue <span class="ob-cta-arrow" aria-hidden="true">&rarr;</span>
+                </button>
+            </div>
+            <div class="ob-pair-another-row">
+                <button type="button" class="ob-link-button" id="ob-pair-another">
+                    Pair another device <span aria-hidden="true">&rarr;</span>
+                </button>
+            </div>
+        </div>
+    `;
+    document.getElementById("ob-pair-continue").addEventListener("click", next);
+    document.getElementById("ob-pair-another").addEventListener("click", pairAnother);
 }
 
 function renderExpired(stage, retry) {
