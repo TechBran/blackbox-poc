@@ -244,28 +244,41 @@ async function initRestartButton() {
 }
 
 function renderRestartState(btn, statusEl, data) {
+    // E11 followup (Brandon 2026-05-17): button is ALWAYS visible + clickable.
+    // Customer should be able to restart anytime, not only when drift is detected
+    // (covers cases where they edit .env directly, or just want a fresh boot for
+    // sanity). Status text differentiates the two cases — actionable warn vs
+    // passive 'up to date' — but the button itself is always pressable.
+    btn.hidden = false;
+    btn.disabled = false;
+    btn.classList.remove("ob-cta-restart-done");
+    const label = btn.querySelector(".ob-cta-restart-label");
+    if (label) label.textContent = "Restart Service";
+    statusEl.hidden = false;
+
     if (data && data.needs_restart) {
-        // State B: actionable
-        btn.hidden = false;
-        btn.disabled = false;
-        btn.classList.remove("ob-cta-restart-done");
-        const label = btn.querySelector(".ob-cta-restart-label");
-        if (label) label.textContent = "Restart Service";
-        statusEl.hidden = false;
+        // State B: actionable — amber warn styling on both button + status
+        btn.classList.remove("ob-cta-restart-passive");
+        btn.classList.add("ob-cta-restart-warn");
         statusEl.classList.remove("ob-restart-status-passive", "ob-restart-status-done");
         statusEl.classList.add("ob-restart-status-warn");
-        statusEl.textContent = "API keys changed — restart so they take effect";
-        // Wire (idempotent — replace any prior handler)
-        btn.onclick = () => doRestart(btn, statusEl);
+        // Compose human-readable reason from the drift list when available
+        const drifted = (data.drifted_keys || []).length;
+        statusEl.textContent = drifted > 0
+            ? `${drifted} setting${drifted === 1 ? "" : "s"} changed — restart so they take effect`
+            : "Settings changed — restart so they take effect";
     } else {
-        // State A: passive
-        btn.hidden = true;
-        btn.disabled = true;
-        statusEl.hidden = false;
+        // State A: passive — neutral styling, but button still clickable
+        btn.classList.remove("ob-cta-restart-warn");
+        btn.classList.add("ob-cta-restart-passive");
         statusEl.classList.remove("ob-restart-status-warn", "ob-restart-status-done");
         statusEl.classList.add("ob-restart-status-passive");
         statusEl.innerHTML = "Service up to date &check;";
     }
+
+    // Wire (idempotent — replace any prior handler). Done in both states
+    // because the button is now always clickable.
+    btn.onclick = () => doRestart(btn, statusEl);
 }
 
 async function doRestart(btn, statusEl) {

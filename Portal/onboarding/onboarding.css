@@ -2111,6 +2111,25 @@ body::after {
     color: #001a05;
 }
 
+/* E11 followup (2026-05-17): passive state — button is ALWAYS clickable
+ * (Brandon's UX call), but visually de-emphasized when no drift is detected.
+ * Neutral muted styling so it doesn't compete with the primary 'Open Portal'
+ * CTA on the done step. Hover state lifts opacity for affordance discoverability. */
+.ob-cta-restart.ob-cta-restart-passive {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.7);
+    box-shadow:
+        4px 4px 0 rgba(255, 255, 255, 0.1),
+        none;
+}
+.ob-cta-restart.ob-cta-restart-passive:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.95);
+    box-shadow:
+        6px 6px 0 rgba(255, 255, 255, 0.15),
+        none;
+}
+
 /* Status text adjacent to the buttons. Three flavors:
  *  - passive: muted grey (default "up to date" or transitional)
  *  - warn:    amber hint ("API keys changed — restart so they take effect")

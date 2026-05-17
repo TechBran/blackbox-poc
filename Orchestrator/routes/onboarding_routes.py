@@ -459,7 +459,10 @@ def restart_status() -> RestartStatusResponse:
     from Orchestrator import config as cfg
 
     env = dotenv_values(str(ENV_FILE))
-    # Keys whose stale-constant-vs-fresh-disk-value mismatch is customer-visible
+    # Keys whose stale-constant-vs-fresh-disk-value mismatch is customer-visible.
+    # E11 followup (Brandon's MSO2 Ultra 2026-05-17): expanded to cover ALL
+    # onboarding-writable env vars — JSON service account + Gmail OAuth in
+    # addition to the original 5 API keys + Tailscale hostname.
     checks = {
         "OPENAI_API_KEY": cfg.OPENAI_API_KEY,
         "ANTHROPIC_API_KEY": cfg.ANTHROPIC_API_KEY,
@@ -467,6 +470,9 @@ def restart_status() -> RestartStatusResponse:
         "XAI_API_KEY": cfg.XAI_API_KEY,
         "PERPLEXITY_API_KEY": cfg.PERPLEXITY_API_KEY,
         "BLACKBOX_TAILNET_HOSTNAME": cfg.BLACKBOX_TAILNET_HOSTNAME,
+        "GOOGLE_APPLICATION_CREDENTIALS": getattr(cfg, "GOOGLE_APPLICATION_CREDENTIALS", "") or "",
+        "GOOGLE_OAUTH_CLIENT_ID": getattr(cfg, "GOOGLE_OAUTH_CLIENT_ID", "") or "",
+        "GOOGLE_OAUTH_CLIENT_SECRET": getattr(cfg, "GOOGLE_OAUTH_CLIENT_SECRET", "") or "",
     }
     drifted = []
     for key, running_val in checks.items():
