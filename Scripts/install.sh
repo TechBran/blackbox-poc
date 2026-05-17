@@ -58,6 +58,36 @@ if ! [[ -x /usr/bin/tailscale ]]; then
     exit 1
 fi
 
+# ── Step 1c: nvm + Node.js + CLI agent binaries (audit E20) ──
+# CLI Agent feature spawns claude / gemini / codex via tmux PTY bridge
+# (Orchestrator/routes/cli_agent_routes.py PROVIDER_BIN). Binaries are
+# provided as npm globals — install nvm (matches dev-box pattern per
+# CLAUDE.md memory: nvm-aware bin resolution in path_extension.py),
+# install latest LTS Node, then npm install -g the three provider CLIs.
+# All as $REAL_USER so binaries land in ~/.nvm/versions/node/<ver>/bin/
+# which the orchestrator's path_extension auto-discovers via glob.
+echo "[install] Installing nvm + Node.js + CLI agent binaries..."
+sudo -u "$REAL_USER" bash -c '
+    export NVM_DIR="$HOME/.nvm"
+    if [[ ! -d "$NVM_DIR" ]]; then
+        echo "[install]   Installing nvm..."
+        curl -fsSL -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+    else
+        echo "[install]   nvm already installed (skipping)"
+    fi
+    . "$NVM_DIR/nvm.sh"
+    if ! command -v node > /dev/null 2>&1; then
+        echo "[install]   Installing latest LTS Node..."
+        nvm install --lts
+        nvm alias default "lts/*"
+    else
+        echo "[install]   Node already installed: $(node --version)"
+    fi
+    echo "[install]   Installing CLI agent npm globals: @anthropic-ai/claude-code, @google/gemini-cli, @openai/codex..."
+    npm install -g @anthropic-ai/claude-code @google/gemini-cli @openai/codex 2>&1 | tail -3
+    echo "[install]   CLI agent binaries resolved to: $(which claude gemini codex 2>&1 | tr "\n" " ")"
+'
+
 # ── Step 2: Python venv (audit I1 — run as $REAL_USER so files are user-owned, not root-owned) ──
 echo "[install] Creating Python venv..."
 sudo -u "$REAL_USER" python3.12 -m venv "$BLACKBOX_ROOT/Orchestrator/venv"
