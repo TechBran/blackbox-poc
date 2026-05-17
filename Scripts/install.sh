@@ -30,9 +30,13 @@ fi
 "$BLACKBOX_ROOT/Scripts/install-preflight.sh"
 
 # ── Step 1: apt deps (audit C1 — corrected pipeline) ──
-echo "[install] Installing system packages..."
+# E16 fix: install MUST_HAVE + SHOULD_HAVE buckets. SHOULD_HAVE packages
+# (scrot, xdotool, openbox, x11vnc, mpg123, alsa-utils, chromium-browser)
+# back customer-facing features like Computer Use screenshots + audio playback;
+# previously only MUST_HAVE installed so those features silently failed.
+echo "[install] Installing system packages (MUST_HAVE + SHOULD_HAVE)..."
 sudo apt update
-grep -E '^[a-zA-Z0-9._+-]+\s+#\s+MUST_HAVE' \
+grep -E '^[a-zA-Z0-9._+-]+\s+#\s+(MUST_HAVE|SHOULD_HAVE)' \
     "$BLACKBOX_ROOT/Scripts/onboarding/system-packages.txt" \
   | awk '{print $1}' \
   | xargs sudo apt install -y
@@ -75,6 +79,17 @@ fi
 if [[ ! -f "$BLACKBOX_ROOT/config.ini" ]]; then
     sudo -u "$REAL_USER" cp "$BLACKBOX_ROOT/config.ini.template" "$BLACKBOX_ROOT/config.ini"
     echo "[install] Created config.ini from template"
+fi
+
+# ── Step 3c: device_registry/devices.json from template (per-install state — tracked devices on this BlackBox) ──
+# Customer ZIP doesn't ship devices.json (gitignored to prevent shipping the
+# author's Tailscale device list — phones, dev boxes from a different tailnet).
+# /devices endpoints + tailscale sync repopulate from the customer's actual
+# tailnet on first use.
+if [[ ! -f "$BLACKBOX_ROOT/Orchestrator/device_registry/devices.json" ]]; then
+    sudo -u "$REAL_USER" cp "$BLACKBOX_ROOT/Orchestrator/device_registry/devices.json.template" \
+        "$BLACKBOX_ROOT/Orchestrator/device_registry/devices.json"
+    echo "[install] Bootstrapped Orchestrator/device_registry/devices.json from template"
 fi
 
 # ── Step 4: systemd unit (audit M2 + M3 + Q3 + Q4) ──
