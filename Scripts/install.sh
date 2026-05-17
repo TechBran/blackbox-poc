@@ -213,6 +213,30 @@ if ! sudo visudo -c -f /etc/sudoers.d/blackbox-tailscale > /dev/null; then
 fi
 echo "[install] Sudoers grant written for $REAL_USER (tailscale operations)"
 
+# ── Step 4h: force X11 session via GDM (audit E18b — Computer Use input on Wayland) ──
+# Wayland's Mutter compositor silently drops uinput events for cursor/click from
+# untrusted processes (including ydotool). xdotool similarly only sees XWayland
+# windows, not native Wayland surfaces. Computer Use therefore cannot inject
+# input into native apps on a Wayland session — clicks "succeed" (exit 0) but
+# never reach the GUI. Forcing X11 session restores full xdotool functionality
+# (X server processes uinput events normally). This matches the dev-box config
+# pattern: WaylandEnable=false in /etc/gdm3/custom.conf. Customers logging in
+# next will get an X11 session automatically.
+if [[ -f /etc/gdm3/custom.conf ]]; then
+    if sudo grep -q "^WaylandEnable=false" /etc/gdm3/custom.conf; then
+        echo "[install] GDM already configured for X11 session"
+    elif sudo grep -q "^#WaylandEnable=false" /etc/gdm3/custom.conf; then
+        sudo sed -i 's/^#WaylandEnable=false/WaylandEnable=false/' /etc/gdm3/custom.conf
+        echo "[install] Switched GDM to X11 session (uncommented WaylandEnable=false)"
+    else
+        sudo sed -i '/^\[daemon\]/a WaylandEnable=false' /etc/gdm3/custom.conf
+        echo "[install] Switched GDM to X11 session (inserted WaylandEnable=false under [daemon])"
+    fi
+    echo "[install] X11 session takes effect on next login. Reboot or log out + back in to activate."
+else
+    echo "[install] /etc/gdm3/custom.conf not present (non-GDM display manager?) — skipping X11 switch"
+fi
+
 # ── Step 4f: ydotool 1.x for Wayland input injection (E18) ──
 # Ubuntu 24.04's apt ydotool is v0.1.8 which lacks --absolute mousemove
 # (Computer Use sends absolute coords, so we can't use 0.1.8). Build v1.0.4
