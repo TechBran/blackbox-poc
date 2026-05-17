@@ -108,6 +108,7 @@ function renderSummary(container, { config, state, error }) {
     }
 
     const skipped = new Set(state.skipped_steps || []);
+    const completed = new Set(state.completed_steps || []);
     const rows = [];
 
     // Tailscale row
@@ -141,13 +142,21 @@ function renderSummary(container, { config, state, error }) {
         rows.push(summaryRow("Optional integrations", "skip", "none configured"));
     }
 
-    // Phone pairing row
+    // Phone pairing row — E15b (Brandon 2026-05-17): also honor the "I've
+    // already paired this phone" manual completion (E14). Customer who clicked
+    // that button doesn't add an entry to paired_devices registry (the
+    // registry only logs OAuth-style /pair/claim handshakes), but they DO
+    // mark the step complete via /onboarding/step/complete. So the summary
+    // should reflect their self-reported intent in addition to the registry.
     const pairedCount = (config.paired_devices || []).length;
     if (skipped.has("pair_phone")) {
         rows.push(summaryRow("Phone pairing", "skip", "pair later from System Menu"));
     } else if (pairedCount > 0) {
         const names = config.paired_devices.map(d => d.hostname || d.device_kind || "device").join(", ");
         rows.push(summaryRow("Phone pairing", "ok", `${pairedCount} paired · ${names}`));
+    } else if (completed.has("pair_phone")) {
+        // E14 manual mark-complete path — no registry entry but step IS done
+        rows.push(summaryRow("Phone pairing", "ok", "marked as paired"));
     } else {
         rows.push(summaryRow("Phone pairing", "skip", "no devices paired"));
     }
