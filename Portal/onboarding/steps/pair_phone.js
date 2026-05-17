@@ -51,12 +51,29 @@ export async function render(container, { next, back, skip }) {
                     Your phone becomes a remote &mdash; voice, vision, and tool access
                     on the go, sharing the same memory as the desktop.
                 </p>
+                <div class="ob-pair-prereq">
+                    <strong>Before you pair:</strong>
+                    <p>
+                        Make sure <strong>Tailscale</strong> is installed on your phone
+                        and signed in with the <strong>same account</strong> you used
+                        for this BlackBox (the Tailnet step earlier). The Android app
+                        reaches the BlackBox via your tailnet &mdash; without Tailscale
+                        signed in on your phone, the connection won't work.
+                    </p>
+                    <a href="https://play.google.com/store/apps/details?id=com.tailscale.ipn"
+                       target="_blank" rel="noopener" class="ob-pair-prereq-link">
+                        Get Tailscale for Android &rarr;
+                    </a>
+                </div>
                 <div id="ob-pair-stage" class="ob-pair-stage">
                     <div class="ob-loading">Generating pairing code&hellip;</div>
                 </div>
                 <nav class="ob-step-nav" aria-label="Step navigation">
                     <button type="button" class="ob-back" id="ob-pair-back">
                         <span aria-hidden="true">&larr;</span> Back to extras
+                    </button>
+                    <button type="button" class="ob-pair-mark-done" id="ob-pair-mark-done">
+                        I've already paired this phone &mdash; mark complete <span aria-hidden="true">&check;</span>
                     </button>
                     <button type="button" class="ob-skip" id="ob-pair-skip">
                         Skip &mdash; pair later from System Menu <span aria-hidden="true">&rarr;</span>
@@ -75,33 +92,26 @@ export async function render(container, { next, back, skip }) {
         skip();
     });
 
-    // E13: pre-mount check — if any device is already paired (persistent
-    // registry survives service restart), short-circuit to the success view.
-    // The phone won't re-claim a fresh token once it has stored credentials,
-    // so polling alone would loop forever on the QR view. Fail-soft: any
-    // error from /current-config falls through to the normal mint flow.
-    const stage = container.querySelector("#ob-pair-stage");
-    let pairedDevices = [];
-    try {
-        const r = await fetch("/onboarding/current-config");
-        if (r.ok) {
-            const cfg = await r.json();
-            if (Array.isArray(cfg.paired_devices)) {
-                pairedDevices = cfg.paired_devices;
-            }
-        }
-    } catch (_e) {
-        // Fall through to mint flow — no toast, no surface error
-    }
-    if (pairedDevices.length > 0) {
-        renderAlreadyPaired(stage, pairedDevices, {
-            next,
-            pairAnother: () => mintAndPoll(container, { next }),
-        });
-        return;
-    }
+    // E14 (Brandon 2026-05-17): manual 'I've already paired' escape hatch.
+    // Tailscale owns access control to the BlackBox — pairing is recorded
+    // here for record-keeping but the wizard doesn't need magical detection.
+    // If customer pairs via QR + polling fires → auto-advances (existing
+    // flow). If customer pairs out-of-band OR has stored credentials from
+    // a prior session → click this button to mark complete.
+    document.getElementById("ob-pair-mark-done").addEventListener("click", async () => {
+        stopPolling();
+        // Best-effort: tell backend the step is complete so state reflects it
+        try {
+            await fetch("/onboarding/step/complete", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ step: "pair_phone" }),
+            });
+        } catch (_) { /* non-fatal */ }
+        next();
+    });
 
-    // No devices in registry — mint the first token + start the cycle
+    // Mint a fresh pairing token + start the QR + poll cycle.
     await mintAndPoll(container, { next });
 }
 
