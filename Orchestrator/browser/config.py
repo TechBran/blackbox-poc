@@ -126,9 +126,6 @@ def _detect_xauthority():
         return classic
     return ""
 
-XAUTHORITY = _detect_xauthority() if NATIVE_MODE else ""
-
-
 def _detect_dbus_session():
     """Find the D-Bus session bus address for the user session.
     Needed for XDG Portal access from systemd services.
@@ -142,17 +139,34 @@ def _detect_dbus_session():
         return f"unix:path={bus_path}"
     return ""
 
-DBUS_SESSION_BUS_ADDRESS = _detect_dbus_session() if NATIVE_MODE else ""
-
 
 def get_native_env() -> dict:
-    """Get environment dict suitable for X11/Wayland commands on the native display."""
+    """Get environment dict suitable for X11/Wayland commands on the native display.
+
+    E17 (Brandon 2026-05-17): XAUTHORITY + DBUS detection used to be cached as
+    module-level constants computed at import time. But blackbox.service starts
+    at boot BEFORE the user logs into GNOME — at that moment no Xauthority file
+    exists yet and the user DBUS session isn't running. The constants get
+    captured as empty strings and stay empty forever. Compute FRESH on each
+    call so the service picks up the session whenever the user logs in.
+    Also add XDG_RUNTIME_DIR which the Portal subprocess relies on.
+    """
     env = {"DISPLAY": f":{ACTIVE_DISPLAY}", "PATH": "/usr/bin:/usr/local/bin:/bin"}
-    if XAUTHORITY:
-        env["XAUTHORITY"] = XAUTHORITY
-    if DBUS_SESSION_BUS_ADDRESS:
-        env["DBUS_SESSION_BUS_ADDRESS"] = DBUS_SESSION_BUS_ADDRESS
+    if NATIVE_MODE:
+        xauth = _detect_xauthority()
+        if xauth:
+            env["XAUTHORITY"] = xauth
+        dbus_addr = _detect_dbus_session()
+        if dbus_addr:
+            env["DBUS_SESSION_BUS_ADDRESS"] = dbus_addr
+        env["XDG_RUNTIME_DIR"] = f"/run/user/{os.getuid()}"
     return env
+
+
+# Legacy aliases kept for backward compatibility; prefer get_native_env() which
+# computes fresh on each call.
+XAUTHORITY = _detect_xauthority() if NATIVE_MODE else ""
+DBUS_SESSION_BUS_ADDRESS = _detect_dbus_session() if NATIVE_MODE else ""
 
 # Chrome settings
 CHROME_PATH = "/opt/google/chrome/chrome"

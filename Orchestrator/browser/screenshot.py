@@ -163,26 +163,21 @@ def capture_screenshot_cdp(page_ws_url: str = "") -> bytes:
 def capture_screenshot(display_number: int = ACTIVE_DISPLAY) -> bytes:
     """Capture a screenshot of the display and resize to CU model resolution.
 
-    In native mode (Wayland): Portal (full desktop) → scrot (XWayland only) fallback.
-    In sandbox mode (Xvfb): scrot → CDP fallback.
+    Native mode: always try Portal first (works on Wayland AND on X11+GNOME),
+    fall through to scrot (works on plain X11 + as Wayland-XWayland fallback).
+    Sandbox mode (Xvfb): scrot → CDP fallback.
+
+    E17 (Brandon 2026-05-17): previous version branched on XDG_SESSION_TYPE env
+    var which is stripped from systemd-launched processes, so Wayland systems
+    were taking the X11 branch + getting black scrot captures. New approach:
+    just try Portal first universally. Portal failure (no portal, not a desktop
+    session, etc.) falls through to scrot. Removes brittle session detection.
+
     Returns PNG bytes at the CU model resolution.
     """
     if NATIVE_MODE:
-        # On X11: scrot captures the real desktop directly (fast, reliable)
-        # On Wayland: scrot only sees XWayland, so Portal is primary
-        _is_wayland = os.environ.get("XDG_SESSION_TYPE", "") == "wayland"
-
-        if not _is_wayland:
-            # X11 — scrot is the primary and best method
-            try:
-                png_bytes = capture_screenshot_display(display_number)
-                png_bytes = resize_screenshot(png_bytes, CU_DISPLAY_WIDTH, CU_DISPLAY_HEIGHT)
-                return png_bytes
-            except Exception as e:
-                print(f"[SCREENSHOT] scrot failed on X11: {e}")
-                raise RuntimeError(f"Native X11 screenshot failed: {e}")
-
-        # Wayland — Portal primary, scrot fallback (XWayland only)
+        # Always try Portal first — works on Wayland (full composited desktop)
+        # AND on X11+GNOME (also full desktop). Single best path on modern Linux.
         try:
             png_bytes = capture_screenshot_portal()
             png_bytes = resize_screenshot(png_bytes, CU_DISPLAY_WIDTH, CU_DISPLAY_HEIGHT)
@@ -190,6 +185,8 @@ def capture_screenshot(display_number: int = ACTIVE_DISPLAY) -> bytes:
         except Exception as e:
             print(f"[SCREENSHOT] Portal failed, trying scrot: {e}")
 
+        # Fall through to scrot — works on plain X11. On Wayland this captures
+        # only XWayland windows (often black) but better than nothing.
         try:
             png_bytes = capture_screenshot_display(display_number)
             png_bytes = resize_screenshot(png_bytes, CU_DISPLAY_WIDTH, CU_DISPLAY_HEIGHT)
