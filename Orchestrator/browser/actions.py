@@ -1,5 +1,15 @@
 """
-Action executor — translates Anthropic Computer Use actions to xdotool commands.
+Action executor — translates Anthropic Computer Use actions into native input
+injection on the active display.
+
+E18 (Brandon 2026-05-17): added ydotool path for Wayland-compatible input.
+xdotool only reaches XWayland windows; native Wayland apps don't see its
+events. ydotool writes to /dev/uinput at the kernel layer so both X11 and
+Wayland apps receive events. Wayland is detected by the presence of
+$WAYLAND_DISPLAY (or wayland-0 socket under $XDG_RUNTIME_DIR); X11 falls
+through to the existing xdotool path so nothing regresses on plain-X11
+hosts.
+
 Supports all 18 actions from the computer_20251124 tool type.
 """
 import os
@@ -10,10 +20,118 @@ import io
 
 from Orchestrator.browser.config import (
     DISPLAY_NUMBER, DISPLAY_WIDTH, DISPLAY_HEIGHT,
-    NATIVE_MODE, ACTIVE_DISPLAY, SCALE_X, SCALE_Y,
+    NATIVE_MODE, ACTIVE_DISPLAY, get_scale_factors,
     get_native_env
 )
 from Orchestrator.browser.display import get_display
+
+
+# ── Wayland detection + ydotool config ──
+YDOTOOL_BIN = "/usr/local/bin/ydotool"  # built from v1.0.4 source by install.sh
+# Socket lives in /run/user/<uid>/ so it survives blackbox.service's
+# PrivateTmp=true sandbox (which would mask /tmp). /run/user/<uid> is the
+# standard Linux user-runtime dir that systemd preserves verbatim.
+YDOTOOL_SOCKET = f"/run/user/{os.getuid()}/.ydotool_socket"
+
+
+def _is_wayland_session() -> bool:
+    """Detect whether the active session is Wayland.
+
+    blackbox.service runs under systemd which strips XDG_SESSION_TYPE, so we
+    can't rely on that env var. Instead probe for the Wayland display socket
+    which Mutter creates inside the user's XDG_RUNTIME_DIR.
+    """
+    uid = os.getuid()
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{uid}")
+    # Check for any wayland-* socket (typically wayland-0)
+    try:
+        for entry in os.listdir(runtime_dir):
+            if entry.startswith("wayland-") and not entry.endswith(".lock"):
+                return True
+    except (FileNotFoundError, PermissionError):
+        pass
+    return False
+
+
+def _ydotool_available() -> bool:
+    """Check ydotool binary exists AND daemon socket is reachable."""
+    if not os.path.isfile(YDOTOOL_BIN):
+        return False
+    try:
+        st = os.stat(YDOTOOL_SOCKET)
+        # Socket present + writable by us
+        import stat as _stat
+        return _stat.S_ISSOCK(st.st_mode) and os.access(YDOTOOL_SOCKET, os.W_OK)
+    except FileNotFoundError:
+        return False
+
+
+# Cache the routing decision — re-evaluated on each ActionExecutor() construction
+# is fine, but we don't want to stat() on every single key press.
+_USE_YDOTOOL = None
+
+def _use_ydotool() -> bool:
+    global _USE_YDOTOOL
+    if _USE_YDOTOOL is None:
+        _USE_YDOTOOL = _is_wayland_session() and _ydotool_available()
+        if _USE_YDOTOOL:
+            print(f"[actions] Wayland detected + ydotool available — routing input via ydotool")
+        else:
+            print(f"[actions] Using xdotool (wayland={_is_wayland_session()}, ydotool_ok={_ydotool_available()})")
+    return _USE_YDOTOOL
+
+
+# xdotool keysym name → Linux input event keycode (from /usr/include/linux/input-event-codes.h)
+# Covers the keys Anthropic CU commonly sends. Unknown keys fall through to xdotool
+# (which on Wayland silently no-ops, but at least doesn't crash).
+_XDOTOOL_TO_LINUX_KEYCODE = {
+    # Letters (a-z)
+    "a": 30, "b": 48, "c": 46, "d": 32, "e": 18, "f": 33, "g": 34, "h": 35,
+    "i": 23, "j": 36, "k": 37, "l": 38, "m": 50, "n": 49, "o": 24, "p": 25,
+    "q": 16, "r": 19, "s": 31, "t": 20, "u": 22, "v": 47, "w": 17, "x": 45,
+    "y": 21, "z": 44,
+    # Digits
+    "0": 11, "1": 2, "2": 3, "3": 4, "4": 5, "5": 6, "6": 7, "7": 8, "8": 9, "9": 10,
+    # Common control keys
+    "Return": 28, "return": 28, "Enter": 28, "enter": 28,
+    "Escape": 1, "escape": 1, "Esc": 1, "esc": 1,
+    "Tab": 15, "tab": 15,
+    "BackSpace": 14, "backspace": 14, "Backspace": 14,
+    "space": 57, "Space": 57,
+    "Delete": 111, "delete": 111, "Del": 111,
+    "Insert": 110, "insert": 110,
+    "Home": 102, "home": 102,
+    "End": 107, "end": 107,
+    "Page_Up": 104, "Prior": 104, "PageUp": 104,
+    "Page_Down": 109, "Next": 109, "PageDown": 109,
+    "Up": 103, "up": 103,
+    "Down": 108, "down": 108,
+    "Left": 105, "left": 105,
+    "Right": 106, "right": 106,
+    # Modifiers
+    "ctrl": 29, "Control": 29, "Control_L": 29, "Ctrl": 29,
+    "Control_R": 97, "ctrl_r": 97,
+    "shift": 42, "Shift": 42, "Shift_L": 42,
+    "Shift_R": 54, "shift_r": 54,
+    "alt": 56, "Alt": 56, "Alt_L": 56, "Meta": 56, "meta": 56,
+    "Alt_R": 100, "alt_r": 100, "AltGr": 100,
+    "super": 125, "Super": 125, "Super_L": 125, "Win": 125,
+    "Super_R": 126,
+    # Function keys
+    "F1": 59, "F2": 60, "F3": 61, "F4": 62, "F5": 63, "F6": 64,
+    "F7": 65, "F8": 66, "F9": 67, "F10": 68, "F11": 87, "F12": 88,
+    # Punctuation/symbols
+    "minus": 12, "equal": 13, "plus": 13,
+    "bracketleft": 26, "bracketright": 27,
+    "semicolon": 39, "apostrophe": 40, "grave": 41,
+    "backslash": 43, "comma": 51, "period": 52, "slash": 53,
+    # Print Screen and friends
+    "Print": 99, "Sys_Req": 99,
+    "Scroll_Lock": 70,
+    "Pause": 119, "Break": 119,
+    "Menu": 127,
+    "Caps_Lock": 58, "Capslock": 58,
+}
 
 
 def _jitter(base_ms: float = 0) -> float:
@@ -25,8 +143,9 @@ def _scale_coord(coord):
     """Scale a coordinate pair from CU model space to real display space."""
     if not NATIVE_MODE or coord is None:
         return coord
+    sx, sy = get_scale_factors()
     x, y = coord
-    return [int(x * SCALE_X), int(y * SCALE_Y)]
+    return [int(x * sx), int(y * sy)]
 
 
 def _run_xdotool(*args, display_number: int = ACTIVE_DISPLAY) -> subprocess.CompletedProcess:
@@ -42,11 +161,60 @@ def _run_xdotool(*args, display_number: int = ACTIVE_DISPLAY) -> subprocess.Comp
         return subprocess.CompletedProcess(cmd, returncode=-1, stdout="", stderr="ACTION_TIMEOUT: xdotool command timed out after 10s")
 
 
+def _run_ydotool(*args) -> subprocess.CompletedProcess:
+    """Run a ydotool command. Daemon must already be running (via ydotoold.service)."""
+    env = {**os.environ, "YDOTOOL_SOCKET": YDOTOOL_SOCKET, "PATH": "/usr/local/bin:/usr/bin:/bin"}
+    cmd = [YDOTOOL_BIN] + list(args)
+    try:
+        return subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=10)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(cmd, returncode=-1, stdout="", stderr="ACTION_TIMEOUT: ydotool command timed out after 10s")
+
+
+def _parse_xdotool_key_combo(text: str):
+    """Translate xdotool key string ("ctrl+a", "Return", "shift+F4") to list of
+    (keycode, is_modifier) tuples ready to be turned into ydotool down/up events.
+
+    Returns None if any token can't be translated — caller should fall back.
+    """
+    tokens = text.replace(" ", "").split("+")
+    codes = []
+    for tok in tokens:
+        kc = _XDOTOOL_TO_LINUX_KEYCODE.get(tok)
+        if kc is None:
+            # Try lowercase fallback for letters typed as uppercase like "A"
+            kc = _XDOTOOL_TO_LINUX_KEYCODE.get(tok.lower())
+        if kc is None:
+            return None
+        codes.append(kc)
+    return codes
+
+
+def _ydotool_key(text: str) -> bool:
+    """Press a key combo via ydotool. Returns True on success, False if unknown key."""
+    codes = _parse_xdotool_key_combo(text)
+    if not codes:
+        return False
+    # Build event sequence: all keys down in order, then all up in reverse
+    seq = []
+    for kc in codes:
+        seq.append(f"{kc}:1")
+    for kc in reversed(codes):
+        seq.append(f"{kc}:0")
+    _run_ydotool("key", *seq)
+    return True
+
+
 class ActionExecutor:
-    """Executes Anthropic Computer Use actions via xdotool on the virtual display."""
+    """Executes Anthropic Computer Use actions on the native display.
+
+    Auto-detects Wayland vs X11 at construction time and routes input through
+    ydotool (Wayland-compatible) or xdotool (X11-only) accordingly.
+    """
 
     def __init__(self, display_number: int = DISPLAY_NUMBER):
         self.display_number = display_number
+        self.use_ydotool = _use_ydotool()
 
     def execute(self, action: str, **params) -> dict:
         """Execute a single CU action. Returns {success, message}."""
@@ -58,60 +226,132 @@ class ActionExecutor:
         except Exception as e:
             return {"success": False, "message": f"Action '{action}' failed: {e}"}
 
+    # ── Input dispatch helpers — choose ydotool or xdotool per op ──
+
+    def _move(self, x: int, y: int) -> None:
+        if self.use_ydotool:
+            _run_ydotool("mousemove", "--absolute", "--", str(x), str(y))
+        else:
+            _run_xdotool("mousemove", "--sync", str(x), str(y))
+
+    def _click_button(self, button: int) -> None:
+        """button: 1=left, 2=middle, 3=right (xdotool numbering)."""
+        if self.use_ydotool:
+            # ydotool: 0xC0=left, 0xC1=right, 0xC2=middle (0x40=down, 0x80=up combined)
+            btn_map = {1: "0xC0", 2: "0xC2", 3: "0xC1"}
+            _run_ydotool("click", btn_map.get(button, "0xC0"))
+        else:
+            _run_xdotool("click", str(button))
+
+    def _click_button_repeat(self, button: int, repeat: int, delay_ms: int = 80) -> None:
+        if self.use_ydotool:
+            btn_map = {1: "0xC0", 2: "0xC2", 3: "0xC1"}
+            _run_ydotool("click", "--repeat", str(repeat),
+                         "--next-delay", str(delay_ms), btn_map.get(button, "0xC0"))
+        else:
+            _run_xdotool("click", "--repeat", str(repeat), "--delay", str(delay_ms), str(button))
+
+    def _button_down(self, button: int) -> None:
+        if self.use_ydotool:
+            # ydotool down: 0x40=left-down, 0x42=middle-down, 0x41=right-down
+            down_map = {1: "0x40", 2: "0x42", 3: "0x41"}
+            _run_ydotool("click", down_map.get(button, "0x40"))
+        else:
+            _run_xdotool("mousedown", str(button))
+
+    def _button_up(self, button: int) -> None:
+        if self.use_ydotool:
+            up_map = {1: "0x80", 2: "0x82", 3: "0x81"}
+            _run_ydotool("click", up_map.get(button, "0x80"))
+        else:
+            _run_xdotool("mouseup", str(button))
+
+    def _type_text(self, text: str) -> None:
+        if self.use_ydotool:
+            _run_ydotool("type", "--key-delay", "12", text)
+        else:
+            _run_xdotool("type", "--clearmodifiers", "--delay", "12", text)
+
+    def _key_combo(self, text: str) -> None:
+        """Press a key combo like 'Return' or 'ctrl+a'."""
+        if self.use_ydotool:
+            if _ydotool_key(text):
+                return
+            # Fall through: unknown key → try xdotool (silent no-op on Wayland,
+            # but better than crashing — and useful if XWayland window is focused)
+            print(f"[actions] ydotool can't translate key '{text}', falling through to xdotool")
+        _run_xdotool("key", "--clearmodifiers", text)
+
+    def _key_down(self, text: str) -> None:
+        if self.use_ydotool:
+            codes = _parse_xdotool_key_combo(text)
+            if codes:
+                _run_ydotool("key", *[f"{kc}:1" for kc in codes])
+                return
+        _run_xdotool("keydown", "--clearmodifiers", text)
+
+    def _key_up(self, text: str) -> None:
+        if self.use_ydotool:
+            codes = _parse_xdotool_key_combo(text)
+            if codes:
+                # Release in reverse order
+                _run_ydotool("key", *[f"{kc}:0" for kc in reversed(codes)])
+                return
+        _run_xdotool("keyup", "--clearmodifiers", text)
+
     # --- Click actions ---
 
     def _action_left_click(self, coordinate=None, **kw) -> dict:
         if coordinate:
             x, y = _scale_coord(coordinate)
-            _run_xdotool("mousemove", "--sync", str(x), str(y))
+            self._move(x, y)
             time.sleep(_jitter())
-        _run_xdotool("click", "1")
+        self._click_button(1)
         return {"success": True, "message": f"Left click at {coordinate}"}
 
     def _action_right_click(self, coordinate=None, **kw) -> dict:
         if coordinate:
             x, y = _scale_coord(coordinate)
-            _run_xdotool("mousemove", "--sync", str(x), str(y))
+            self._move(x, y)
             time.sleep(_jitter())
-        _run_xdotool("click", "3")
+        self._click_button(3)
         return {"success": True, "message": f"Right click at {coordinate}"}
 
     def _action_middle_click(self, coordinate=None, **kw) -> dict:
         if coordinate:
             x, y = _scale_coord(coordinate)
-            _run_xdotool("mousemove", "--sync", str(x), str(y))
+            self._move(x, y)
             time.sleep(_jitter())
-        _run_xdotool("click", "2")
+        self._click_button(2)
         return {"success": True, "message": f"Middle click at {coordinate}"}
 
     def _action_double_click(self, coordinate=None, **kw) -> dict:
         if coordinate:
             x, y = _scale_coord(coordinate)
-            _run_xdotool("mousemove", "--sync", str(x), str(y))
+            self._move(x, y)
             time.sleep(_jitter())
-        _run_xdotool("click", "--repeat", "2", "--delay", "80", "1")
+        self._click_button_repeat(1, 2, 80)
         return {"success": True, "message": f"Double click at {coordinate}"}
 
     def _action_triple_click(self, coordinate=None, **kw) -> dict:
         if coordinate:
             x, y = _scale_coord(coordinate)
-            _run_xdotool("mousemove", "--sync", str(x), str(y))
+            self._move(x, y)
             time.sleep(_jitter())
-        _run_xdotool("click", "--repeat", "3", "--delay", "80", "1")
+        self._click_button_repeat(1, 3, 80)
         return {"success": True, "message": f"Triple click at {coordinate}"}
 
     # --- Type/Key actions ---
 
     def _action_type(self, text="", **kw) -> dict:
         time.sleep(_jitter(30))
-        _run_xdotool("type", "--clearmodifiers", "--delay", "12", text)
+        self._type_text(text)
         return {"success": True, "message": f"Typed {len(text)} chars"}
 
     def _action_key(self, text="", **kw) -> dict:
         # Anthropic sends combos like "ctrl+a" or "Return"
-        # xdotool uses the same format
         time.sleep(_jitter())
-        _run_xdotool("key", "--clearmodifiers", text)
+        self._key_combo(text)
         return {"success": True, "message": f"Key press: {text}"}
 
     # --- Mouse movement ---
@@ -119,7 +359,7 @@ class ActionExecutor:
     def _action_mouse_move(self, coordinate=None, **kw) -> dict:
         if coordinate:
             x, y = _scale_coord(coordinate)
-            _run_xdotool("mousemove", "--sync", str(x), str(y))
+            self._move(x, y)
         return {"success": True, "message": f"Mouse moved to {coordinate}"}
 
     # --- Scroll ---
@@ -127,19 +367,32 @@ class ActionExecutor:
     def _action_scroll(self, coordinate=None, direction="down", amount=3, **kw) -> dict:
         if coordinate:
             x, y = _scale_coord(coordinate)
-            _run_xdotool("mousemove", "--sync", str(x), str(y))
+            self._move(x, y)
             time.sleep(_jitter())
 
-        # xdotool scroll: button 4=up, 5=down, 6=left, 7=right
-        # Each xdotool click = 1 mouse wheel notch ≈ 100px in Chrome.
-        # Anthropic's computer tool spec: amount=N means ~N*100px of scroll.
-        # Pass amount directly — no multiplier needed.
-        button_map = {"up": "4", "down": "5", "left": "6", "right": "7"}
-        button = button_map.get(direction, "5")
         clicks = max(1, int(amount))
-        for _ in range(clicks):
-            _run_xdotool("click", button)
-            time.sleep(0.02)
+        if self.use_ydotool:
+            # ydotool wheel: --wheel + relative Y. Positive Y = down, negative = up.
+            # Each "tick" ≈ 120 wheel units (REL_WHEEL standard).
+            # Anthropic's amount=N is meant as ~N*100px of scroll; map 1 tick per N.
+            direction_sign = {"up": -1, "down": 1, "left": 0, "right": 0}.get(direction, 1)
+            if direction in ("left", "right"):
+                # Horizontal scroll: use --wheel with -x
+                horiz_sign = {"left": -1, "right": 1}[direction]
+                for _ in range(clicks):
+                    _run_ydotool("mousemove", "--wheel", "--", str(horiz_sign), "0")
+                    time.sleep(0.02)
+            else:
+                for _ in range(clicks):
+                    _run_ydotool("mousemove", "--wheel", "--", "0", str(direction_sign))
+                    time.sleep(0.02)
+        else:
+            # xdotool: button 4=up, 5=down, 6=left, 7=right
+            button_map = {"up": "4", "down": "5", "left": "6", "right": "7"}
+            button = button_map.get(direction, "5")
+            for _ in range(clicks):
+                _run_xdotool("click", button)
+                time.sleep(0.02)
         return {"success": True, "message": f"Scroll {direction} x{clicks} ticks at {coordinate}"}
 
     # --- Drag ---
@@ -148,33 +401,33 @@ class ActionExecutor:
         if start_coordinate and coordinate:
             sx, sy = _scale_coord(start_coordinate)
             ex, ey = _scale_coord(coordinate)
-            _run_xdotool("mousemove", "--sync", str(sx), str(sy))
+            self._move(sx, sy)
             time.sleep(_jitter(50))
-            _run_xdotool("mousedown", "1")
+            self._button_down(1)
             time.sleep(0.1)
-            _run_xdotool("mousemove", "--sync", str(ex), str(ey))
+            self._move(ex, ey)
             time.sleep(0.1)
-            _run_xdotool("mouseup", "1")
+            self._button_up(1)
             return {"success": True, "message": f"Drag ({sx},{sy}) -> ({ex},{ey})"}
         return {"success": False, "message": "Drag requires start_coordinate and coordinate"}
 
     # --- Mouse button hold ---
 
     def _action_left_mouse_down(self, **kw) -> dict:
-        _run_xdotool("mousedown", "1")
+        self._button_down(1)
         return {"success": True, "message": "Mouse button down"}
 
     def _action_left_mouse_up(self, **kw) -> dict:
-        _run_xdotool("mouseup", "1")
+        self._button_up(1)
         return {"success": True, "message": "Mouse button up"}
 
     # --- Key hold ---
 
     def _action_hold_key(self, text="", duration=1, **kw) -> dict:
         capped_duration = min(float(duration), 10)
-        _run_xdotool("keydown", "--clearmodifiers", text)
+        self._key_down(text)
         time.sleep(capped_duration)
-        _run_xdotool("keyup", "--clearmodifiers", text)
+        self._key_up(text)
         return {"success": True, "message": f"Held '{text}' for {capped_duration}s"}
 
     # --- Wait ---

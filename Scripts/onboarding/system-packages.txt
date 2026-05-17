@@ -17,13 +17,22 @@ python3-gi               # MUST_HAVE # GObject introspection for portal
 
 # === SHOULD_HAVE — degraded but functional ===
 chromium-browser         # SHOULD_HAVE # Tauri webview backend, kiosk fallback
-xdotool                  # SHOULD_HAVE # Computer Use input injection
+xdotool                  # SHOULD_HAVE # Computer Use input injection (X11 only)
 scrot                    # SHOULD_HAVE # X11 screenshot
 openbox                  # SHOULD_HAVE # CU window management
 x11vnc                   # SHOULD_HAVE # remote desktop CU
 mpg123                   # SHOULD_HAVE # audio playback
 alsa-utils               # SHOULD_HAVE # audio devices
 pulseaudio-utils         # SHOULD_HAVE # PulseAudio control
+# ── ydotool 1.x build deps (E18) ──
+# Ubuntu 24.04 only ships ydotool 0.1.8 in apt, which lacks --absolute mousemove
+# (needed to translate CU click coords correctly). install.sh builds v1.0.4 from
+# source so we get the absolute API. Daemon writes to /dev/uinput at the kernel
+# layer — works on both Wayland (where xdotool can't reach native apps) and X11.
+cmake                    # SHOULD_HAVE # ydotool 1.x build
+libevdev-dev             # SHOULD_HAVE # ydotool 1.x build (input event lib headers)
+g++                      # SHOULD_HAVE # ydotool 1.x build (C++ compiler)
+scdoc                    # SHOULD_HAVE # ydotool 1.x manpage build
 
 # === FEATURE_OPTIONAL ===
 docker.io                # FEATURE_OPTIONAL # phone integration (FreeSwitch/Drachtio)

@@ -213,6 +213,96 @@ if ! sudo visudo -c -f /etc/sudoers.d/blackbox-tailscale > /dev/null; then
 fi
 echo "[install] Sudoers grant written for $REAL_USER (tailscale operations)"
 
+# ── Step 4f: ydotool 1.x for Wayland input injection (E18) ──
+# Ubuntu 24.04's apt ydotool is v0.1.8 which lacks --absolute mousemove
+# (Computer Use sends absolute coords, so we can't use 0.1.8). Build v1.0.4
+# from source; it's a tiny C project (<5s compile). The daemon writes to
+# /dev/uinput at the kernel layer — both X11 AND Wayland apps receive events
+# (xdotool only reaches XWayland windows; native Wayland apps were silent
+# before E18).
+build_ydotool() {
+    if [[ -x /usr/local/bin/ydotool && -x /usr/local/bin/ydotoold ]]; then
+        echo "[install] ydotool 1.x already installed at /usr/local/bin/"
+        return 0
+    fi
+    echo "[install] Building ydotool 1.0.4 from source..."
+    local BUILD_DIR=/tmp/ydotool-build-$$
+    rm -rf "$BUILD_DIR"
+    git clone --depth 1 --branch v1.0.4 https://github.com/ReimuNotMoe/ydotool.git "$BUILD_DIR"
+    (
+        cd "$BUILD_DIR"
+        mkdir -p build && cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        make -j"$(nproc)"
+        sudo make install
+    )
+    rm -rf "$BUILD_DIR"
+    if [[ ! -x /usr/local/bin/ydotool || ! -x /usr/local/bin/ydotoold ]]; then
+        echo "[install] ERROR: ydotool build/install did not produce expected binaries" >&2
+        exit 1
+    fi
+    echo "[install] ydotool 1.0.4 installed to /usr/local/bin/"
+}
+build_ydotool
+
+# REAL_USER needs /dev/uinput access (input group). For the running session,
+# the systemd service runs ydotoold as root and hands ownership of the socket
+# to REAL_USER's uid:gid via --socket-own, so this group membership is mostly
+# defensive (helps if someone tries to run ydotool directly outside the service).
+USER_UID=$(id -u "$REAL_USER")
+USER_GID=$(id -g "$REAL_USER")
+sudo usermod -aG input "$REAL_USER"
+echo "[install] Added $REAL_USER to 'input' group (effective next login)"
+
+# Install ydotoold systemd unit. Daemon owns /dev/uinput access (root needed),
+# but the socket gets chowned to REAL_USER so blackbox.service can talk to it
+# without privilege escalation.
+sudo tee /etc/systemd/system/ydotoold.service > /dev/null <<EOF
+[Unit]
+Description=ydotool daemon (Wayland-compatible input injection for Computer Use)
+Documentation=https://github.com/ReimuNotMoe/ydotool
+After=multi-user.target
+
+[Service]
+Type=simple
+# Socket path uses /run/user/<uid>/ — survives blackbox.service's
+# PrivateTmp=true sandbox (PrivateTmp masks /tmp but leaves /run/user/* alone).
+# REAL_USER's uid:gid owns the socket so the BlackBox process can write to it
+# without root.
+ExecStart=/usr/local/bin/ydotoold --socket-path=/run/user/${USER_UID}/.ydotool_socket --socket-own=${USER_UID}:${USER_GID}
+# Make sure /run/user/<uid> exists before we try to bind there. systemd creates
+# it on user login, but if ydotoold starts at boot before login we need it now.
+ExecStartPre=/usr/bin/install -d -o ${USER_UID} -g ${USER_GID} -m 700 /run/user/${USER_UID}
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl enable --now ydotoold.service
+echo "[install] ydotoold.service enabled and running"
+
+# ── Step 4g: GNOME 46 screenshot flash suppression (E18) ──
+# GNOME 46 fires a full-screen flash on every XDG Portal Screenshot — annoying
+# during Computer Use (Portal screenshots run at 1Hz from the live viewer).
+# org.gnome.Shell.Screenshot D-Bus is blocked by GNOME 46 ("Screenshot is not
+# allowed") so we can't use the older flash=false API. The only working knob
+# is the global animation toggle. Trade-off: customer loses all GNOME UI
+# transitions (window minimize/maximize/workspace switch animations), but this
+# is desirable on a CU kiosk anyway — animations confuse the model and waste
+# CPU. Set via dbus-launch wrapper so dconf finds the right session.
+sudo -u "$REAL_USER" bash -c '
+    if [[ -e "/run/user/$(id -u)/bus" ]]; then
+        export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
+        gsettings set org.gnome.desktop.interface enable-animations false 2>/dev/null \
+            && echo "[install] Disabled GNOME animations (suppresses screenshot flash)" \
+            || echo "[install] (skipping animation disable — gsettings unavailable)"
+    else
+        echo "[install] (skipping animation disable — no user dbus, will apply on next login)"
+    fi
+' || true
+
 # ── Step 5: Build + install Tauri setup app (audit C2 / Q1=A) ──
 build_tauri_setup() {
     echo "[install] Building BlackBox Setup (Tauri .deb)..."

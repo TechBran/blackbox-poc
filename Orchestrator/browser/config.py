@@ -1,8 +1,10 @@
 """
 Sovereign Browser configuration constants
 """
+import io
 import os
 import subprocess
+import time as _time
 from pathlib import Path
 
 # ── Native Desktop Mode ──
@@ -59,8 +61,41 @@ def _detect_native_display() -> int:
 NATIVE_DISPLAY_NUMBER = _detect_native_display()
 
 
-def _detect_native_resolution():
-    """Detect the real display resolution via xrandr."""
+# CU model resolution — what the model sees and clicks on.
+# Fixed at 1280x720 (Anthropic's optimal range for computer_20251124).
+# Scale factors are computed from actual desktop → CU resolution.
+CU_DISPLAY_WIDTH = 1280
+CU_DISPLAY_HEIGHT = 720
+
+# ── Virtual display settings (used when NATIVE_MODE = False) ──
+DISPLAY_NUMBER = 99
+DISPLAY_WIDTH = CU_DISPLAY_WIDTH if NATIVE_MODE else 1280
+DISPLAY_HEIGHT = CU_DISPLAY_HEIGHT if NATIVE_MODE else 720
+DISPLAY_DEPTH = 24
+
+# The active display number used throughout the system
+ACTIVE_DISPLAY = NATIVE_DISPLAY_NUMBER if NATIVE_MODE else DISPLAY_NUMBER
+
+
+# ── Dynamic native resolution detection (E18) ──
+# Previously NATIVE_WIDTH/NATIVE_HEIGHT were detected ONCE at module-import
+# time via xrandr, which (1) returns nothing on Wayland because xrandr is X11-
+# only, and (2) bakes in the assumption that the customer's display is 1920x1080
+# if detection failed. Brandon's 2026-05-17 question: "are we locked at that
+# screen resolution, or does it dynamically fix itself based on how big the
+# screen is?" — answer was "locked, with a 1080p fallback".
+#
+# New approach: detect on demand, with a 60s cache. Try xrandr first (cheap),
+# fall back to taking a Portal screenshot and reading its PNG dimensions (works
+# on Wayland). Customers running 4K, ultrawide, or anything non-1080p now get
+# correct click coordinate translation without code changes.
+
+_RES_CACHE = {"w": None, "h": None, "ts": 0.0}
+_RES_CACHE_TTL_S = 60.0
+
+
+def _xrandr_resolution():
+    """Try xrandr --current. Returns (w, h) or None."""
     try:
         env = {"DISPLAY": f":{NATIVE_DISPLAY_NUMBER}", "PATH": "/usr/bin:/bin"}
         xa = os.environ.get("XAUTHORITY", "")
@@ -78,26 +113,61 @@ def _detect_native_resolution():
                 return int(w.strip()), int(h.strip())
     except Exception:
         pass
-    return 1920, 1080  # Fallback for this machine
+    return None
 
-NATIVE_WIDTH, NATIVE_HEIGHT = _detect_native_resolution()
 
-# CU model resolution — what the model sees and clicks on.
-# Fixed at 1280x720 (Anthropic's optimal range for computer_20251124).
-# Scale factors are computed from actual desktop → CU resolution.
-CU_DISPLAY_WIDTH = 1280
-CU_DISPLAY_HEIGHT = 720
+def _portal_screenshot_resolution():
+    """Fallback: take a Portal screenshot and read PNG dimensions. Works on Wayland."""
+    try:
+        # Imported lazily to avoid circular import at module load
+        from Orchestrator.browser.screenshot import capture_screenshot_portal
+        from PIL import Image
+        png_bytes = capture_screenshot_portal()
+        with Image.open(io.BytesIO(png_bytes)) as img:
+            return img.size  # (w, h)
+    except Exception:
+        pass
+    return None
 
-# ── Virtual display settings (used when NATIVE_MODE = False) ──
-DISPLAY_NUMBER = 99
-DISPLAY_WIDTH = CU_DISPLAY_WIDTH if NATIVE_MODE else 1280
-DISPLAY_HEIGHT = CU_DISPLAY_HEIGHT if NATIVE_MODE else 720
-DISPLAY_DEPTH = 24
 
-# The active display number used throughout the system
-ACTIVE_DISPLAY = NATIVE_DISPLAY_NUMBER if NATIVE_MODE else DISPLAY_NUMBER
+def detect_native_resolution(force: bool = False):
+    """Return the real display (width, height), cached for 60s.
 
-# Coordinate scaling factors (CU model coords → real desktop coords)
+    Tries xrandr first (cheap, X11-only). If xrandr returns nothing (Wayland)
+    falls back to a Portal screenshot whose PNG header gives us the dimensions.
+    Final fallback: 1920x1080.
+
+    Args:
+        force: bypass the cache and re-detect now.
+    """
+    now = _time.time()
+    if not force and _RES_CACHE["w"] and (now - _RES_CACHE["ts"]) < _RES_CACHE_TTL_S:
+        return _RES_CACHE["w"], _RES_CACHE["h"]
+
+    result = _xrandr_resolution() or _portal_screenshot_resolution() or (1920, 1080)
+    _RES_CACHE["w"], _RES_CACHE["h"], _RES_CACHE["ts"] = result[0], result[1], now
+    return result
+
+
+def get_scale_factors():
+    """Return current (SCALE_X, SCALE_Y) computed from the live native resolution.
+
+    Always use this in click-translation code paths — the module-level
+    SCALE_X/SCALE_Y are stale snapshots from import time.
+    """
+    if not NATIVE_MODE:
+        return 1.0, 1.0
+    w, h = detect_native_resolution()
+    return w / CU_DISPLAY_WIDTH, h / CU_DISPLAY_HEIGHT
+
+
+# Module-level constants — kept for backward compatibility. Initial values are
+# detected at import via xrandr only (Portal fallback skipped because
+# screenshot.py imports this module — circular). Callers that need fresh values
+# (especially click translation) should use get_scale_factors() instead.
+_initial = _xrandr_resolution() or (1920, 1080)
+NATIVE_WIDTH, NATIVE_HEIGHT = _initial
+_RES_CACHE["w"], _RES_CACHE["h"], _RES_CACHE["ts"] = NATIVE_WIDTH, NATIVE_HEIGHT, _time.time()
 SCALE_X = NATIVE_WIDTH / CU_DISPLAY_WIDTH if NATIVE_MODE else 1.0
 SCALE_Y = NATIVE_HEIGHT / CU_DISPLAY_HEIGHT if NATIVE_MODE else 1.0
 
