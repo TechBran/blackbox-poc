@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=BlackBox CU Display Resolution
+Comment=Set display to 1280x720 (Anthropic Computer Use sweet spot)
+Exec=/bin/bash -c 'sleep 5; for output in $(xrandr 2>/dev/null | grep " connected" | cut -d" " -f1); do xrandr --output "$output" --mode 1280x720 2>/dev/null && exit 0; done'
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

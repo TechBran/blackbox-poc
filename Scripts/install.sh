@@ -237,6 +237,25 @@ else
     echo "[install] /etc/gdm3/custom.conf not present (non-GDM display manager?) — skipping X11 switch"
 fi
 
+# ── Step 6c: CU display resolution autostart (audit E19) ──
+# Codify 1280x720 (16:9) as the v1 BlackBox default display resolution.
+# Anthropic Computer Use models are trained on 16:9 / 4:3 in the 1024x768
+# to 1280x800 range — 1280x720 is the precision sweet spot. Customer-class
+# machines are AI-first (not human aesthetics), so we set this automatically.
+# Higher resolutions or ultrawide aspect ratios degrade model click accuracy
+# (model picks coordinates that drift 5-15% due to aspect-ratio bias in its
+# training set). Brandon's MSO2 Ultra testing confirmed: 3440x1440 = 4-5
+# inches click drift; 1280x720 = pinpoint accuracy.
+#
+# Autostart .desktop file runs xrandr at every login (X11 session required —
+# see Step 4h). Iterates connected outputs (HDMI-1, DP-1, etc.) and applies
+# the mode to the first one that accepts it. Sleeps 5s to let the session
+# fully initialize before changing resolution.
+sudo -u "$REAL_USER" mkdir -p "$REAL_HOME/.config/autostart"
+sudo -u "$REAL_USER" cp "$BLACKBOX_ROOT/installer/templates/set-cu-resolution.desktop" \
+    "$REAL_HOME/.config/autostart/blackbox-cu-resolution.desktop"
+echo "[install] Installed autostart entry: set display to 1280x720 on next login (Anthropic CU sweet spot)"
+
 # ── Step 4f: ydotool 1.x for Wayland input injection (E18) ──
 # Ubuntu 24.04's apt ydotool is v0.1.8 which lacks --absolute mousemove
 # (Computer Use sends absolute coords, so we can't use 0.1.8). Build v1.0.4
