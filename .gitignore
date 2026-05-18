@@ -69,6 +69,21 @@ Fossils/
 # ============================================================================
 
 Portal/uploads/
+
+# ============================================================================
+# Apps/ — customer-created app territory (T1 / audit C1 + I2)
+# ============================================================================
+# Apps/ is the convention dir for customer-built sub-apps. The update flow
+# does `git reset --hard origin/main` which would overwrite a customer-created
+# Apps/<name>/ if a future commit added a tracked Apps/<name>/ of the same
+# slug. Untracking everything under Apps/* prevents that collision class.
+# Existing tracked content (PelvicVibeAndroid example app) is grandfathered
+# via the allowlist exception below — its git history continues normally.
+# New example apps should live in docs/examples/ instead.
+Apps/*
+!Apps/.gitkeep
+!Apps/README.md
+!Apps/PelvicVibeAndroid/
 media_files/
 
 # ============================================================================
@@ -185,8 +200,11 @@ AI_BlackBox_Portal_Android_MVP*/AI_BlackBox_Portal_Android_MVP/AI_BlackBox_Porta
 # ============================================================================
 # Notes for future maintainers
 # ============================================================================
-# 1. The `Apps/` directory IS committed — those are user-created sub-projects
-#    that are part of the blackbox example/test surface.
+# 1. The `Apps/` directory now ignores everything by default (audit C1) —
+#    customer-created apps live here at runtime and the update flow does
+#    `git reset --hard` which would stomp collisions. Only `Apps/.gitkeep`,
+#    `Apps/README.md`, and the grandfathered `Apps/PelvicVibeAndroid/`
+#    example are tracked. Add new examples to `docs/examples/` instead.
 # 2. The `Apps/PelvicVibeAndroid/` sub-project may have its own gradle/build/
 #    dirs — those are caught by the `**/build/` and `**/.gradle/` patterns.
 # 3. Templates (.env.template, .env.example) are explicitly ALLOWED via the

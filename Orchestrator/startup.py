@@ -29,7 +29,10 @@ from pydantic import BaseModel
 # Local imports - Import app from checkpoint to register event handlers
 from Orchestrator.checkpoint import app
 from Orchestrator.config import SNAPSHOT_INDEX, OPERATOR_STATE_FILE, APPS_REGISTRY_FILE, UPLOADS_DIR, VOL_PATH, START_RX
-from Orchestrator.fossils import load_snapshot_index, rebuild_snapshot_index, update_snapshot_index
+from Orchestrator.fossils import (
+    load_snapshot_index, rebuild_snapshot_index, update_snapshot_index,
+    read_schema_version, write_schema_version, CURRENT_SCHEMA_VERSION,
+)
 from Orchestrator.volume import cleanup_old_archives, read_text_safe, read_volume_bytes, cleanup_old_artifacts
 from Orchestrator.state import load_operator_state, load_operator_preferences, load_app_registry
 
@@ -111,6 +114,17 @@ def startup_check_index():
 
     if not SNAPSHOT_INDEX.exists():
         logger.info("Index not found, rebuilding...")
+        rebuild_snapshot_index()
+    elif read_schema_version() != CURRENT_SCHEMA_VERSION:
+        # T1 / audit M9: schema sentinel mismatch (or pre-versioning install).
+        # Rebuild from volume — the canonical source of truth — so the on-disk
+        # index matches what current code expects to parse.
+        on_disk = read_schema_version()
+        logger.warning(
+            "Snapshot index schema version mismatch (on-disk=%d, code=%d). "
+            "Rebuilding index from volume...",
+            on_disk, CURRENT_SCHEMA_VERSION,
+        )
         rebuild_snapshot_index()
     else:
         try:

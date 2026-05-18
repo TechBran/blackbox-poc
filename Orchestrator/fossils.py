@@ -265,6 +265,46 @@ def filter_by_operator(fossils: List[str], op: str) -> List[str]:
 _index_cache: Optional[Dict[str, Dict[str, Any]]] = None
 _index_cache_mtime: float = 0.0
 
+# Schema version sentinel (T1 / audit M9). Bump when the per-snapshot dict
+# shape in snapshot_index.json changes in a way readers can't tolerate.
+# Lives in a SEPARATE file (Manifest/schema_version.json) because the index
+# itself is a flat dict mapping snap_id → metadata — adding a sibling key
+# would break every iterator (.items(), len(), keys(), .values()) that
+# assumes top-level entries are snapshots.
+#
+# Increment by 1 whenever the schema changes. Add an upgrade path here when
+# you do — currently bumping version triggers a full rebuild from the volume
+# file (rebuild_snapshot_index preserves existing embeddings).
+CURRENT_SCHEMA_VERSION = 1
+SCHEMA_VERSION_FILE = SNAPSHOT_INDEX.parent / "schema_version.json"
+
+
+def read_schema_version() -> int:
+    """Return the schema version recorded in Manifest/schema_version.json,
+    or 0 if the file is missing/unreadable (treated as "pre-versioning"
+    install — caller should rebuild)."""
+    try:
+        if not SCHEMA_VERSION_FILE.exists():
+            return 0
+        with open(SCHEMA_VERSION_FILE, "r", encoding="utf-8") as f:
+            return int(json.load(f).get("schema_version", 0))
+    except Exception:
+        return 0
+
+
+def write_schema_version(version: int = CURRENT_SCHEMA_VERSION) -> None:
+    """Persist the schema version. Called after a successful rebuild or
+    after schema-aware code has confirmed the on-disk index matches the
+    current expected shape."""
+    try:
+        SCHEMA_VERSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = SCHEMA_VERSION_FILE.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"schema_version": int(version)}, f)
+        os.replace(tmp, SCHEMA_VERSION_FILE)
+    except Exception as e:
+        print(f"[WARNING] Failed to write schema_version: {e}")
+
 
 def load_snapshot_index() -> Dict[str, Dict[str, Any]]:
     """Load the snapshot index, using in-memory cache when possible.
@@ -424,6 +464,9 @@ def rebuild_snapshot_index() -> Dict[str, Dict[str, Any]]:
             print(f"[INDEX] Processed {count} snapshots...")
 
     save_snapshot_index(index)
+    # T1 / audit M9: record schema version after a successful rebuild so the
+    # next startup check can fast-path past the rebuild trigger.
+    write_schema_version(CURRENT_SCHEMA_VERSION)
     elapsed = time.time() - start_time
     print(f"[INDEX] Rebuilt index with {count} snapshots in {elapsed:.2f}s")
     if embeddings_preserved > 0:
