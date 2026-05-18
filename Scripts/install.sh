@@ -272,6 +272,39 @@ sudo tee /etc/systemd/system/blackbox.service.d/override.conf > /dev/null <<EOF
 # Nice=-5
 EOF
 
+# ── Step 4b1: CLI Agent compatibility drop-in (audit E22) ──
+# Brandon 2026-05-17: Android portal Tmux bridge showed blank screen on
+# every connect. Root cause: three systemd-hardening settings from Step 4
+# silently broke the CLI Agent feature on customer hardware:
+#
+#   1. ProtectHome=read-only blocked claude/gemini/codex from writing
+#      their session state, history, and auth tokens to ~/.claude,
+#      ~/.gemini, ~/.codex — CLI agents crashed on startup, leaving an
+#      empty tmux pane that the bridge attached to with nothing to show.
+#   2. PrivateTmp=true put tmux's socket in a per-service-instance
+#      namespace; every service restart destroyed the namespace and the
+#      sessions inside it.
+#   3. KillMode defaulted to control-group; restart killed tmux server
+#      itself. Code in Orchestrator/cli_agent/session_manager.py expected
+#      a drop-in setting KillMode=process — but install.sh never made it.
+#
+# Dev box never hit this because it runs uvicorn directly in a shell
+# (no systemd unit = no hardening sandbox).
+sudo tee /etc/systemd/system/blackbox.service.d/cli-agent-overrides.conf > /dev/null <<EOF
+# CLI Agent compatibility drop-in (E22). DO NOT EDIT — install.sh manages
+# this file. To customize service behavior, edit override.conf instead.
+[Service]
+# Punch holes through ProtectHome=read-only for each CLI agent's config
+# dir + standard user dirs they write to during normal operation.
+ReadWritePaths=$REAL_HOME/.claude $REAL_HOME/.gemini $REAL_HOME/.codex $REAL_HOME/.config $REAL_HOME/.cache $REAL_HOME/.npm
+# Disable PrivateTmp so tmux's socket lives in real /tmp and survives
+# service restarts (combined with KillMode=process below).
+PrivateTmp=false
+# Restart only kills the main uvicorn process; tmux server + CLI agents
+# persist across restarts. See session_manager.py _new_session_cmd comment.
+KillMode=process
+EOF
+
 # ── Step 4c: log rotation (audit M3 carry-forward) ──
 sudo tee /etc/logrotate.d/blackbox > /dev/null <<EOF
 /var/log/blackbox/*.log {
