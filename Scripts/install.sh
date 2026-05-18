@@ -295,8 +295,11 @@ sudo tee /etc/systemd/system/blackbox.service.d/cli-agent-overrides.conf > /dev/
 # this file. To customize service behavior, edit override.conf instead.
 [Service]
 # Punch holes through ProtectHome=read-only for each CLI agent's config
-# dir + standard user dirs they write to during normal operation.
-ReadWritePaths=$REAL_HOME/.claude $REAL_HOME/.gemini $REAL_HOME/.codex $REAL_HOME/.config $REAL_HOME/.cache $REAL_HOME/.npm
+# dir + standard user dirs they write to during normal operation. Also
+# punch /tmp through ProtectSystem=strict (E22a) so tmux's socket dir
+# /tmp/tmux-\$UID/ is writable. /tmp is 1777 sticky-bit world-writable
+# already so this doesn't weaken security.
+ReadWritePaths=$REAL_HOME/.claude $REAL_HOME/.gemini $REAL_HOME/.codex $REAL_HOME/.config $REAL_HOME/.cache $REAL_HOME/.npm /tmp
 # Disable PrivateTmp so tmux's socket lives in real /tmp and survives
 # service restarts (combined with KillMode=process below).
 PrivateTmp=false
