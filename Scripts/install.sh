@@ -369,19 +369,26 @@ fi
 ln -sf "Scripts/blackbox-status.sh" "$BLACKBOX_ROOT/blackbox-status.sh"
 echo "[install] Symlinked blackbox-status.sh → Scripts/blackbox-status.sh"
 
-# ── Step 4e: sudoers grant for runtime tailscale operations ──
-# (Tailscale wizard actuator: bounded NOPASSWD for the specific commands
-# the onboarding step needs. install -m 0440 atomic-replaces existing
-# file; visudo-check aborts if syntax broken.)
-sed "s|REAL_USER_PLACEHOLDER|$REAL_USER|g" \
-    "$BLACKBOX_ROOT/installer/templates/sudoers-blackbox-tailscale" \
-    | sudo install -m 0440 -o root -g root /dev/stdin /etc/sudoers.d/blackbox-tailscale
-if ! sudo visudo -c -f /etc/sudoers.d/blackbox-tailscale > /dev/null; then
-    echo "[install] ERROR: sudoers file syntax check failed" >&2
+# ── Step 4e: sudoers grant for runtime BlackBox operations (T5) ──
+# Bounded NOPASSWD entries covering: Tailscale wizard actuator, service
+# restart + journal access, update-pipeline dispatch helpers. install -m
+# 0440 atomic-replaces existing file; visudo-check aborts if syntax broken.
+#
+# Renamed from blackbox-tailscale → blackbox-system in T5 (scope grew
+# beyond tailscale). Remove the old file if it exists (upgrade-in-place).
+if [[ -f /etc/sudoers.d/blackbox-tailscale ]]; then
     sudo rm -f /etc/sudoers.d/blackbox-tailscale
+    echo "[install] Removed legacy /etc/sudoers.d/blackbox-tailscale (renamed to -system)"
+fi
+sed "s|REAL_USER_PLACEHOLDER|$REAL_USER|g" \
+    "$BLACKBOX_ROOT/installer/templates/sudoers-blackbox-system" \
+    | sudo install -m 0440 -o root -g root /dev/stdin /etc/sudoers.d/blackbox-system
+if ! sudo visudo -c -f /etc/sudoers.d/blackbox-system > /dev/null; then
+    echo "[install] ERROR: sudoers file syntax check failed" >&2
+    sudo rm -f /etc/sudoers.d/blackbox-system
     exit 1
 fi
-echo "[install] Sudoers grant written for $REAL_USER (tailscale operations)"
+echo "[install] Sudoers grant written for $REAL_USER (tailscale + service + update helpers)"
 
 # ── Step 4f1: install root-owned dispatch helpers for update pipeline (T2 / T3) ──
 # Two bounded helper scripts that the update flow's sudoers grants will point at.
