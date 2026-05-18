@@ -2558,3 +2558,38 @@ body::after {
     from { transform: rotate(0deg); }
     to   { transform: rotate(360deg); }
 }
+
+/* ── T9: done-step update-available banner ───────────────────────────── */
+.ob-done-updates {
+    margin: 1rem 0 1.25rem;
+}
+.ob-update-banner {
+    background: rgba(108, 160, 220, 0.08);
+    border-left: 3px solid rgba(108, 160, 220, 0.6);
+    border-radius: var(--radius-md, 8px);
+    padding: 0.85rem 1rem;
+    font-size: 0.9em;
+}
+.ob-update-banner strong {
+    display: block;
+    color: rgba(180, 220, 255, 0.95);
+    margin-bottom: 0.3rem;
+}
+.ob-update-banner p {
+    margin: 0 0 0.5rem;
+    color: rgba(255, 255, 255, 0.75);
+    line-height: 1.45;
+}
+.ob-update-banner-actions {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    margin-top: 0.4rem;
+}
+.ob-update-banner-major {
+    background: rgba(255, 180, 50, 0.08);
+    border-left-color: rgba(255, 180, 50, 0.6);
+}
+.ob-update-banner-major strong {
+    color: rgba(255, 220, 150, 0.95);
+}

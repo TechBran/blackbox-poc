@@ -33,6 +33,8 @@ export async function render(container, { next, back, skip }) {
                 <div id="ob-done-summary" class="ob-done-summary">
                     <div class="ob-loading">Building summary&hellip;</div>
                 </div>
+                <!-- T9: update-available badge — conditionally rendered after status fetch -->
+                <div id="ob-done-updates" class="ob-done-updates" hidden></div>
                 <div class="ob-cta-row">
                     <button type="button" class="ob-cta ob-cta-large" id="ob-done-open" disabled>
                         Open Portal <span class="ob-cta-arrow" aria-hidden="true">&rarr;</span>
@@ -78,6 +80,81 @@ export async function render(container, { next, back, skip }) {
     // diagnostic affordance.
     const logsBtn = document.getElementById("ob-view-logs-btn");
     if (logsBtn) logsBtn.addEventListener("click", openLogsModal);
+
+    // T9: update-available badge. Best-effort — failures stay silent so a
+    // git-not-initialized or rate-limited /update/status never blocks the
+    // happy "you're done!" path.
+    initUpdatesBadge();
+}
+
+// ── T9: update-available badge ─────────────────────────────────────────
+// Fetches /update/status (cached 60s server-side). Renders nothing if:
+//   - git not initialized (fresh install case — no update mechanism yet)
+//   - commits_behind === 0 (already current)
+//   - status fetch fails (no point alarming the user during onboarding)
+// Renders the "N updates available" banner with Install/Skip buttons if
+// 1-10 commits behind, or "Major update available — install later from
+// System Menu" if >10 (audit I3 — avoid alarming first-run customers).
+async function initUpdatesBadge() {
+    let status;
+    try {
+        const r = await fetch("/update/status");
+        if (!r.ok) return;
+        status = await r.json();
+    } catch (_) {
+        return;
+    }
+    if (!status.git_initialized) return;
+    if (!status.commits_behind) return;
+
+    const host = document.getElementById("ob-done-updates");
+    if (!host) return;
+    host.hidden = false;
+
+    const n = status.commits_behind;
+    const isMajor = n > 10;
+    host.innerHTML = isMajor
+        ? `
+            <div class="ob-update-banner ob-update-banner-major">
+                <strong>Major update available</strong>
+                <p>${n} commits behind. Recommended to install from System Menu after onboarding completes — gives you time to test it.</p>
+            </div>
+        `
+        : `
+            <div class="ob-update-banner">
+                <strong>⬆ ${n} update${n === 1 ? "" : "s"} available since this install</strong>
+                <p>Apply now (restarts service, ~60–90s) or skip and use System Menu later.</p>
+                <div class="ob-update-banner-actions">
+                    <button type="button" class="ob-cta-secondary" id="ob-done-update-install">Install Now</button>
+                    <button type="button" class="ob-link-button" id="ob-done-update-skip">Skip — install later</button>
+                </div>
+            </div>
+        `;
+
+    if (!isMajor) {
+        document.getElementById("ob-done-update-install").addEventListener("click", async () => {
+            try {
+                const r = await fetch("/update/start", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ confirm_sha: status.latest_sha }),
+                });
+                if (!r.ok) {
+                    const t = await r.text();
+                    window.alert("Couldn't start update: " + t.substring(0, 200));
+                    return;
+                }
+                const { task_id } = await r.json();
+                const mod = await import("/ui/modules/updates-manager.js");
+                mod.openUpdateLogModal(task_id);
+            } catch (e) {
+                window.alert("Network error: " + e.message);
+            }
+        });
+        document.getElementById("ob-done-update-skip").addEventListener("click", () => {
+            host.hidden = true;
+        });
+    }
 }
 
 async function loadSummary() {
