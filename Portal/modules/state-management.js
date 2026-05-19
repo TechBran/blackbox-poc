@@ -379,62 +379,55 @@ export async function blobToDataURL(blob) {
 // Model Configuration
 // =============================================================================
 
-/** Model configuration for each provider */
+/**
+ * Model configuration for each provider.
+ *
+ * IMPORTANT (T2 / 2026-05-18): The 4 chat providers' `models[]` arrays are
+ * now OFFLINE-BOOTSTRAP FALLBACKS only — minimal 3-5 entries shown until
+ * fetchAvailableModels() hydrates from the backend's /models/{provider}
+ * endpoint (the single source of truth — see
+ * Orchestrator/routes/admin_routes.py). Once hydrated, these arrays are
+ * REPLACED with the live catalog.
+ *
+ * Non-chat entries (computer-use, agents, gemini-agents, realtime) are
+ * NOT centralized — they're subsystem-pinned model lists with different
+ * lifecycles than chat models, so they remain hardcoded here.
+ */
 const MODEL_CONFIG = {
     google: {
         name: "Google",
-        models: [
+        models: [  // Offline fallback — replaced by /models/google fetch
             { id: "", name: "(Auto - Latest)", default: true },
-            { id: "gemini-3-pro-preview", name: "Gemini 3 Pro (Preview)" },
+            { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro" },
             { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro" },
-            { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" },
-            { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash-Lite" },
-            { id: "gemini-2.0-flash-exp", name: "Gemini 2.0 Flash (Experimental)" },
-            { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Legacy)" },
-            { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash (Legacy)" }
+            { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash" }
         ]
     },
     anthropic: {
         name: "Anthropic",
-        models: [
+        models: [  // Offline fallback — replaced by /models/anthropic fetch
             { id: "", name: "(Auto - Latest)", default: true },
-            { id: "claude-opus-4-7", name: "Claude Opus 4.7 (Apr 2026, 1M ctx, adaptive thinking)" },
-            { id: "claude-opus-4-6", name: "Claude Opus 4.6 (Feb 2026)" },
-            { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (Mar 2026)" },
-            { id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5 (Sep 2025)" },
-            { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5 (Oct 2025)" },
-            { id: "claude-opus-4-1-20250805", name: "Claude Opus 4.1 (Aug 2025)" },
-            { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4 (May 2025)" },
-            { id: "claude-3-7-sonnet-20250219", name: "Claude 3.7 Sonnet (Feb 2025)" },
-            { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku (Oct 2024)" }
+            { id: "claude-opus-4-7", name: "Claude Opus 4.7" },
+            { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+            { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5" }
         ]
     },
     openai: {
         name: "OpenAI",
-        models: [
+        models: [  // Offline fallback — replaced by /models/openai fetch
             { id: "", name: "(Auto - Latest)", default: true },
             { id: "gpt-5.1", name: "GPT-5.1" },
-            { id: "gpt-5-2025-08-07", name: "GPT-5 (Aug 2025)" },
             { id: "gpt-5-mini-2025-08-07", name: "GPT-5 Mini" },
-            { id: "gpt-5-nano-2025-08-07", name: "GPT-5 Nano" },
-            { id: "o3-2025-04-16", name: "o3 (Reasoning)" },
-            { id: "o4-mini-2025-04-16", name: "o4-mini (Reasoning)" },
-            { id: "gpt-4o", name: "GPT-4o" },
-            { id: "gpt-4o-mini", name: "GPT-4o Mini" }
+            { id: "o3-2025-04-16", name: "o3 (Reasoning)" }
         ]
     },
     xai: {
         name: "xAI (Grok)",
-        models: [
+        models: [  // Offline fallback — replaced by /models/xai fetch
             { id: "", name: "(Auto - Latest)", default: true },
-            { id: "grok-4-0709", name: "Grok 4 (Powerhouse)" },
-            { id: "grok-4-1-fast-reasoning", name: "Grok 4.1 Fast (Reasoning)" },
-            { id: "grok-4-1-fast-non-reasoning", name: "Grok 4.1 Fast (Instant)" },
-            { id: "grok-4-fast-reasoning", name: "Grok 4 Fast (Reasoning)" },
-            { id: "grok-4-fast-non-reasoning", name: "Grok 4 Fast (Instant)" },
-            { id: "grok-3-beta", name: "Grok 3 Beta" },
-            { id: "grok-3-mini-beta", name: "Grok 3 Mini (Visible Thinking)" },
-            { id: "grok-code-fast-1", name: "Grok Code Fast" }
+            { id: "grok-4.3", name: "Grok 4.3" },
+            { id: "grok-4.20-multi-agent-0309", name: "Grok 4.20 Multi-Agent" },
+            { id: "grok-3-mini-beta", name: "Grok 3 Mini (legacy, cheap)" }
         ]
     },
     "computer-use": {
@@ -519,27 +512,60 @@ export function updateModelDropdown(provider) {
 }
 
 /**
- * Fetch available models from backend
- * @param {string} provider - Provider name
- * @returns {Promise<boolean>} True if models were fetched successfully
+ * Fetch available models from backend /models/{provider} and hydrate
+ * MODEL_CONFIG[provider].models in place. Always prepends the
+ * `(Auto - Latest)` placeholder so the dropdown's default option is
+ * preserved across hydration.
+ *
+ * Caches successful fetches in sessionStorage for 5 minutes to avoid
+ * hammering the backend (which has its own 10-minute upstream cache,
+ * but sessionStorage lets us skip the round-trip entirely on
+ * provider-switch within a tab).
+ *
+ * @param {string} provider - one of "google" | "anthropic" | "openai" | "xai"
+ * @returns {Promise<boolean>} true if MODEL_CONFIG was updated (from cache or fetch)
  */
 export async function fetchAvailableModels(provider) {
+    const CACHE_TTL_MS = 5 * 60 * 1000;  // 5 minutes
+    const cacheKey = `bb_models:${provider}`;
+
+    // Try sessionStorage cache first
+    try {
+        const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
+        if (cached && Date.now() - cached.ts < CACHE_TTL_MS && Array.isArray(cached.models)) {
+            MODEL_CONFIG[provider].models = [
+                { id: "", name: "(Auto - Latest)", default: true },
+                ...cached.models.map(m => ({ id: m.id, name: m.name || m.id }))
+            ];
+            console.log(`[ModelSelect] Cache hit for ${provider} (${cached.models.length} models, age ${Math.round((Date.now() - cached.ts) / 1000)}s)`);
+            return true;
+        }
+    } catch (_) { /* corrupted cache — fall through to live fetch */ }
+
+    // Live fetch via backend (which itself has 10-min upstream cache)
     try {
         const response = await fetch(`/models/${provider}`);
         if (response.ok) {
             const data = await response.json();
             if (data.models && data.models.length > 0) {
-                // Update MODEL_CONFIG with fetched models
                 MODEL_CONFIG[provider].models = [
                     { id: "", name: "(Auto - Latest)", default: true },
                     ...data.models.map(m => ({ id: m.id, name: m.name || m.id }))
                 ];
-                console.log(`[ModelSelect] Fetched ${data.models.length} models for ${provider}`);
+                // Cache the live result for 5 min
+                try {
+                    sessionStorage.setItem(cacheKey, JSON.stringify({
+                        ts: Date.now(),
+                        models: data.models,
+                        source: data.source || "live"
+                    }));
+                } catch (_) { /* sessionStorage full or disabled — ignore */ }
+                console.log(`[ModelSelect] Fetched ${data.models.length} models for ${provider} (source=${data.source || "unknown"})`);
                 return true;
             }
         }
     } catch (e) {
-        console.log(`[ModelSelect] Could not fetch models for ${provider}, using defaults:`, e.message);
+        console.log(`[ModelSelect] Could not fetch models for ${provider}, using built-in fallback:`, e.message);
     }
     return false;
 }
