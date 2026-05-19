@@ -488,7 +488,7 @@ ANTHROPIC_NO_SAMPLING_MODELS = {"claude-opus-4-7"}
 # Other models stream thinking text as-is without the flag.
 ANTHROPIC_THINKING_DISPLAY_MODELS = {"claude-opus-4-7"}
 GEMINI_MODEL_DEFAULT    = os.getenv("GOOGLE_GEMINI_MODEL", "gemini-3.1-pro-preview")
-XAI_MODEL_DEFAULT       = os.getenv("XAI_MODEL", "grok-4-1-fast-reasoning")
+XAI_MODEL_DEFAULT       = os.getenv("XAI_MODEL", "grok-4.3")  # Bumped 2026-05-18: prior default grok-4-1-fast-reasoning is on xAI's May 2026 deprecation list (auto-redirected to grok-4.3 server-side)
 DEFAULT_PROVIDER        = (os.getenv("DEFAULT_PROVIDER") or "google").strip().lower()
 STT_MODEL       = os.getenv("STT_MODEL","whisper-1").strip()
 
