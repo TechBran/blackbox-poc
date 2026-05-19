@@ -1,0 +1,282 @@
+package com.aiblackbox.portal.ui.updates
+
+import android.app.Application
+import android.util.Log
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.aiblackbox.portal.data.api.BlackBoxApi
+import com.aiblackbox.portal.data.model.UpdateStatus
+import com.aiblackbox.portal.data.repository.UpdateRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+
+/**
+ * Maps the backend's update flow into a Compose-friendly state machine.
+ *
+ * UI states (parallel to Portal/modules/updates-manager.js):
+ *   Loading             — first fetch in flight
+ *   Error               — fetch itself failed (network down, etc.)
+ *   GitNotInitialized   — backend reports git_initialized=false
+ *   UpToDate            — commits_behind=0 AND commits_ahead=0
+ *   LocalAhead          — commits_ahead>0 (unpushed local work)
+ *   UpdatesAvailable    — commits_behind>0
+ *   InProgress          — backend's in_progress=true (another runner is going)
+ *   Failed              — last_state.phase=failed
+ *   Interrupted         — last_state phase non-terminal AND not in_progress
+ *
+ * Once the user clicks Install:
+ *   - status moves to RunningUpdate with a Flow<LogLine> for SSE events
+ *   - on 'complete' SSE event with succeeded=true: AwaitingRestart, then
+ *     poll /health every 2s up to 180s with progressive copy
+ *   - on 'complete' with succeeded=false: back to Failed state
+ */
+class UpdatesViewModel(application: Application) : AndroidViewModel(application) {
+    private var api: BlackBoxApi? = null
+    private var repo: UpdateRepository? = null
+    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+
+    private val _state = MutableStateFlow<UpdatesUiState>(UpdatesUiState.Loading)
+    val state: StateFlow<UpdatesUiState> = _state.asStateFlow()
+
+    private val _logLines = MutableStateFlow<List<LogLine>>(emptyList())
+    val logLines: StateFlow<List<LogLine>> = _logLines.asStateFlow()
+
+    private val _logModalOpen = MutableStateFlow(false)
+    val logModalOpen: StateFlow<Boolean> = _logModalOpen.asStateFlow()
+
+    private val _restartPollLabel = MutableStateFlow<String?>(null)
+    val restartPollLabel: StateFlow<String?> = _restartPollLabel.asStateFlow()
+
+    private var streamJob: Job? = null
+    private var pollJob: Job? = null
+
+    fun initialize(origin: String) {
+        if (api == null) {
+            api = BlackBoxApi(origin)
+            repo = UpdateRepository(api!!)
+        }
+        refreshStatus(forceFresh = false)
+    }
+
+    fun refreshStatus(forceFresh: Boolean) {
+        val r = repo ?: return
+        _state.value = UpdatesUiState.Loading
+        viewModelScope.launch {
+            try {
+                val status = if (forceFresh) r.preflight() else r.getStatus()
+                _state.value = mapStatusToState(status)
+            } catch (e: Exception) {
+                Log.e(TAG, "refreshStatus failed", e)
+                _state.value = UpdatesUiState.Error(e.message ?: "unknown error")
+            }
+        }
+    }
+
+    private fun mapStatusToState(status: UpdateStatus): UpdatesUiState {
+        if (!status.gitInitialized) {
+            return UpdatesUiState.GitNotInitialized(status.message)
+        }
+        if (status.fetchError != null) {
+            return UpdatesUiState.Error("fetch error: ${status.fetchError}")
+        }
+        if (status.inProgress) {
+            // Re-poll in 3s; another runner is going. If we already have an
+            // active stream the modal is showing those events; otherwise the
+            // panel just waits.
+            viewModelScope.launch {
+                delay(3000)
+                if (_state.value is UpdatesUiState.InProgress) {
+                    refreshStatus(forceFresh = false)
+                }
+            }
+            return UpdatesUiState.InProgress(status)
+        }
+        val lastState = status.lastState
+        if (lastState != null && lastState.phase == "failed") {
+            return UpdatesUiState.Failed(status, lastState)
+        }
+        if (lastState != null && !lastState.isTerminal && !status.inProgress) {
+            return UpdatesUiState.Interrupted(status, lastState)
+        }
+        return when {
+            status.commitsBehind > 0 -> UpdatesUiState.UpdatesAvailable(status)
+            status.commitsAhead > 0 -> UpdatesUiState.LocalAhead(status)
+            else -> UpdatesUiState.UpToDate(status)
+        }
+    }
+
+    fun startUpdate() {
+        val r = repo ?: return
+        val current = _state.value
+        val confirmSha = (current as? UpdatesUiState.UpdatesAvailable)?.status?.latestSha
+        viewModelScope.launch {
+            try {
+                _logLines.value = emptyList()
+                _logModalOpen.value = true
+                _logLines.value = _logLines.value + LogLine.system("Starting update…")
+                val response = r.start(confirmSha = confirmSha)
+                streamLog(response.taskId)
+            } catch (e: Exception) {
+                Log.e(TAG, "startUpdate failed", e)
+                _logLines.value = _logLines.value + LogLine.error("Failed to start: ${e.message}")
+            }
+        }
+    }
+
+    private fun streamLog(taskId: String) {
+        val r = repo ?: return
+        streamJob?.cancel()
+        streamJob = viewModelScope.launch {
+            try {
+                r.streamLog(taskId).collect { event ->
+                    val parsed = try { json.parseToJsonElement(event.data).jsonObject } catch (_: Exception) { null }
+                    if (parsed != null) {
+                        handleSseEvent(parsed)
+                    }
+                }
+                Log.d(TAG, "SSE stream completed for task=$taskId")
+            } catch (e: Exception) {
+                Log.e(TAG, "SSE stream error", e)
+                _logLines.value = _logLines.value + LogLine.system("(stream disconnected — service may be restarting)")
+                // If we got a complete event already we'll be in AwaitingRestart anyway.
+            }
+        }
+    }
+
+    private fun handleSseEvent(obj: JsonObject) {
+        val type = obj["type"]?.jsonPrimitive?.content ?: return
+        when (type) {
+            "heartbeat" -> { /* silent keepalive */ }
+            "phase" -> {
+                val phase = obj["phase"]?.jsonPrimitive?.content ?: "?"
+                _logLines.value = _logLines.value + LogLine.phase(phase.uppercase())
+            }
+            "log" -> {
+                val phase = obj["phase"]?.jsonPrimitive?.content
+                val text = obj["text"]?.jsonPrimitive?.content ?: ""
+                _logLines.value = _logLines.value + LogLine.line(text, phase)
+            }
+            "complete" -> {
+                val ok = obj["succeeded"]?.jsonPrimitive?.content == "true"
+                if (ok) {
+                    val from = obj["sha_before"]?.jsonPrimitive?.content ?: ""
+                    val to = obj["sha_after"]?.jsonPrimitive?.content ?: ""
+                    _logLines.value = _logLines.value + LogLine.success("✓ COMPLETE: $from → $to")
+                    awaitRestart()
+                } else {
+                    val err = obj["error"]?.jsonPrimitive?.content ?: "(no error msg)"
+                    _logLines.value = _logLines.value + LogLine.error("✕ FAILED: $err")
+                    // Refresh panel state so Failed branch surfaces with rollback button
+                    viewModelScope.launch {
+                        delay(1500)
+                        refreshStatus(forceFresh = false)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * After 'complete' event: poll /health every 2s up to 180s with progressive
+     * copy (mirrors web Portal audit C5).
+     */
+    private fun awaitRestart() {
+        val r = repo ?: return
+        pollJob?.cancel()
+        pollJob = viewModelScope.launch {
+            val start = System.currentTimeMillis()
+            val timeoutMs = 180_000L
+            while (isActive && System.currentTimeMillis() - start < timeoutMs) {
+                val elapsed = System.currentTimeMillis() - start
+                val label = when {
+                    elapsed < 30_000 -> "Restarting service…"
+                    elapsed < 90_000 -> "Rebuilding snapshot index (60–90s typical)…"
+                    else -> "Still warming. Check logs via journalctl if this hangs."
+                }
+                _restartPollLabel.value = label
+                if (r.healthOk()) {
+                    _logLines.value = _logLines.value + LogLine.success("✓ Service back online after ${elapsed / 1000}s.")
+                    _restartPollLabel.value = null
+                    delay(1500)
+                    _logModalOpen.value = false
+                    refreshStatus(forceFresh = true)
+                    return@launch
+                }
+                delay(2000)
+            }
+            _restartPollLabel.value = null
+            _logLines.value = _logLines.value + LogLine.error("⚠ Still down after 180s. Check the logs manually.")
+        }
+    }
+
+    fun rollback() {
+        val r = repo ?: return
+        viewModelScope.launch {
+            try {
+                val response = r.rollback()
+                _logLines.value = listOf(LogLine.system("Rolled back to ${response.revertedTo}. Restarting service…"))
+                _logModalOpen.value = true
+                awaitRestart()
+            } catch (e: Exception) {
+                Log.e(TAG, "rollback failed", e)
+                _logLines.value = _logLines.value + LogLine.error("Rollback failed: ${e.message}")
+            }
+        }
+    }
+
+    fun closeLogModal() {
+        _logModalOpen.value = false
+    }
+
+    override fun onCleared() {
+        streamJob?.cancel()
+        pollJob?.cancel()
+        super.onCleared()
+    }
+
+    companion object { private const val TAG = "UpdatesViewModel" }
+}
+
+/** Sealed UI state — Compose collects this StateFlow and renders accordingly. */
+sealed class UpdatesUiState {
+    data object Loading : UpdatesUiState()
+    data class Error(val message: String) : UpdatesUiState()
+    data class GitNotInitialized(val message: String?) : UpdatesUiState()
+    data class UpToDate(val status: UpdateStatus) : UpdatesUiState()
+    data class LocalAhead(val status: UpdateStatus) : UpdatesUiState()
+    data class UpdatesAvailable(val status: UpdateStatus) : UpdatesUiState()
+    data class InProgress(val status: UpdateStatus) : UpdatesUiState()
+    data class Failed(
+        val status: UpdateStatus,
+        val lastState: com.aiblackbox.portal.data.model.UpdateState,
+    ) : UpdatesUiState()
+    data class Interrupted(
+        val status: UpdateStatus,
+        val lastState: com.aiblackbox.portal.data.model.UpdateState,
+    ) : UpdatesUiState()
+}
+
+/** Single log-modal entry. kind drives styling (success=green, error=red, etc.). */
+data class LogLine(
+    val text: String,
+    val kind: Kind,
+    val phase: String? = null,
+) {
+    enum class Kind { System, Phase, Line, Success, Error }
+    companion object {
+        fun system(t: String) = LogLine(t, Kind.System)
+        fun phase(p: String) = LogLine("── $p ──", Kind.Phase, p)
+        fun line(t: String, phase: String?) = LogLine("  $t", Kind.Line, phase)
+        fun success(t: String) = LogLine(t, Kind.Success)
+        fun error(t: String) = LogLine(t, Kind.Error)
+    }
+}

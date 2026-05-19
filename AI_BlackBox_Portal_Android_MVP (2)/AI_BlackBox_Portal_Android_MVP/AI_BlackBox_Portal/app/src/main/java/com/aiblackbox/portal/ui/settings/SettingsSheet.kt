@@ -254,6 +254,7 @@ fun SettingsSheet(
                 MenuButton("SMS Inbox") { onNavigate("sms_inbox"); onDismiss() }
                 MenuButton("Contacts") { onNavigate("contacts"); onDismiss() }
                 MenuButton("Cellular") { onNavigate("cellular"); onDismiss() }
+                MenuButton("↻  Updates") { onNavigate("updates"); onDismiss() }
             }
 
             Spacer(Modifier.height(20.dp))

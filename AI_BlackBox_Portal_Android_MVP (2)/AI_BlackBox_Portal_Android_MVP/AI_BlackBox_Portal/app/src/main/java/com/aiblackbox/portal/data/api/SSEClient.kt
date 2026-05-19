@@ -49,6 +49,78 @@ class SSEClient(private val api: BlackBoxApi) {
         return trimmed
     }
 
+    /**
+     * GET-based SSE stream. Mirrors stream() but uses a GET request — needed
+     * for endpoints like /update/log/stream where the task_id is a query
+     * parameter and there's no request body.
+     */
+    fun streamGet(path: String, queryParams: Map<String, String> = emptyMap()): Flow<SSEEvent> = callbackFlow {
+        Log.d(TAG, "Starting SSE stream GET to $path")
+        val call = api.streamGet(path, queryParams)
+        call.enqueue(sseCallback(this::trySend, this::close))
+        awaitClose {
+            Log.d(TAG, "SSE GET flow cancelled, cancelling HTTP call")
+            call.cancel()
+        }
+    }
+
+    /**
+     * Shared callback that parses the SSE wire format and routes events into
+     * the given sender. Extracted so stream() and streamGet() share the
+     * frame-decoding logic instead of duplicating ~50 lines apiece.
+     */
+    private fun sseCallback(
+        send: (SSEEvent) -> Any,
+        closeWith: (Throwable?) -> Boolean,
+    ): Callback = object : Callback {
+        override fun onResponse(call: Call, response: Response) {
+            Log.d(TAG, "SSE response code: ${response.code}, content-type: ${response.header("Content-Type")}")
+            if (!response.isSuccessful) {
+                val errorBody = try { response.body?.string()?.take(500) } catch (_: Exception) { "unreadable" }
+                Log.e(TAG, "SSE HTTP error ${response.code}: $errorBody")
+                closeWith(IOException("SSE HTTP ${response.code}: ${response.message}"))
+                return
+            }
+            try {
+                val body = response.body
+                if (body == null) {
+                    Log.e(TAG, "SSE response body is null")
+                    closeWith(IOException("SSE response body is null"))
+                    return
+                }
+                val reader = BufferedReader(InputStreamReader(body.byteStream()))
+                var eventType = "message"
+                val data = StringBuilder()
+                reader.forEachLine { line ->
+                    when {
+                        line.startsWith("event:") -> eventType = line.removePrefix("event:").trim()
+                        line.startsWith("data:") -> data.append(line.removePrefix("data:").trim())
+                        line.isBlank() && data.isNotEmpty() -> {
+                            val decoded = decodeJsonData(data.toString())
+                            send(SSEEvent(event = eventType, data = decoded))
+                            eventType = "message"
+                            data.clear()
+                        }
+                    }
+                }
+                if (data.isNotEmpty()) {
+                    val decoded = decodeJsonData(data.toString())
+                    send(SSEEvent(event = eventType, data = decoded))
+                }
+                Log.d(TAG, "SSE stream completed normally")
+                closeWith(null)
+            } catch (e: Exception) {
+                Log.e(TAG, "SSE read error: ${e.message}", e)
+                closeWith(e)
+            }
+        }
+
+        override fun onFailure(call: Call, e: IOException) {
+            Log.e(TAG, "SSE connection failed: ${e.message}", e)
+            closeWith(e)
+        }
+    }
+
     fun stream(path: String, body: String): Flow<SSEEvent> = callbackFlow {
         Log.d(TAG, "Starting SSE stream POST to $path")
         Log.d(TAG, "Request body: ${body.take(500)}")
