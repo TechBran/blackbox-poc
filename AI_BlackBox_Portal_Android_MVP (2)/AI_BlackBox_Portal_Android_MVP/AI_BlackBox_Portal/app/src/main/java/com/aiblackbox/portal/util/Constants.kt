@@ -90,12 +90,16 @@ object Constants {
             "claude-opus-4-1" to "Claude Opus 4.1",
             "claude-sonnet-4" to "Claude Sonnet 4"
         ),
+        // T3 (2026-05-18): xai entries were MALFORMED — "grok-4", "grok-4.1-fast",
+        // "grok-3-mini" don't exist in the xAI API and would silently fail at
+        // chat-completion time. Refreshed to real API IDs matching current 2026
+        // catalog. These are OFFLINE-BOOTSTRAP fallbacks only — ChatViewModel's
+        // fetchLiveModels() hydrates the dropdown from /models/xai on init.
         "xai" to listOf(
             "" to "Auto - Latest",
-            "grok-4" to "Grok 4",
-            "grok-4.1-fast" to "Grok 4.1 Fast",
-            "grok-3-beta" to "Grok 3 Beta",
-            "grok-3-mini" to "Grok 3 Mini"
+            "grok-4.3" to "Grok 4.3",
+            "grok-4.20-multi-agent-0309" to "Grok 4.20 Multi-Agent",
+            "grok-3-mini-beta" to "Grok 3 Mini (legacy)"
         ),
         "agents" to listOf(
             "sonnet" to "Sonnet",

@@ -1229,13 +1229,25 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     // Dynamic model fetching — matches Portal fetchAvailableModels()
     // =========================================================================
 
-    /** Map provider IDs to the backend's expected provider key */
+    /** Map provider IDs to the backend's expected provider key.
+     *  Note: Android uses "gemini" as provider key but backend uses "google".
+     *  T3 (2026-05-18) added xai mapping — previously a gap that left
+     *  the xai dropdown stuck on the malformed Constants.MODEL_CONFIG
+     *  fallback (which had IDs like "grok-4.1-fast" that don't exist
+     *  in the xAI API). */
     private fun mapProviderForApi(provider: String): String? = when (provider) {
         "gemini" -> "google"
         "anthropic" -> "anthropic"
         "openai" -> "openai"
+        "xai" -> "xai"
         else -> null // Voice/agent/CU providers don't have model endpoints
     }
+
+    // In-memory cache for fetched model lists (5min TTL — same as web sessionStorage).
+    // Survives provider-switching within a session but NOT app restart (intentional —
+    // restart implies operator may have switched API keys).
+    private val modelsCache = mutableMapOf<String, Pair<Long, List<Pair<String, String>>>>()
+    private val MODELS_CACHE_TTL_MS = 5 * 60 * 1_000L
 
     private fun fetchLiveModels(provider: String) {
         val currentApi = api ?: return
@@ -1245,6 +1257,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             _liveModels.value = emptyList()
             return
         }
+
+        // Cache hit — instant population, no network
+        val cached = modelsCache[apiProvider]
+        val now = System.currentTimeMillis()
+        if (cached != null && now - cached.first < MODELS_CACHE_TTL_MS) {
+            _liveModels.value = cached.second
+            Log.d(TAG, "Models cache hit for $provider (age ${(now - cached.first) / 1000}s)")
+            return
+        }
+
         viewModelScope.launch {
             try {
                 val response = currentApi.get("/models/$apiProvider")
@@ -1260,8 +1282,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 if (models.isNotEmpty()) {
                     // Prepend "Auto" option
-                    _liveModels.value = listOf("" to "Auto - Latest") + models
-                    Log.d(TAG, "Fetched ${models.size} live models for $provider")
+                    val withAuto = listOf("" to "Auto - Latest") + models
+                    _liveModels.value = withAuto
+                    modelsCache[apiProvider] = System.currentTimeMillis() to withAuto
+                    Log.d(TAG, "Fetched ${models.size} live models for $provider (source=${obj["source"]?.jsonPrimitive?.content ?: "?"})")
                 }
             } catch (e: Exception) {
                 Log.d(TAG, "Model fetch failed for $provider, using defaults: ${e.message}")
